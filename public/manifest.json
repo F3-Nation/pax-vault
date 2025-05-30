@@ -1,0 +1,29 @@
+{
+  "name": "F3 PAX Stats",
+  "short_name": "PAX Stats",
+  "description": "PAX Stats is a web application that provides real-time statistics and information about the F3 PAX (Fitness, Fellowship, Faith) community.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2E2E2E",
+  "theme_color": "#FFFFFF",
+  "orientation": "portrait",
+  "lang": "en-US",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ]
+}

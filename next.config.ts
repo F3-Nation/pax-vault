@@ -1,7 +1,24 @@
-import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  /* config options here */
+import withPWA from 'next-pwa';
+
+const nextConfig = {
+  reactStrictMode: true,
+  images: {
+    domains: [
+      'a.slack-edge.com',
+      'avatars.slack-edge.com',
+      'secure.gravatar.com',
+    ]
+  }
 };
 
-export default nextConfig;
+const isDev = process.env.NODE_ENV === 'development';
+
+const withPWACustom = withPWA({
+  dest: 'public',
+  disable: isDev,
+  register: true,
+  skipWaiting: true,
+});
+
+export default withPWACustom(nextConfig);
