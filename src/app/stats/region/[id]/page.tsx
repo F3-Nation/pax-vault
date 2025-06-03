@@ -23,7 +23,7 @@ export default async function RegionDetailPage({ params }: IdProps) {
         <h1 className="text-4xl font-bold mb-4">{region.name}</h1>
         <p><strong>Email:</strong> {region.email}</p>
         <p><strong>Website:</strong> {region.website}</p>
-        <p><strong>Status:</strong> {region.is_active ? 'Active' : 'Inactive'}</p>
+        <p><strong>Status:</strong> {region.active ? 'Active' : 'Inactive'}</p>
       </div>
     </main>
   );

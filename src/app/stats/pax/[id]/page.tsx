@@ -22,9 +22,9 @@ export default async function PaxDetailPage({ params }: IdProps) {
     <main className="flex min-h-screen flex-col items-center justify-center bg-gray-100 text-gray-800">
       <div className="p-8 rounded-xl bg-white shadow-xl text-center max-w-md">
         <h1 className="text-4xl font-bold mb-4">{pax.f3_name}</h1>
-        {pax.avatar_url && (
+        {pax.avatar && (
           <Image
-            src={pax.avatar_url}
+            src={pax.avatar}
             alt={`${pax.f3_name}'s avatar`}
             width={96}
             height={96}

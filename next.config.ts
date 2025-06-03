@@ -8,6 +8,7 @@ const nextConfig = {
       'a.slack-edge.com',
       'avatars.slack-edge.com',
       'secure.gravatar.com',
+      'storage.googleapis.com',
     ]
   }
 };

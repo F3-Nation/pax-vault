@@ -7,16 +7,32 @@ export interface PaxData {
   first_name: string;
   last_name: string;
   email: string;
-  home_region_id: number;
-  avatar_url: string;
+  region: string;
+  avatar: string;
   created: string;
   updated: string;
   status: string;
 }
 
 export async function getPaxData(): Promise<PaxData[]> {
-    const { rows } = await pool.query(
-        "SELECT id, f3_name, first_name, last_name, email, home_region_id, avatar_url, created, updated, status FROM users ORDER BY id DESC"
-    );
+    const { rows } = await pool.query(`
+        SELECT 
+            us.id,
+            us.f3_name,
+            us.first_name,
+            us.last_name,
+            us.email,
+            org.name AS region,
+            us.avatar_url as avatar,
+            us.created,
+            us.updated,
+            us.status
+        FROM 
+            users us
+        LEFT JOIN 
+            orgs org ON us.home_region_id = org.id
+        ORDER BY 
+            us.id DESC;
+    `);
     return rows as PaxData[];
 }

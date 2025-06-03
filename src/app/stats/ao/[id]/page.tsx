@@ -23,7 +23,7 @@ export default async function AoDetailPage({ params }: IdProps) {
         <h1 className="text-4xl font-bold mb-4">{ao.name}</h1>
         <p><strong>Email:</strong> {ao.email}</p>
         <p><strong>Website:</strong> {ao.website}</p>
-        <p><strong>Status:</strong> {ao.is_active ? 'Active' : 'Inactive'}</p>
+        <p><strong>Status:</strong> {ao.active ? 'Active' : 'Inactive'}</p>
       </div>
     </main>
   );
