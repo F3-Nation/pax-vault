@@ -4,11 +4,32 @@ import withPWA from 'next-pwa';
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: [
-      'a.slack-edge.com',
-      'avatars.slack-edge.com',
-      'secure.gravatar.com',
-      'storage.googleapis.com',
+    remotePatterns: [
+      {
+        protocol: 'https' as const,
+        hostname: 'a.slack-edge.com',
+        pathname: '**',
+      },
+      {
+        protocol: 'https' as const,
+        hostname: 'avatars.slack-edge.com',
+        pathname: '**',
+      },
+      {
+        protocol: 'https' as const,
+        hostname: 'secure.gravatar.com',
+        pathname: '**',
+      },
+      {
+        protocol: 'https' as const,
+        hostname: 'storage.googleapis.com',
+        pathname: '**',
+      },
+      {
+        protocol: 'https' as const,
+        hostname: 'placehold.in',
+        pathname: '**',
+      },
     ]
   }
 };

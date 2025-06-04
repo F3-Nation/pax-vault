@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Navbar, NavbarBrand, NavbarContent, NavbarItem } from "@heroui/navbar";
-import { Button } from "@heroui/button";
+import { Navbar, NavbarBrand, NavbarContent, NavbarItem, NavbarMenu, NavbarMenuItem, NavbarMenuToggle } from "@heroui/navbar";
 import { Link } from "@heroui/link";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { Avatar } from "@heroui/avatar";
@@ -19,39 +18,101 @@ type Props = {
     f3_name: string;
     id: string;
     region: string;
+    region_default: string;
   }[];
 };
 
 export default function NavbarClient({ regionData, paxData }: Props) {
   const router = useRouter();
-  const [selectedPax, setSelectedPax] = useState<string | null>(null);
-  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+
+  // Pax search state
+  const [paxKey, setPaxKey] = useState<React.Key | null>(null);
+  const [paxLoading, setPaxLoading] = useState(false);
+  const [paxInput, setPaxInput] = useState<string>('');
+
+  // Region search state
+  const [regionKey, setRegionKey] = useState<React.Key | null>(null);
+  const [regionLoading, setRegionLoading] = useState(false);
+  const [regionInput, setRegionInput] = useState<string>('');
+
+  // Navigation state
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // Handle pax input change with loading
+  const handlePaxInputChange = (value: string) => {
+    setPaxInput(value);
+    if (value.length > 0) {
+      setPaxLoading(true);
+      setTimeout(() => {
+        setPaxLoading(false);
+      }, 300); // Simulate loading delay
+    }
+  };
+
+  // Handle region input change with loading
+  const handleRegionInputChange = (value: string) => {
+    setRegionInput(value);
+    if (value.length > 0) {
+      setRegionLoading(true);
+      setTimeout(() => {
+        setRegionLoading(false);
+      }, 300); // Simulate loading delay
+    }
+  };
+
+  // Navigate to pax page
+  const handlePaxSelection = (key: React.Key | null) => {
+    setPaxKey(key);
+    if (key !== "null") {
+      router.push(`/stats/pax/${key}`);
+      setPaxInput(''); // Clear input after selection
+    }
+  };
+
+  // Navigate to region page
+  const handleRegionSelection = (key: React.Key | null) => {
+    setRegionKey(key);
+    if (key !== "null") {
+      router.push(`/stats/region/${key}`);
+      setRegionInput(''); // Clear input after selection
+    }
+  };
+
 
   return (
-    <Navbar>
-      <NavbarBrand>
-        <Link href="/" className="flex items-center gap-2 font-bold text-inherit">PAX STATS</Link>
-      </NavbarBrand>
-      <NavbarContent className="hidden sm:flex gap-4" justify="center">
-        <NavbarItem>
+    <Navbar
+      isBordered
+      isMenuOpen={isMenuOpen}
+      onMenuOpenChange={setIsMenuOpen}
+      className="bg-background/70 backgdrop-blur-md backgrop-saturate-150"  
+    >
+      <NavbarContent>
+        <NavbarMenuToggle
+          area-label={isMenuOpen ? "Close menu" : "Open menu"}
+          className="lg:hidden"
+        />
+        <NavbarBrand>
+          <Link href="/" className="flex items-center gap-2 font-bold text-inherit">PAX STATS</Link>
+        </NavbarBrand>
+      </NavbarContent>
+
+      {/* Desktop Search Fields */}
+      <NavbarContent className="hidden lg:flex gap-10" justify="end">
+        <NavbarItem className="w-64">
           <Autocomplete
-            aria-label="SEARCH FOR A REGION"
-            className="max-w-xs"
+            className="w-full"
+            label="SEARCH FOR A REGION"
             defaultItems={regionData}
-            isVirtualized
+            inputValue={regionInput}
+            isLoading={regionLoading}
+            placeholder="F3 REGION NAME"
             itemHeight={40}
-            label="F3 REGION"
-            onSelectionChange={(key) => {
-              if (key) {
-                router.push(`/stats/region/${key}`);
-                setSelectedRegion(null);
-              }
-            }}
-            placeholder="SEARCH FOR A REGION"
-            selectedKey={selectedRegion}
-            size="sm"
-            style={{ minWidth: '200px' }}
+            selectedKey={String(regionKey)}
+            onInputChange={handleRegionInputChange}
+            onSelectionChange={handleRegionSelection}
             variant="underlined"
+            // size="sm"
+            isClearable
           >
           {(region) => (
             <AutocompleteItem key={region.id} textValue={region.name}>
@@ -65,57 +126,114 @@ export default function NavbarClient({ regionData, paxData }: Props) {
           )}
           </Autocomplete>
         </NavbarItem>
-        <NavbarItem>
+
+        <NavbarItem className="w-64">
           <Autocomplete
-            aria-label="SEARCH FOR A PAX"
-            className="max-w-xs"
+            className="w-full"
+            label="SEARCH FOR A PAX"
             defaultItems={paxData}
-            isVirtualized
+            inputValue={paxInput}
+            isLoading={paxLoading}
+            placeholder="F3 PAX NAME"
             itemHeight={40}
-            label="F3 PAX"
-            onSelectionChange={(key) => {
-              if (key) {
-                router.push(`/stats/pax/${key}`);
-                setSelectedPax(null);
-              }
-            }}
-            placeholder="SEARCH FOR A PAX"
-            selectedKey={selectedPax}
-            size="sm"
-            style={{ minWidth: '200px' }}
+            selectedKey={String(paxKey)}
+            onInputChange={handlePaxInputChange}
+            onSelectionChange={handlePaxSelection}
             variant="underlined"
+            // size="sm"
+            isClearable
           >
           {(pax) => (
             <AutocompleteItem key={pax.id} textValue={pax.f3_name}>
               <div className="flex gap-2 items-center">
                 <Avatar alt={pax.f3_name} className="flex-shrink-0" size="sm" src={pax.avatar} />
                 <div className="flex flex-col">
-                  <span className="text-small">{pax.f3_name}</span>
-                  <span className="text-tiny text-default-400">{pax.region}</span>
+                  <span className="text-small">
+                    {pax.f3_name && pax.f3_name.length > 20
+                      ? pax.f3_name.slice(0, 20) + '...'
+                      : pax.f3_name || 'Unknown PAX'}
+                  </span>
+                  <span className="text-tiny text-default-400">{pax.region || pax.region_default || "Unknown Region"}</span>
                 </div>
               </div>
             </AutocompleteItem>
           )}
           </Autocomplete>
         </NavbarItem>
+      </NavbarContent>
 
-        
-        <NavbarItem>
-          <Link color="foreground" href="#">
-            Integrations
-          </Link>
-        </NavbarItem>
-      </NavbarContent>
-      <NavbarContent justify="end">
-        <NavbarItem className="hidden lg:flex">
-          <Link href="#">Login</Link>
-        </NavbarItem>
-        <NavbarItem>
-          <Button as={Link} color="primary" href="#" variant="flat">
-            Sign Up
-          </Button>
-        </NavbarItem>
-      </NavbarContent>
+
+
+      {/* Mobile Menu */}
+      <NavbarMenu className="pt-6">
+        <NavbarMenuItem className="mb-6">
+          <Autocomplete
+            className="w-full"
+            label="SEARCH FOR A REGION"
+            defaultItems={regionData}
+            inputValue={regionInput}
+            isLoading={regionLoading}
+            placeholder="F3 REGION NAME"
+            itemHeight={40}
+            selectedKey={String(regionKey)}
+            onInputChange={handleRegionInputChange}
+            onSelectionChange={(key) => {
+              handleRegionSelection(key);
+              setIsMenuOpen(false);
+            }}
+            variant="underlined"
+            isClearable
+          >
+          {(region) => (
+            <AutocompleteItem key={region.id} textValue={region.name}>
+              <div className="flex gap-2 items-center">
+                <Avatar alt={region.name} className="flex-shrink-0" size="sm" src={region.logo ?? undefined} />
+                <div className="flex flex-col">
+                  <span className="text-small">{region.name}</span>
+                </div>
+              </div>
+            </AutocompleteItem>
+          )}
+          </Autocomplete>
+        </NavbarMenuItem>
+        <NavbarMenuItem className="mb-6">
+          <Autocomplete
+            className="w-full"
+            label="SEARCH FOR A PAX"
+            defaultItems={paxData}
+            inputValue={paxInput}
+            isLoading={paxLoading}
+            placeholder="F3 PAX NAME"
+            itemHeight={40}
+            selectedKey={String(paxKey)}
+            onInputChange={handlePaxInputChange}
+            onSelectionChange={(key) => {
+              handlePaxSelection(key);
+              setIsMenuOpen(false);
+            }}
+            variant="underlined"
+            isClearable
+          >
+          {(pax) => (
+            <AutocompleteItem key={pax.id} textValue={pax.f3_name} className="py-2">
+              <div className="flex gap-2 items-center">
+                <Avatar alt={pax.f3_name} className="flex-shrink-0" size="sm" src={pax.avatar} />
+                <div className="flex flex-col">
+                  <span className="text-small">
+                    {pax.f3_name && pax.f3_name.length > 20
+                      ? pax.f3_name.slice(0, 20) + '...'
+                      : pax.f3_name || 'Unknown PAX'}
+                  </span>
+                  <span className="text-tiny text-default-400">{pax.region || pax.region_default || "Unknown Region"}</span>
+                </div>
+              </div>
+            </AutocompleteItem>
+          )}
+          </Autocomplete>
+        </NavbarMenuItem>
+      </NavbarMenu>
+
+
     </Navbar>
   );
 }

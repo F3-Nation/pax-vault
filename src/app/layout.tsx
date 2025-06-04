@@ -1,7 +1,4 @@
 // app/layout.tsx
-
-// globals.css includes @tailwind directives
-// adjust the path if necessary
 import "@/styles/globals.css";
 import {Providers} from "./providers";
 import NavbarComponent from "@/components/navbar-server";
