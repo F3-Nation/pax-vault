@@ -1,10 +1,10 @@
-import { getCachedRegionData } from "@/lib/region";
+import { getCachedRegionList } from "@/lib/region";
 import NavbarClient from "@/components/navbar-client";
-import { getCachedPaxData } from "@/lib/pax";
+import { getCachedPaxList } from "@/lib/pax";
 
 export default async function NavbarComponent() {
-  const regionData = await getCachedRegionData();
-  const paxData = await getCachedPaxData();
+  const regionData = await getCachedRegionList();
+  const paxData = await getCachedPaxList();
   const regionRows = regionData.map(({ id, name, logo, ...rest }) => ({
     id: String(id),
     name,

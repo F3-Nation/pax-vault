@@ -1,25 +1,23 @@
 import Link from 'next/link';
 import NextImage from "next/image";
-import { getCachedPaxData } from '@/lib/pax';
-import { PaxData as PaxDataType } from '@/lib/data/pax';
+import { getPaxDetail } from '@/lib/pax';
+import { PaxDetail } from '@/lib/data/pax';
 import { IdProps } from '@/types/props';
 import { Card, CardHeader, CardBody } from '@heroui/card';
 import { Image } from '@heroui/image';
 import { Divider } from '@heroui/divider';
 
 export default async function PaxDetailPage({ params }: IdProps) {
-  let allPax: PaxDataType[] = [];
-  try {
-    allPax = await getCachedPaxData();
-  } catch (err) {
-    console.error('Error fetching cached pax data:', err);
-  }
-
   const { id } = await params;
-  const pax = allPax.find((r) => r.id.toString() === id);
-  console.log('Pax data:', pax?.avatar);
-
-  if (!pax) {
+  
+  let paxData: PaxDetail | null = null;
+  try {
+    paxData = await getPaxDetail(Number(id));
+  } catch (err) {
+    console.error('Error fetching cached region data:', err);
+  }
+  
+  if (!paxData) {
     return <div className="p-8 text-center text-red-600">Pax not found</div>;
   }
 
@@ -34,38 +32,38 @@ export default async function PaxDetailPage({ params }: IdProps) {
             isZoomed
             as={NextImage}
             src={
-              pax?.avatar
-                ? pax.avatar
+              paxData?.avatar
+                ? paxData.avatar
                 : 'https://placehold.in/300x200.png'
             }
-            alt={`${pax.f3_name}'s avatar`}
+            alt={`${paxData.f3_name}'s avatar`}
             height={200}
             width={300}
           />
           <Divider className='my-4' />
           <div className="flex justify-between mb-2">
             <span className="font-semibold">First Name:</span>
-            <span>{pax.first_name}</span>
+            <span>{paxData.first_name}</span>
           </div>
           <div className="flex justify-between mb-2">
             <span className="font-semibold">Last Name:</span>
-            <span>{pax.last_name}</span>
+            <span>{paxData.last_name}</span>
           </div>
           <div className="flex justify-between mb-2">
             <span className="font-semibold">Region:</span>
             <span>
-              {pax.region_id ? (
-                <Link href={`/stats/region/${pax.region_id}`} className="text-blue-600 underline">
-                  {pax.region || pax.region_default || "Unknown Region"}
+              {paxData.region_id ? (
+                <Link href={`/stats/region/${paxData.region_id}`} className="text-blue-600 underline">
+                  {paxData.region || paxData.region_default || "Unknown Region"}
                 </Link>
               ) : (
-                pax.region || pax.region_default || "Unknown Region"
+                paxData.region || paxData.region_default || "Unknown Region"
               )}
             </span>
           </div>
           <div className="flex justify-between mb-2">
             <span className="font-semibold">Status:</span>
-            <span>{pax.status ? 'Active' : 'Inactive'}</span>
+            <span>{paxData.status ? 'Active' : 'Inactive'}</span>
           </div>
         </CardBody>
       </Card>

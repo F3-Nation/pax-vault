@@ -2,10 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Navbar, NavbarBrand, NavbarContent, NavbarItem, NavbarMenu, NavbarMenuItem, NavbarMenuToggle } from "@heroui/navbar";
+// import { Navbar, NavbarBrand, NavbarContent, NavbarItem, NavbarMenu, NavbarMenuItem, NavbarMenuToggle } from "@heroui/navbar";
+import { Navbar, NavbarBrand, NavbarContent, NavbarItem } from "@heroui/navbar";
 import { Link } from "@heroui/link";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { Avatar } from "@heroui/avatar";
+import { Button } from "@heroui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerBody,
+  DrawerFooter
+} from "@heroui/drawer";
+import { useDisclosure } from "@heroui/use-disclosure";
+import { Divider } from "@heroui/divider";
 
 type Props = {
   regionData: {
@@ -24,6 +35,7 @@ type Props = {
 
 export default function NavbarClient({ regionData, paxData }: Props) {
   const router = useRouter();
+  const {isOpen, onOpen, onOpenChange} = useDisclosure();
 
   // Pax search state
   const [paxKey, setPaxKey] = useState<React.Key | null>(null);
@@ -36,7 +48,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
   const [regionInput, setRegionInput] = useState<string>('');
 
   // Navigation state
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Handle pax input change with loading
   const handlePaxInputChange = (value: string) => {
@@ -66,6 +78,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
     if (key !== "null") {
       router.push(`/stats/pax/${key}`);
       setPaxInput(''); // Clear input after selection
+      onOpenChange(); // Close drawer after selection
     }
   };
 
@@ -75,22 +88,22 @@ export default function NavbarClient({ regionData, paxData }: Props) {
     if (key !== "null") {
       router.push(`/stats/region/${key}`);
       setRegionInput(''); // Clear input after selection
+      onOpenChange(); // Close drawer after selection
     }
   };
-
 
   return (
     <Navbar
       isBordered
-      isMenuOpen={isMenuOpen}
-      onMenuOpenChange={setIsMenuOpen}
+      // isMenuOpen={isMenuOpen}
+      // onMenuOpenChange={setIsMenuOpen}
       className="bg-background/70 backgdrop-blur-md backgrop-saturate-150"  
     >
       <NavbarContent>
-        <NavbarMenuToggle
+        {/* <NavbarMenuToggle
           area-label={isMenuOpen ? "Close menu" : "Open menu"}
           className="lg:hidden"
-        />
+        /> */}
         <NavbarBrand>
           <Link href="/" className="flex items-center gap-2 font-bold text-inherit">PAX STATS</Link>
         </NavbarBrand>
@@ -162,10 +175,105 @@ export default function NavbarClient({ regionData, paxData }: Props) {
         </NavbarItem>
       </NavbarContent>
 
+      {/* Mobile Search Buttons */}
+      <NavbarContent className="flex lg:hidden" justify="end">
+          <Button
+            key="search-region-pax"
+            className="w-40"
+            variant="flat"
+            color="default"
+            size="sm"
+            onPress={() => onOpen()}
+            >
+              FIND REGION/PAX
+            </Button>
+      </NavbarContent>
+
+      <Drawer 
+        isOpen={isOpen} 
+        backdrop="blur" 
+        placement="bottom" 
+        onOpenChange={onOpenChange}
+        isDismissable={false}
+        isKeyboardDismissDisabled={true}
+      >
+        <DrawerContent>
+          <DrawerHeader className="flex flex-col gap-1">SEARCH FOR A REGION OR A PAX</DrawerHeader>
+          <Divider />
+          <DrawerBody className="flex flex-col gap-10 py-10">
+            <Autocomplete
+              className="w-full"
+              label="SEARCH FOR A REGION"
+              defaultItems={regionData}
+              inputValue={regionInput}
+              isLoading={regionLoading}
+              placeholder="F3 REGION NAME"
+              itemHeight={40}
+              selectedKey={String(regionKey)}
+              onInputChange={handleRegionInputChange}
+              onSelectionChange={handleRegionSelection}
+              variant="bordered"
+              // size="sm"
+              // isClearable
+            >
+            {(region) => (
+              <AutocompleteItem key={region.id} textValue={region.name}>
+                <div className="flex gap-2 items-center">
+                  <Avatar alt={region.name} className="flex-shrink-0" size="sm" src={region.logo ?? undefined} />
+                  <div className="flex flex-col">
+                    <span className="text-small">{region.name}</span>
+                  </div>
+                </div>
+              </AutocompleteItem>
+            )}
+            </Autocomplete>
+            <Autocomplete
+              className="w-full"
+              label="SEARCH FOR A PAX"
+              defaultItems={paxData}
+              inputValue={paxInput}
+              isLoading={paxLoading}
+              placeholder="F3 PAX NAME"
+              itemHeight={40}
+              selectedKey={String(paxKey)}
+              onInputChange={handlePaxInputChange}
+              onSelectionChange={handlePaxSelection}
+              variant="bordered"
+              // size="sm"
+              isClearable
+            >
+            {(pax) => (
+              <AutocompleteItem key={pax.id} textValue={pax.f3_name}>
+                <div className="flex gap-2 items-center">
+                  <Avatar alt={pax.f3_name} className="flex-shrink-0" size="sm" src={pax.avatar} />
+                  <div className="flex flex-col">
+                    <span className="text-small">
+                      {pax.f3_name && pax.f3_name.length > 20
+                        ? pax.f3_name.slice(0, 20) + '...'
+                        : pax.f3_name || 'Unknown PAX'}
+                    </span>
+                    <span className="text-tiny text-default-400">{pax.region || pax.region_default || "Unknown Region"}</span>
+                  </div>
+                </div>
+              </AutocompleteItem>
+            )}
+            </Autocomplete>
+          </DrawerBody>
+          <DrawerFooter>
+            {/* <Button color="danger" variant="light" onPress={onClose}>
+              Close
+            </Button>
+            <Button color="primary" onPress={onClose}>
+              Action
+            </Button> */}
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
 
 
       {/* Mobile Menu */}
-      <NavbarMenu className="pt-6">
+      {/* <NavbarMenu className="pt-6">
         <NavbarMenuItem className="mb-6">
           <Autocomplete
             className="w-full"
@@ -231,7 +339,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
           )}
           </Autocomplete>
         </NavbarMenuItem>
-      </NavbarMenu>
+      </NavbarMenu> */}
 
 
     </Navbar>

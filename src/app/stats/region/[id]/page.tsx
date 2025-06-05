@@ -1,24 +1,24 @@
 import Link from 'next/link';
 import NextImage from "next/image";
-import { getCachedRegionData } from '@/lib/region';
-import { RegionData as RegionDataType } from '@/lib/data/region';
+import { getRegionDetail } from '@/lib/region';
+import { RegionDetailResponse } from '@/lib/data/region';
 import { IdProps } from '@/types/props';
 import { Card, CardHeader, CardBody } from '@heroui/card';
 import { Image } from '@heroui/image';
 import { Divider } from '@heroui/divider';
+import { Chip } from '@heroui/chip';
 
 export default async function RegionDetailPage({ params }: IdProps) {
-  let allRegions: RegionDataType[] = [];
+  const { id } = await params;
+
+  let regionData: RegionDetailResponse | null = null;
   try {
-    allRegions = await getCachedRegionData();
+    regionData = await getRegionDetail(Number(id));
   } catch (err) {
     console.error('Error fetching cached region data:', err);
   }
 
-  const { id } = await params;
-  const region = allRegions.find((r) => r.id.toString() === id);
-
-  if (!region) {
+  if (!regionData) {
     return <div className="p-8 text-center text-red-600">Region not found</div>;
   }
 
@@ -33,47 +33,65 @@ export default async function RegionDetailPage({ params }: IdProps) {
             isZoomed
             as={NextImage}
             src={
-              region?.logo
-                ? region.logo
+              regionData.region?.logo
+                ? regionData.region.logo
                 : 'https://placehold.in/300x200.png'
             }
-            alt={`${region.name}'s logo`}
+            alt={`${regionData.region?.name}'s logo`}
             height={200}
             width={300}
           />
           <Divider className='my-4' />
           <div className="flex justify-between mb-2">
             <span className="font-semibold">Name:</span>
-            <span>{region.name}</span>
+            <span>{regionData.region?.name}</span>
           </div>
           <div className="flex justify-between mb-2">
             <span className="font-semibold">Email:</span>
             <span>
-              {region.email ? (
-                <Link href={`mailto:${region.email}`} className="text-blue-600 underline">
+              {regionData.region?.email ? (
+                <Link href={`mailto:${regionData.region?.email}`} className="text-blue-600 underline">
                   {"Email Region"}
                 </Link>
               ) : (
-                region.email || 'No email available'
+                regionData.region?.email || 'No email available'
               )}
             </span>
           </div>
           <div className="flex justify-between mb-2">
             <span className="font-semibold">Website:</span>
             <span>
-              {region.website ? (
-                <Link href={`${region.website}`} className="text-blue-600 underline">
+              {regionData.region?.website ? (
+                <Link href={`${regionData.region?.website}`} className="text-blue-600 underline">
                   {"Visit Website"}
                 </Link>
               ) : (
-                region.website || 'No website available'
+                regionData.region?.website || 'No website available'
               )}
             </span>
           </div>
           <div className="flex justify-between mb-2">
             <span className="font-semibold">Status:</span>
-            <span>{region.active ? 'Active' : 'Inactive'}</span>
+            <span>{regionData.region?.active ? 'Active' : 'Inactive'}</span>
           </div>
+          {regionData.region?.aos && regionData.region.aos.length > 0 && (
+            <div className="flex mb-2">
+              <span className="font-semibold w-1/3">AOs:</span>
+              <div className="w-2/3 flex flex-wrap gap-2 justify-end">
+                {regionData.region.aos.map((ao) => (
+                  <Link key={ao.id} href={`/stats/ao/${ao.id}`}>
+                    <Chip
+                      className="cursor-pointer hover:bg-blue-200"
+                      color="primary"
+                      variant="flat"
+                    >
+                      {ao.name}
+                    </Chip>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </CardBody>
       </Card>
     </div>
