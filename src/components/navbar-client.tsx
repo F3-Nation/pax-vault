@@ -191,10 +191,15 @@ export default function NavbarClient({ regionData, paxData }: Props) {
 
       <Drawer 
         isOpen={isOpen} 
+        key={isOpen ? 'mobile_open' : 'mobile_closed'} 
         backdrop="blur" 
         placement="bottom" 
+        classNames={{
+          wrapper: 'h-full',
+        }}
         onOpenChange={onOpenChange}
         isDismissable={false}
+        
         isKeyboardDismissDisabled={true}
       >
         <DrawerContent>
@@ -213,7 +218,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
               onInputChange={handleRegionInputChange}
               onSelectionChange={handleRegionSelection}
               variant="bordered"
-              // size="sm"
+              size="lg"
               // isClearable
             >
             {(region) => (
@@ -239,7 +244,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
               onInputChange={handlePaxInputChange}
               onSelectionChange={handlePaxSelection}
               variant="bordered"
-              // size="sm"
+              size="lg"
               isClearable
             >
             {(pax) => (
