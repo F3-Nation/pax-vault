@@ -50,7 +50,7 @@ export default async function RegionDetailPage({ params }: IdProps) {
             <span className="font-semibold">Email:</span>
             <span>
               {regionData.region?.email ? (
-                <Link href={`mailto:${regionData.region?.email}`} className="text-blue-600 underline">
+                <Link href={`mailto:${regionData.region?.email}`} className="text-secondary-600">
                   {"Email Region"}
                 </Link>
               ) : (
@@ -62,7 +62,7 @@ export default async function RegionDetailPage({ params }: IdProps) {
             <span className="font-semibold">Website:</span>
             <span>
               {regionData.region?.website ? (
-                <Link href={`${regionData.region?.website}`} className="text-blue-600 underline">
+                <Link href={`${regionData.region?.website}`} className="text-secondary-600">
                   {"Visit Website"}
                 </Link>
               ) : (
@@ -81,9 +81,9 @@ export default async function RegionDetailPage({ params }: IdProps) {
                 {regionData.region.aos.map((ao) => (
                   <Link key={ao.id} href={`/stats/ao/${ao.id}`}>
                     <Chip
-                      className="cursor-pointer hover:bg-blue-200"
-                      color="primary"
-                      variant="flat"
+                      className="cursor-pointer"
+                      color="secondary"
+                      variant="faded"
                     >
                       {ao.name}
                     </Chip>

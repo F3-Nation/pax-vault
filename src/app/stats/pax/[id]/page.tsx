@@ -24,7 +24,11 @@ export default async function PaxDetailPage({ params }: IdProps) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center">
     <div className="flex flex-col items-center justify-center min-h-screen">
-      <Card className="w-full max-w-md shadow-lg">
+      <Card 
+        className="w-full bg-background/60 dark:bg-default-100/50 max-w-[610px]"
+        isBlurred
+        shadow="lg"
+      >
         <CardHeader className="text-center font-bold">PAX DETAILS</CardHeader>
         <Divider />
         <CardBody className="p-6">
@@ -53,7 +57,7 @@ export default async function PaxDetailPage({ params }: IdProps) {
             <span className="font-semibold">Region:</span>
             <span>
               {paxData.region_id ? (
-                <Link href={`/stats/region/${paxData.region_id}`} className="text-blue-600 underline">
+                <Link href={`/stats/region/${paxData.region_id}`} className="text-secondary-600">
                   {paxData.region || paxData.region_default || "Unknown Region"}
                 </Link>
               ) : (

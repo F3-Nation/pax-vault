@@ -1,7 +1,7 @@
 {
-  "name": "F3 PAX Stats",
-  "short_name": "PAX Stats",
-  "description": "PAX Stats is a web application that provides real-time statistics and information about the F3 PAX (Fitness, Fellowship, Faith) community.",
+  "name": "F3 PAX Vault",
+  "short_name": "PAX Vault",
+  "description": "PAX Vault is a web application that provides real-time statistics and information about the F3 PAX (Fitness, Fellowship, Faith) community.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#2E2E2E",

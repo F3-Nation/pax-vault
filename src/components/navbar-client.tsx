@@ -8,13 +8,7 @@ import { Link } from "@heroui/link";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerBody,
-  DrawerFooter
-} from "@heroui/drawer";
+import { Drawer, DrawerContent, DrawerHeader, DrawerBody, DrawerFooter } from "@heroui/drawer";
 import { useDisclosure } from "@heroui/use-disclosure";
 import { Divider } from "@heroui/divider";
 
@@ -77,8 +71,24 @@ export default function NavbarClient({ regionData, paxData }: Props) {
     setPaxKey(key);
     if (key !== "null") {
       router.push(`/stats/pax/${key}`);
-      setPaxInput(''); // Clear input after selection
-      onOpenChange(); // Close drawer after selection
+      setTimeout(() => {
+        setPaxInput(''); // Clear input after selection
+        setPaxKey(null); // Reset key after selection
+      }, 100); // Clear input after selection
+    }
+  };
+
+  // Navigate to pax page on mobile
+  // This function is used to handle the selection of a pax in the mobile drawer
+  const handlePaxSelectionMobile = (key: React.Key | null) => {
+    setPaxKey(key);
+    if (key !== "null") {
+      router.push(`/stats/pax/${key}`);
+      setTimeout(() => {
+        setPaxInput(''); // Clear input after selection
+        setPaxKey(null); // Reset key after selection
+        onOpenChange(); // Close drawer after selection
+      }, 100); // Clear input after selection
     }
   };
 
@@ -87,8 +97,24 @@ export default function NavbarClient({ regionData, paxData }: Props) {
     setRegionKey(key);
     if (key !== "null") {
       router.push(`/stats/region/${key}`);
-      setRegionInput(''); // Clear input after selection
-      onOpenChange(); // Close drawer after selection
+      setTimeout(() => {
+        setRegionInput(''); // Clear input after selection
+        setRegionKey(null); // Reset key after selection
+      }, 100); // Clear input after selection
+    }
+  };
+
+  // Navigate to region page on mobile
+  // This function is used to handle the selection of a region in the mobile drawer
+  const handleRegionSelectionMobile = (key: React.Key | null) => {
+    setRegionKey(key);
+    if (key !== "null") {
+      router.push(`/stats/region/${key}`);
+      setTimeout(() => {
+        setRegionInput(''); // Clear input after selection
+        setRegionKey(null); // Reset key after selection
+        onOpenChange(); // Close drawer after selection
+      }, 100); // Clear input after selection
     }
   };
 
@@ -118,13 +144,14 @@ export default function NavbarClient({ regionData, paxData }: Props) {
             defaultItems={regionData}
             inputValue={regionInput}
             isLoading={regionLoading}
-            placeholder="F3 REGION NAME"
+            // placeholder="F3 REGION NAME"
             itemHeight={40}
             selectedKey={String(regionKey)}
             onInputChange={handleRegionInputChange}
             onSelectionChange={handleRegionSelection}
-            variant="underlined"
-            // size="sm"
+            variant="bordered"
+            color="secondary"
+            size="sm"
             isClearable
           >
           {(region) => (
@@ -147,13 +174,14 @@ export default function NavbarClient({ regionData, paxData }: Props) {
             defaultItems={paxData}
             inputValue={paxInput}
             isLoading={paxLoading}
-            placeholder="F3 PAX NAME"
+            // placeholder="F3 PAX NAME"
             itemHeight={40}
             selectedKey={String(paxKey)}
             onInputChange={handlePaxInputChange}
             onSelectionChange={handlePaxSelection}
-            variant="underlined"
-            // size="sm"
+            variant="bordered"
+            color="secondary"
+            size="sm"
             isClearable
           >
           {(pax) => (
@@ -181,7 +209,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
             key="search-region-pax"
             className="w-40"
             variant="flat"
-            color="default"
+            color="secondary"
             size="sm"
             onPress={() => onOpen()}
             >
@@ -193,7 +221,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
         isOpen={isOpen} 
         key={isOpen ? 'mobile_open' : 'mobile_closed'} 
         backdrop="blur" 
-        placement="bottom" 
+        placement="top" 
         classNames={{
           wrapper: 'h-full',
         }}
@@ -212,14 +240,15 @@ export default function NavbarClient({ regionData, paxData }: Props) {
               defaultItems={regionData}
               inputValue={regionInput}
               isLoading={regionLoading}
-              placeholder="F3 REGION NAME"
+              // placeholder="F3 REGION NAME"
               itemHeight={40}
               selectedKey={String(regionKey)}
               onInputChange={handleRegionInputChange}
-              onSelectionChange={handleRegionSelection}
+              onSelectionChange={handleRegionSelectionMobile}
               variant="bordered"
               size="lg"
-              // isClearable
+              color="secondary"
+              isClearable
             >
             {(region) => (
               <AutocompleteItem key={region.id} textValue={region.name}>
@@ -238,13 +267,14 @@ export default function NavbarClient({ regionData, paxData }: Props) {
               defaultItems={paxData}
               inputValue={paxInput}
               isLoading={paxLoading}
-              placeholder="F3 PAX NAME"
+              // placeholder="F3 PAX NAME"
               itemHeight={40}
               selectedKey={String(paxKey)}
               onInputChange={handlePaxInputChange}
-              onSelectionChange={handlePaxSelection}
+              onSelectionChange={handlePaxSelectionMobile}
               variant="bordered"
               size="lg"
+              color="secondary"
               isClearable
             >
             {(pax) => (
