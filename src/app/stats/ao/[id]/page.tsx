@@ -1,11 +1,11 @@
-import { getCachedAoData } from '@/lib/ao';
-import { AoData as AoDataType } from '@/lib/data/ao';
+import { getAOData } from '@/lib/ao';
+import { AOData } from '@/types/ao';
 import { IdProps } from '@/types/props';
 
 export default async function AoDetailPage({ params }: IdProps) {
-  let allAos: AoDataType[] = [];
+  let allAos: AOData[] = [];
   try {
-    allAos = await getCachedAoData();
+    allAos = await getAOData();
   } catch (err) {
     console.error('Error fetching cached ao data:', err);
   }

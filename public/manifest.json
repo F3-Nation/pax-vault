@@ -5,25 +5,41 @@
   "start_url": "/",
   "display": "standalone",
   "background_color": "#2E2E2E",
+  "display_override": ["window-controls-overlay", "standalone"],
   "theme_color": "#FFFFFF",
   "orientation": "portrait",
   "lang": "en-US",
   "icons": [
     {
-      "src": "/icon-192x192.png",
+      "src": "/icons/icon-144x144.png",
+      "type": "image/png",
+      "sizes": "144x144"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "/icon-512x512.png",
+      "src": "/icons/icon-512x512.png",
       "type": "image/png",
       "sizes": "512x512"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/screenshot-600x1200.png",
+      "type": "image/png",
+      "sizes": "600x1200",
+      "form_factor": "narrow",
+      "label": "Mobile view"
     },
     {
-      "src": "/icon-512x512.png",
+      "src": "/screenshots/screenshot-1200x600.png",
       "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any maskable"
+      "sizes": "1200x600",
+      "form_factor": "wide",
+      "label": "Desktop view"
     }
   ]
 }

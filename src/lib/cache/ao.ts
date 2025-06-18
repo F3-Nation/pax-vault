@@ -1,17 +1,9 @@
 // src/lib/data/ao.ts
 import pool from '@/lib/db';
 import { unstable_cache } from 'next/cache';
+import { AOData } from '@/types/ao';
 
-export interface AoData {
-  id: number; // Unique identifier for the organization
-  name: string; // Name of the organization
-  email: string; // Contact email for the organization
-  website: string; // Website URL of the organization
-  logo: string | null; // Logo URL of the organization, can be null
-  active: boolean; // Indicates if the organization is active
-}
-
-export async function getAoDataUncached(): Promise<AoData[]> {
+export async function getAoDataUncached(): Promise<AOData[]> {
     const { rows } = await pool.query(`
       SELECT 
         id, 
@@ -28,7 +20,7 @@ export async function getAoDataUncached(): Promise<AoData[]> {
         id DESC
     `);
     console.log('Ao data fetched from database');
-    return rows as AoData[];
+    return rows as AOData[];
 }
 
 export const getAoData = unstable_cache(

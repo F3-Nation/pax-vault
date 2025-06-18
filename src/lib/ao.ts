@@ -1,12 +1,23 @@
 // src/lib/region.ts
-import { getAoData, AoData } from './data/ao';
-import { cache } from 'react';
+import { AOData } from '@/types/ao';
+import pool from '@/lib/db';
 
-export const getCachedAoData = cache(async (): Promise<AoData[]> => {
-  try {
-    return await getAoData();
-  } catch (err) {
-    console.error('Failed to load ao data:', err);
-    return [];
-  }
-});
+export async function getAOData(): Promise<AOData[]> {
+    const { rows } = await pool.query(`
+      SELECT 
+        id, 
+        name, 
+        email, 
+        website,
+        logo_url as logo, 
+        is_active as active 
+      FROM 
+        orgs
+      WHERE 
+        org_type = 'ao' 
+      ORDER BY 
+        id DESC
+    `);
+    console.log('Ao data fetched from database');
+    return rows as AOData[];
+}

@@ -1,5 +1,6 @@
 // src/lib/region.ts
-import { getRegionList, RegionList, RegionDetailResponse } from './data/region';
+import { getRegionList } from '@/lib/cache/region';
+import { RegionList, RegionDetailResponse } from '@/types/region';
 import { cache } from 'react';
 import pool from '@/lib/db';
 

@@ -2,6 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --background: #fff;
+  --foreground: #000;
+  /* ...other variables... */
+}
+
+.dark {
+  --background: #18181b;
+  --foreground: #fff;
+  --primary: #ccff00;
+  /* ...other variables for dark mode... */
+}
+
+.light {
+  --background: #fff;
+  --foreground: #18181b;
+  --primary: #b50000;
+  /* ...other variables for light mode... */
+}
+
 body {
     font-family: 'Titillium Web', sans-serif;
+    background-color: var(--background);
+    color: var(--foreground);
     }
+    

@@ -8,9 +8,10 @@ import { Link } from "@heroui/link";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
-import { Drawer, DrawerContent, DrawerHeader, DrawerBody, DrawerFooter } from "@heroui/drawer";
+import { Drawer, DrawerContent, DrawerHeader, DrawerBody } from "@heroui/drawer";
 import { useDisclosure } from "@heroui/use-disclosure";
 import { Divider } from "@heroui/divider";
+import { ThemeSwitcher } from "@/lib/theme-switcher";
 
 type Props = {
   regionData: {
@@ -131,12 +132,12 @@ export default function NavbarClient({ regionData, paxData }: Props) {
           className="lg:hidden"
         /> */}
         <NavbarBrand>
-          <Link href="/" className="flex items-center gap-2 font-bold text-inherit">PAX STATS</Link>
+          <Link href="/" className="flex items-center gap-2 font-bold text-inherit">PAX VAULT</Link>
         </NavbarBrand>
       </NavbarContent>
 
       {/* Desktop Search Fields */}
-      <NavbarContent className="hidden lg:flex gap-10" justify="end">
+      <NavbarContent className="hidden lg:flex" justify="end">
         <NavbarItem className="w-64">
           <Autocomplete
             className="w-full"
@@ -150,7 +151,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
             onInputChange={handleRegionInputChange}
             onSelectionChange={handleRegionSelection}
             variant="bordered"
-            color="secondary"
+            color="primary"
             size="sm"
             isClearable
           >
@@ -180,7 +181,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
             onInputChange={handlePaxInputChange}
             onSelectionChange={handlePaxSelection}
             variant="bordered"
-            color="secondary"
+            color="primary"
             size="sm"
             isClearable
           >
@@ -201,20 +202,28 @@ export default function NavbarClient({ regionData, paxData }: Props) {
           )}
           </Autocomplete>
         </NavbarItem>
+        <NavbarItem>
+          {ThemeSwitcher({ size: "lg" }, { type: "md" })}
+        </NavbarItem>
       </NavbarContent>
 
       {/* Mobile Search Buttons */}
       <NavbarContent className="flex lg:hidden" justify="end">
+        <NavbarItem>
           <Button
             key="search-region-pax"
             className="w-40"
-            variant="flat"
-            color="secondary"
+            variant="faded"
+            color="primary"
             size="sm"
             onPress={() => onOpen()}
             >
-              FIND REGION/PAX
-            </Button>
+              FIND REGION OR PAX
+          </Button>
+        </NavbarItem>
+        <NavbarItem>
+           {ThemeSwitcher({ size: "md" }, { type: "sm" })}
+        </NavbarItem>
       </NavbarContent>
 
       <Drawer 
@@ -247,7 +256,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
               onSelectionChange={handleRegionSelectionMobile}
               variant="bordered"
               size="lg"
-              color="secondary"
+              color="primary"
               isClearable
             >
             {(region) => (
@@ -274,7 +283,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
               onSelectionChange={handlePaxSelectionMobile}
               variant="bordered"
               size="lg"
-              color="secondary"
+              color="primary"
               isClearable
             >
             {(pax) => (
@@ -294,14 +303,14 @@ export default function NavbarClient({ regionData, paxData }: Props) {
             )}
             </Autocomplete>
           </DrawerBody>
-          <DrawerFooter>
-            {/* <Button color="danger" variant="light" onPress={onClose}>
+          {/* <DrawerFooter>
+            <Button color="danger" variant="light" onPress={onClose}>
               Close
             </Button>
             <Button color="primary" onPress={onClose}>
               Action
-            </Button> */}
-          </DrawerFooter>
+            </Button>
+          </DrawerFooter> */}
         </DrawerContent>
       </Drawer>
 

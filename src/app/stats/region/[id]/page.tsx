@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import NextImage from "next/image";
 import { getRegionDetail } from '@/lib/region';
-import { RegionDetailResponse } from '@/lib/data/region';
+import { RegionDetailResponse } from '@/types/region';
 import { IdProps } from '@/types/props';
 import { Card, CardHeader, CardBody } from '@heroui/card';
 import { Image } from '@heroui/image';
