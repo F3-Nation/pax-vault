@@ -16,6 +16,22 @@ export default {
         primary: {
           foreground: "var(--primary-foreground)",
           DEFAULT: "var(--primary)"
+        },
+        secondary: {
+          foreground: "var(--secondary-foreground)",
+          DEFAULT: "var(--secondary)"
+        },
+        warning: {
+          foreground: "var(--warning-foreground)",
+          DEFAULT: "var(--warning)"
+        },
+        danger: {
+          foreground: "var(--danger-foreground)",
+          DEFAULT: "var(--danger)"
+        },
+        success: {
+          foreground: "var(--success-foreground)",
+          DEFAULT: "var(--success)"
         },        
       },
     },

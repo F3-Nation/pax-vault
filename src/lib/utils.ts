@@ -32,7 +32,7 @@ export function formatDate(
     const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
     const month = d.toLocaleDateString('en-US', { month: 'short' });
     const day = d.getDate();
-    const year = d.getFullYear();
+    const year = d.toLocaleDateString('en-US', { year: 'numeric' });
 
     switch (format) {
       case "M D Y":
@@ -48,3 +48,14 @@ export function formatDate(
 export function cleanEventName(name: string): string {
   return name.replace(/^Backblast!\s*/i, '').trim();
 } 
+
+export function formatChangeDescription(change: number | null, label: string): string {
+  if (change === null) return "";
+  if (change > 0) {
+    return `${label} volume is up ${change.toFixed(2)}% from last month.`;
+  } else if (change < 0) {
+    return `${label} volume is down ${Math.abs(change).toFixed(2)}% from last month.`;
+  } else {
+    return `There is no change in ${label} volume from last month.`;
+  }
+}

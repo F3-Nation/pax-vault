@@ -1,15 +1,22 @@
-import { IdProps } from '@/types/props';
-import { BioCard } from '@/components/pax/BioCard';
-import { WorkoutSummaryCard } from '@/components/pax/WorkoutSummaryCard';
-import { AOStatsCard } from '@/components/pax/AOStatsCard';
-import { AchievementsCard } from '@/components/pax/AchievementsCard';
-import { BackBlastsCard } from '@/components/pax/BackBlastsCard';
-import { loadPaxStats } from './loader';
-
+import { IdProps } from "@/types/props";
+import { BioCard } from "@/components/pax/BioCard";
+import { PAXSummaryCard } from "@/components/pax/PAXSummaryCard";
+import { AOBreakdownCard } from "@/components/pax/AOBreakdownCard";
+import { AchievementsCard } from "@/components/pax/AchievementsCard";
+import { RecentEventsCard } from "@/components/pax/RecentEventsCard";
+import { PAXInsightsCard } from "@/components/pax/PAXInsightsCard";
+import { loadPaxStats } from "./loader";
 
 export default async function PaxDetailPage({ params }: IdProps) {
   const { id } = await params;
-  const { paxInfo, eventsResult, paxData, paxEvents, achievements } = await loadPaxStats(Number(id));
+  const {
+    paxInfo,
+    eventsResult,
+    paxData,
+    paxEvents,
+    achievements,
+    paxInsights,
+  } = await loadPaxStats(Number(id));
 
   if (!paxInfo) {
     return <div className="p-8 text-center text-red-600">Pax not found</div>;
@@ -23,20 +30,31 @@ export default async function PaxDetailPage({ params }: IdProps) {
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4">
         {/* Workout Summary Card */}
-        <WorkoutSummaryCard
+        <PAXSummaryCard
           paxData={paxData}
           eventsResult={{
             ...eventsResult,
             uniquePax: {
               ...eventsResult.uniquePax,
-              most_attended_user_event_count: eventsResult.uniquePax.most_attended_user_event_count ?? 0,
-              most_attended_user_id: String(eventsResult.uniquePax.most_attended_user_id ?? ''),
-              most_attended_user_name: String(eventsResult.uniquePax.most_attended_user_name ?? ''),
+              most_attended_user_event_count:
+                eventsResult.uniquePax.most_attended_user_event_count ?? 0,
+              most_attended_user_id: String(
+                eventsResult.uniquePax.most_attended_user_id ?? ""
+              ),
+              most_attended_user_name: String(
+                eventsResult.uniquePax.most_attended_user_name ?? ""
+              ),
             },
           }}
         />
         {/* AO Stats Card */}
-        <AOStatsCard paxData={paxData?.nation ?? null} />
+        <AOBreakdownCard paxData={paxData?.nation ?? null} />
+      </div>
+      {/* Insights Card */}
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
+        <PAXInsightsCard
+          paxInsights={Array.isArray(paxInsights) ? paxInsights : [paxInsights]}
+        />
       </div>
       {/* Achievements Card */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
@@ -44,7 +62,7 @@ export default async function PaxDetailPage({ params }: IdProps) {
       </div>
       {/* Backblasts Card */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
-        <BackBlastsCard paxEvents={paxEvents} />
+        <RecentEventsCard paxEvents={paxEvents} />
       </div>
     </main>
   );

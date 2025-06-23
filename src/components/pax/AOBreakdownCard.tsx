@@ -5,8 +5,9 @@ import { Link } from "@heroui/link";
 import { PaxEventsCalculations } from "@/types/pax";
 import { Tab, Tabs } from "@heroui/tabs";
 import { useState } from "react";
+import { Divider } from "@heroui/divider";
 
-export function AOStatsCard({
+export function AOBreakdownCard({
   paxData,
 }: {
   paxData: PaxEventsCalculations | null;
@@ -14,8 +15,8 @@ export function AOStatsCard({
   const [selected, setSelected] = useState("aoNameCounts");
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
-      <CardHeader className="flex justify-between items-center px-6 pb-0">
-        <div className="font-semibold text-xl">AO Stats</div>
+      <CardHeader className="flex justify-between items-center px-6">
+        <div className="font-semibold text-xl">AO Breakdown</div>
         <Tabs
           aria-label="Select AO Stats View"
           selectedKey={selected}
@@ -30,17 +31,21 @@ export function AOStatsCard({
           <Tab key="aoNameQCounts" title="As Q"></Tab>
         </Tabs>
       </CardHeader>
-      <CardBody className="px-6"> 
+      <Divider />
+      <CardBody className="px-6">
         <div className="space-y-1 text-sm">
           {Array.isArray(paxData?.[selected as keyof typeof paxData]) &&
-          (paxData?.[selected as keyof typeof paxData] as Array<unknown>)?.length > 0 ? (
-            (paxData?.[selected as keyof typeof paxData] as {
-              id: number;
-              ao_name: string;
-              count: number;
-              region_name: string;
-              region_org_id: number;
-            }[])?.map(
+          (paxData?.[selected as keyof typeof paxData] as Array<unknown>)
+            ?.length > 0 ? (
+            (
+              paxData?.[selected as keyof typeof paxData] as {
+                id: number;
+                ao_name: string;
+                count: number;
+                region_name: string;
+                region_org_id: number;
+              }[]
+            )?.map(
               ({ id, ao_name, count, region_name, region_org_id }, idx) => (
                 <div
                   key={ao_name}
@@ -77,8 +82,10 @@ export function AOStatsCard({
               )
             )
           ) : (
-            <p className="italic text-default-400">
-              Has not posted to an AO yet
+            <p className="italic text-center text-sm text-default">
+              {selected === "aoNameCounts"
+                ? "Has not posted to an AO yet"
+                : "Has not lead an AO yet"}
             </p>
           )}
         </div>

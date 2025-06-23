@@ -1,6 +1,6 @@
 export interface PaxList {
   id: number; // Unique identifier for the user
-  f3_name: string; // F3 name (nickname)   
+  f3_name: string; // F3 name (nickname)
   first_name: string; // First name of the user
   last_name: string; // Last name of the user
   email: string; // Email address of the user
@@ -16,7 +16,7 @@ export interface PaxList {
 
 export interface PaxDetail {
   id: number; // Unique identifier for the user
-  f3_name: string; // F3 name (nickname)   
+  f3_name: string; // F3 name (nickname)
   first_name: string; // First name of the user
   last_name: string; // Last name of the user
   email: string; // Email address of the user
@@ -48,19 +48,41 @@ export interface PaxEvents {
   q_list: string; // Comma-separated list of users who held a Q for the event
 }
 
+export interface PaxInsights {
+  paxData: {
+    date: string;
+    events: number;
+    qs: number;
+  }[];
+  eventsChange: number;
+  qsChange: number; // Key-value map of date to post count
+}
+
 export interface PaxEventsCalculations {
   totalEvents: number; // Total number of events attended by the user
   totalQ: number; // Total number of Qs (leadership roles) taken by the user
   firstBD: string; // Start date of the first event
-  firstBDLocation: { id: number, name: string } | null; // Location of the first event
+  firstBDLocation: { id: number; name: string } | null; // Location of the first event
   lastBD: string; // Start date of the last event
-  lastBDLocation: { id: number, name: string } | null; // Location of the last event
+  lastBDLocation: { id: number; name: string } | null; // Location of the last event
   firstQ: string; // Start date of the first Q event
-  firstQLocation: { id: number, name: string } | null; // Location of the first Q event
+  firstQLocation: { id: number; name: string } | null; // Location of the first Q event
   lastQ: string; // Start date of the last Q event
-  lastQLocation: { id: number, name: string } | null; // Location of the last Q event
-  aoNameCounts: { id: number, ao_name: string, count: number, region_name: string, region_org_id: number }[]; // Counts of events per AO
-  aoNameQCounts: { id: number, ao_name: string, count: number, region_name: string, region_org_id: number }[]; // Counts of Qs per AO
+  lastQLocation: { id: number; name: string } | null; // Location of the last Q event
+  aoNameCounts: {
+    id: number;
+    ao_name: string;
+    count: number;
+    region_name: string;
+    region_org_id: number;
+  }[]; // Counts of events per AO
+  aoNameQCounts: {
+    id: number;
+    ao_name: string;
+    count: number;
+    region_name: string;
+    region_org_id: number;
+  }[]; // Counts of Qs per AO
 }
 
 export interface PaxEventsResults {
@@ -71,10 +93,11 @@ export interface PaxEventsResults {
 export interface PaxAchievements {
   achievement_id: number; // Unique identifier for the achievement
   user_id: number; // Unique identifier for the user
-  date_awarded: string; // Date when the achievement was awarded
   name: string; // Name of the achievement
   description: string; // Description of the achievement
   verb: string; // Verb associated with the achievement
   image_url: string | null; // URL of the achievement image
   specific_org_id: number | null; // Specific organization ID if applicable
+  date_awarded: string; // Date when the achievement was awarded
+  times: number; // Number of times the achievement has been earned
 }

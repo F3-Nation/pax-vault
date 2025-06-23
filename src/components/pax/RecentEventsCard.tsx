@@ -6,41 +6,50 @@ import { formatDate, cleanEventName } from "@/lib/utils";
 import { Chip } from "@heroui/chip";
 import { Avatar } from "@heroui/avatar";
 import { Link } from "@heroui/link";
+import { Divider } from "@heroui/divider";
 
-export function BackBlastsCard({ paxEvents }: { paxEvents: PaxEvents[] }) {
+export function RecentEventsCard({ paxEvents }: { paxEvents: PaxEvents[] }) {
+  paxEvents = paxEvents.slice(0, 10); // Limit to the most recent 6 events
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="text-center font-semibold text-xl px-6">
         Recent Events
       </CardHeader>
+      <Divider />
       <CardBody className="px-6">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl mb-6">
-          {paxEvents
-            .map(
-              (
-                {
-                  id,
-                  user_id,
-                  q_ind,
-                  name,
-                  ao_name,
-                  ao_org_id,
-                  start_date,
-                  f3_name,
-                  avatar,
-                  pax_list,
-                  q_list,
-                  pax_count,
-                }
-              ) => (
+        <div
+          className={`grid grid-cols-1 gap-6 w-full max-w-6xl ${
+            paxEvents.length > 0 ? "mb-6 lg:grid-cols-2" : ""
+          }`}
+        >
+          {paxEvents.length === 0 ? (
+            <p className="italic text-center text-sm text-default">
+              Has not posted yet
+            </p>
+          ) : (
+            paxEvents.map(
+              ({
+                id,
+                user_id,
+                q_ind,
+                name,
+                ao_name,
+                ao_org_id,
+                start_date,
+                f3_name,
+                avatar,
+                pax_list,
+                q_list,
+                pax_count,
+              }) => (
                 <div key={id}>
-                    <Card
+                  <Card
                     className={`bg-background/60 dark:bg-default-100/50 border ${
                       q_ind === "1"
-                      ? "border-warning-500"
-                      : "border-default-200 dark:border-default-300"
+                        ? "border-secondary"
+                        : "border-default-200 dark:border-default-300"
                     }`}
-                    >
+                  >
                     <CardBody className="text-sm">
                       <div className="flex justify-between gap-4">
                         <div className="pb-4 justify-start">
@@ -50,7 +59,12 @@ export function BackBlastsCard({ paxEvents }: { paxEvents: PaxEvents[] }) {
                             </div>
                           </Link>
                           <div className="text-default-400">
-                            {formatDate(start_date, "M D Y")} @ <Link href={`/stats/ao/${ao_org_id}`}><span className="text-default-400 text-sm italic">{ao_name}</span></Link>
+                            {formatDate(start_date, "M D Y")} @{" "}
+                            <Link href={`/stats/ao/${ao_org_id}`}>
+                              <span className="text-default-400 text-sm italic">
+                                {ao_name}
+                              </span>
+                            </Link>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2 justify-end">
@@ -80,7 +94,7 @@ export function BackBlastsCard({ paxEvents }: { paxEvents: PaxEvents[] }) {
                                         <Avatar showFallback src={qAvatar} />
                                       }
                                       variant="bordered"
-                                      color="warning"
+                                      color="secondary"
                                       size="sm"
                                     >
                                       {qName}
@@ -99,7 +113,7 @@ export function BackBlastsCard({ paxEvents }: { paxEvents: PaxEvents[] }) {
                                   <Avatar showFallback src={avatar ?? ""} />
                                 }
                                 variant="bordered"
-                                color="warning"
+                                color="secondary"
                                 size="sm"
                               >
                                 {f3_name}
@@ -163,10 +177,11 @@ export function BackBlastsCard({ paxEvents }: { paxEvents: PaxEvents[] }) {
                         </div>
                       </div>
                     </CardBody>
-                  </Card>                  
+                  </Card>
                 </div>
               )
-            )}
+            )
+          )}
         </div>
       </CardBody>
     </Card>

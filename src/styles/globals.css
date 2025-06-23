@@ -9,16 +9,24 @@
 }
 
 .dark {
-  --background: #18181b;
+  --background: #121212;
   --foreground: #fff;
   --primary: #ccff00;
+  --secondary: #ff0000;
+  --success: #17c964;
+  --warning: #f5a524;
+  --danger: #f31260;
   /* ...other variables for dark mode... */
 }
 
 .light {
   --background: #fff;
-  --foreground: #18181b;
+  --foreground: #121212;
   --primary: #b50000;
+  --secondary: #7828c8;
+  --success: #17c964;
+  --warning: #f5a524;
+  --danger: #f31260;
   /* ...other variables for light mode... */
 }
 

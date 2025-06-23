@@ -1,6 +1,18 @@
 // /stats/pax/[id]/loader.ts
-import { getPaxDetail, getPaxEvents, calcPaxEvents, getAchievementData } from "@/lib/pax";
-import { PaxDetail, PaxEvents, PaxEventsResults, PaxAchievements } from "@/types/pax";
+import {
+  getPaxDetail,
+  getPaxEvents,
+  calcPaxEvents,
+  getAchievementData,
+  calcPaxInsights,
+} from "@/lib/pax";
+import {
+  PaxDetail,
+  PaxEvents,
+  PaxEventsResults,
+  PaxAchievements,
+  PaxInsights,
+} from "@/types/pax";
 
 export async function loadPaxStats(id: number) {
   let paxInfo: PaxDetail | null = null;
@@ -44,7 +56,6 @@ export async function loadPaxStats(id: number) {
           rawEventsResult.uniquePax.most_attended_user_name ?? undefined,
       },
     };
-    // console.log(eventsResult, 'pax events fetched');
   } catch (err) {
     console.error("Error fetching cached pax events:", err);
   }
@@ -52,12 +63,15 @@ export async function loadPaxStats(id: number) {
   let paxData: PaxEventsResults | null = null;
 
   try {
-    paxData = await calcPaxEvents(eventsResult?.events ?? [], paxInfo?.region_id);
+    paxData = await calcPaxEvents(
+      eventsResult?.events ?? [],
+      paxInfo?.region_id
+    );
   } catch (err) {
     console.error("Error calculating pax events:", err);
   }
 
-  const paxEvents: PaxEvents[] = eventsResult?.events.slice(0, 10) ?? [];
+  const paxEvents: PaxEvents[] = eventsResult?.events ?? [];
 
   let achievements: PaxAchievements[] = [];
 
@@ -67,5 +81,14 @@ export async function loadPaxStats(id: number) {
     console.error("Error fetching achievement data:", err);
   }
 
-  return { paxInfo, eventsResult, paxData, paxEvents, achievements };
+  const paxInsights: PaxInsights = await calcPaxInsights(paxEvents);
+
+  return {
+    paxInfo,
+    eventsResult,
+    paxData,
+    paxEvents,
+    achievements,
+    paxInsights,
+  };
 }

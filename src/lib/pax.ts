@@ -1,22 +1,31 @@
 // src/lib/region.ts
-import { PaxList, PaxDetail, PaxEvents, PaxEventsCalculations, PaxEventsResults, PaxAchievements } from '@/types/pax';
-import { getPaxList } from '@/lib/cache/pax';
+import {
+  PaxList,
+  PaxDetail,
+  PaxEvents,
+  PaxEventsCalculations,
+  PaxEventsResults,
+  PaxAchievements,
+  PaxInsights,
+} from "@/types/pax";
+import { getPaxList } from "@/lib/cache/pax";
 
-import { cache } from 'react';
-import { formatDate }  from '@/lib/utils';
-import pool from '@/lib/db';
+import { cache } from "react";
+import { formatDate } from "@/lib/utils";
+import pool from "@/lib/db";
 
 export const getCachedPaxList = cache(async (): Promise<PaxList[]> => {
   try {
     return await getPaxList();
   } catch (err) {
-    console.error('Failed to load pax data:', err);
+    console.error("Failed to load pax data:", err);
     return [];
   }
 });
 
 export async function getPaxDetail(id: number): Promise<PaxDetail | null> {
-  const { rows } = await pool.query(`
+  const { rows } = await pool.query(
+    `
     SELECT 
       us.id,
       us.f3_name,
@@ -58,33 +67,55 @@ export async function getPaxDetail(id: number): Promise<PaxDetail | null> {
   return pax;
 }
 
-export async function getAchievementData(id: number): Promise<PaxAchievements[]> {
-    const { rows } = await pool.query(`
-      SELECT
-        au.achievement_id,
-        au.user_id,
-        au.date_awarded,
-        ach.name,
-        ach.description,
-        ach.verb,
-        ach.image_url,
-        ach.specific_org_id
-      FROM
-        achievements_x_users au
-        LEFT JOIN achievements ach ON ach.id = au.achievement_id
-      WHERE
-        au.user_id = $1
-      ORDER BY
-        au.date_awarded DESC
-      `,
-     [id]
+export async function getAchievementData(
+  id: number
+): Promise<PaxAchievements[]> {
+  const { rows } = await pool.query(
+    `
+    SELECT
+      au.achievement_id,
+      au.user_id,
+      ach.name,
+      ach.description,
+      ach.verb,
+      ach.image_url,
+      ach.specific_org_id,
+      au.date_awarded,
+      COUNT(*) AS times
+    FROM
+      achievements_x_users au
+      LEFT JOIN achievements ach ON ach.id = au.achievement_id
+    WHERE
+      au.user_id = $1
+    GROUP BY
+      au.achievement_id,
+      au.user_id,
+      ach.name,
+      ach.description,
+      ach.verb,
+      ach.image_url,
+      ach.specific_org_id
+    ORDER BY
+      MAX(au.date_awarded) DESC
+
+    `,
+    [id]
   );
-  console.log('Achievement data fetched from database');
   return rows as PaxAchievements[];
 }
 
-export async function getPaxEvents(id: number): Promise<{ events: PaxEvents[]; uniquePax: { total_unique_other_attendees: number; unique_attendees_when_q: number; most_attended_user_id: number | null; most_attended_user_name: string | null; most_attended_user_event_count: number | null } }> {
-  const { rows } = await pool.query(`
+export async function getPaxEvents(id: number): Promise<{
+  events: PaxEvents[];
+  uniquePax: {
+    total_unique_other_attendees: number;
+    unique_attendees_when_q: number;
+    most_attended_user_id: number | null;
+    most_attended_user_name: string | null;
+    most_attended_user_event_count: number | null;
+  };
+}> {
+  const { rows } = await pool.query(
+    `
     WITH user_events AS (
   SELECT ae.*
   FROM attendance_expanded ae
@@ -128,7 +159,8 @@ ORDER BY ei.start_date DESC;
     `,
     [id]
   );
-  const { rows: uniquePax } = await pool.query(`
+  const { rows: uniquePax } = await pool.query(
+    `
     SELECT
       (
         SELECT COUNT(DISTINCT ae2.user_id)
@@ -201,52 +233,168 @@ ORDER BY ei.start_date DESC;
   return { events: rows as PaxEvents[], uniquePax: uniquePax[0] };
 }
 
-export async function processPaxData(paxData: PaxEvents[]): Promise<PaxEventsCalculations> {
+export async function calcPaxInsights(
+  paxEvents: PaxEvents[]
+): Promise<PaxInsights> {
+  const summaryMap: Record<
+    string,
+    {
+      date: string;
+      events: number;
+      qs: number;
+    }
+  > = {};
+
+  // Reverse the order so the most recent events come first
+  [...paxEvents].reverse().forEach((event) => {
+    const date = new Date(event.start_date);
+    const key = formatDate(date, "M Y");
+    if (!summaryMap[key]) {
+      summaryMap[key] = {
+        date: key,
+        events: 0,
+        qs: 0,
+      };
+    }
+    summaryMap[key].events += 1;
+    if (event.q_ind === "1") {
+      summaryMap[key].qs += 1;
+    }
+  });
+
+  // Convert summaries to arrays of { date, events, qs, events_avg, qs_avg }
+  const paxDataArray = Object.entries(summaryMap).map(([date, data]) => ({
+    date,
+    events: data.events,
+    qs: data.qs,
+  }));
+
+  // Fill in missing months
+  if (paxDataArray.length > 0) {
+    const filled: typeof paxDataArray = [];
+    const monthSet = new Set(paxDataArray.map((d) => d.date));
+    const firstDate = new Date(paxDataArray[0].date + " 1");
+    const endDate = new Date();
+    endDate.setDate(1);
+    const current = new Date(firstDate);
+
+    while (current <= endDate) {
+      const key = formatDate(current, "M Y");
+      if (monthSet.has(key)) {
+        filled.push(paxDataArray.find((d) => d.date === key)!);
+      } else {
+        filled.push({ date: key, events: 0, qs: 0});
+      }
+      current.setMonth(current.getMonth() + 1);
+    }
+
+    paxDataArray.length = 0;
+    paxDataArray.push(...filled);
+  }
+
+  paxDataArray.sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
+  let eventsChange: number | null = null;
+  let qsChange: number | null = null;
+
+  if (paxDataArray.length > 3) {
+    const len = paxDataArray.length;
+    const current = paxDataArray[len - 1];
+    const previous = paxDataArray[len - 2];
+
+    if (previous.events > 0) {
+      eventsChange =
+        ((current.events - previous.events) / previous.events) * 100;
+    }
+
+    if (previous.qs > 0) {
+      qsChange = ((current.qs - previous.qs) / previous.qs) * 100;
+    }
+  }
+  return {
+    paxData: paxDataArray,
+    eventsChange: eventsChange ?? 0,
+    qsChange: qsChange ?? 0,
+  };
+}
+
+export async function processPaxData(
+  paxData: PaxEvents[]
+): Promise<PaxEventsCalculations> {
   const totalEvents = paxData.length;
   const totalQ = paxData.filter((pax: PaxEvents) => pax.q_ind === "1").length;
-  
+
   // Find the oldest event by start_date
   const oldestBD = paxData.reduce((min, curr) => {
     return new Date(curr.start_date) < new Date(min.start_date) ? curr : min;
   }, paxData[0]);
-  const firstBD = oldestBD?.start_date ? formatDate(oldestBD?.start_date) : '';
-  const firstBDLocation = oldestBD?.ao_org_id && oldestBD?.ao_name
-    ? { id: oldestBD?.ao_org_id, name: oldestBD?.ao_name }
-    : null;
+  const firstBD = oldestBD?.start_date ? formatDate(oldestBD?.start_date) : "";
+  const firstBDLocation =
+    oldestBD?.ao_org_id && oldestBD?.ao_name
+      ? { id: oldestBD?.ao_org_id, name: oldestBD?.ao_name }
+      : null;
 
   // Find the newest event by start_date
   const newestBD = paxData.reduce((max, curr) => {
     return new Date(curr.start_date) > new Date(max.start_date) ? curr : max;
   }, paxData[0]);
-  const lastBD = newestBD?.start_date ? formatDate(newestBD?.start_date) : '';
-  const lastBDLocation = newestBD?.ao_org_id && newestBD?.ao_name
-    ? { id: newestBD?.ao_org_id, name: newestBD?.ao_name }
-    : null;
+  const lastBD = newestBD?.start_date ? formatDate(newestBD?.start_date) : "";
+  const lastBDLocation =
+    newestBD?.ao_org_id && newestBD?.ao_name
+      ? { id: newestBD?.ao_org_id, name: newestBD?.ao_name }
+      : null;
 
   // Find the oldest and newest Q event by start_date, only considering events where q_ind === "1"
-  const qEvents = paxData.filter(p => p.q_ind === "1");
-  const oldestQ = qEvents.length > 0 ? qEvents.reduce((min, curr) => {
-    return new Date(curr.start_date) < new Date(min.start_date) ? curr : min;
-  }, qEvents[0]) : null;
-  const firstQ = oldestQ?.start_date ? formatDate(oldestQ?.start_date) : '';
-  const firstQLocation = oldestQ?.ao_org_id && oldestQ?.ao_name
-    ? { id: oldestQ?.ao_org_id, name: oldestQ?.ao_name }
-    : null;
+  const qEvents = paxData.filter((p) => p.q_ind === "1");
+  const oldestQ =
+    qEvents.length > 0
+      ? qEvents.reduce((min, curr) => {
+          return new Date(curr.start_date) < new Date(min.start_date)
+            ? curr
+            : min;
+        }, qEvents[0])
+      : null;
+  const firstQ = oldestQ?.start_date ? formatDate(oldestQ?.start_date) : "";
+  const firstQLocation =
+    oldestQ?.ao_org_id && oldestQ?.ao_name
+      ? { id: oldestQ?.ao_org_id, name: oldestQ?.ao_name }
+      : null;
 
-  const newestQ = qEvents.length > 0 ? qEvents.reduce((max, curr) => {
-    return new Date(curr.start_date) > new Date(max.start_date) ? curr : max;
-  }, qEvents[0]) : null;
-  const lastQ = newestQ?.start_date ? formatDate(newestQ?.start_date) : '';
-  const lastQLocation = newestQ?.ao_org_id && newestQ?.ao_name
-    ? { id: newestQ?.ao_org_id, name: newestQ?.ao_name }
-    : null;
+  const newestQ =
+    qEvents.length > 0
+      ? qEvents.reduce((max, curr) => {
+          return new Date(curr.start_date) > new Date(max.start_date)
+            ? curr
+            : max;
+        }, qEvents[0])
+      : null;
+  const lastQ = newestQ?.start_date ? formatDate(newestQ?.start_date) : "";
+  const lastQLocation =
+    newestQ?.ao_org_id && newestQ?.ao_name
+      ? { id: newestQ?.ao_org_id, name: newestQ?.ao_name }
+      : null;
 
   // Count occurrences of each ao_org_id and store ao_name
-  const aoCounts: Record<number, { ao_name: string; count: number, region_name: string, region_org_id: number }> = {};
+  const aoCounts: Record<
+    number,
+    {
+      ao_name: string;
+      count: number;
+      region_name: string;
+      region_org_id: number;
+    }
+  > = {};
   paxData.forEach((pax) => {
     if (pax.ao_org_id && pax.ao_name) {
       if (!aoCounts[pax.ao_org_id]) {
-        aoCounts[pax.ao_org_id] = { ao_name: pax.ao_name, count: 1, region_name: pax.region_name, region_org_id: pax.region_org_id };
+        aoCounts[pax.ao_org_id] = {
+          ao_name: pax.ao_name,
+          count: 1,
+          region_name: pax.region_name,
+          region_org_id: pax.region_org_id,
+        };
       } else {
         aoCounts[pax.ao_org_id].count += 1;
       }
@@ -260,21 +408,36 @@ export async function processPaxData(paxData: PaxEvents[]): Promise<PaxEventsCal
       ao_name,
       count,
       region_name,
-      region_org_id
+      region_org_id,
     }))
     .sort((a, b) => b.count - a.count);
 
   // Count occurrences of each ao_org_id where the user was Q
-  const aoQCounts: Record<number, { ao_name: string; count: number, region_name: string, region_org_id: number }> = {};
-  paxData.filter(p => p.q_ind === "1").forEach((pax) => {
-    if (pax.ao_org_id && pax.ao_name) {
-      if (!aoQCounts[pax.ao_org_id]) {
-        aoQCounts[pax.ao_org_id] = { ao_name: pax.ao_name, count: 1, region_name: pax.region_name, region_org_id: pax.region_org_id };
-      } else {
-        aoQCounts[pax.ao_org_id].count += 1;
-      }
+  const aoQCounts: Record<
+    number,
+    {
+      ao_name: string;
+      count: number;
+      region_name: string;
+      region_org_id: number;
     }
-  });
+  > = {};
+  paxData
+    .filter((p) => p.q_ind === "1")
+    .forEach((pax) => {
+      if (pax.ao_org_id && pax.ao_name) {
+        if (!aoQCounts[pax.ao_org_id]) {
+          aoQCounts[pax.ao_org_id] = {
+            ao_name: pax.ao_name,
+            count: 1,
+            region_name: pax.region_name,
+            region_org_id: pax.region_org_id,
+          };
+        } else {
+          aoQCounts[pax.ao_org_id].count += 1;
+        }
+      }
+    });
 
   // Convert to sorted array
   const aoNameQCounts = Object.entries(aoQCounts)
@@ -283,16 +446,33 @@ export async function processPaxData(paxData: PaxEvents[]): Promise<PaxEventsCal
       ao_name,
       count,
       region_name,
-      region_org_id
+      region_org_id,
     }))
     .sort((a, b) => b.count - a.count);
 
-    return { totalEvents, totalQ, firstBD, firstBDLocation, lastBD, lastBDLocation, firstQ, firstQLocation, lastQ, lastQLocation, aoNameCounts, aoNameQCounts }
+  return {
+    totalEvents,
+    totalQ,
+    firstBD,
+    firstBDLocation,
+    lastBD,
+    lastBDLocation,
+    firstQ,
+    firstQLocation,
+    lastQ,
+    lastQLocation,
+    aoNameCounts,
+    aoNameQCounts,
+  };
 }
 
-
-export async function calcPaxEvents(paxData: PaxEvents[], region_id?: number): Promise<PaxEventsResults> {
-  const paxDataFiltered = region_id ? paxData.filter((pax: PaxEvents) => pax.region_org_id === region_id) : paxData;
+export async function calcPaxEvents(
+  paxData: PaxEvents[],
+  region_id?: number
+): Promise<PaxEventsResults> {
+  const paxDataFiltered = region_id
+    ? paxData.filter((pax: PaxEvents) => pax.region_org_id === region_id)
+    : paxData;
   const nation_paxEvents = await processPaxData(paxData);
   const region_paxEvents = await processPaxData(paxDataFiltered);
 
