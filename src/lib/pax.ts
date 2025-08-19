@@ -77,10 +77,11 @@ export async function getAchievementData(
       au.user_id,
       ach.name,
       ach.description,
-      ach.verb,
       ach.image_url,
       ach.specific_org_id,
       au.date_awarded,
+      au.award_year,
+      au.award_period,
       COUNT(*) AS times
     FROM
       achievements_x_users au
@@ -90,14 +91,15 @@ export async function getAchievementData(
     GROUP BY
       au.achievement_id,
       au.user_id,
+      au.date_awarded,
+      au.award_year,
+      au.award_period,
       ach.name,
       ach.description,
-      ach.verb,
       ach.image_url,
       ach.specific_org_id
     ORDER BY
       MAX(au.date_awarded) DESC
-
     `,
     [id]
   );
@@ -116,7 +118,7 @@ export async function getPaxEvents(id: number): Promise<{
 }> {
   const { rows } = await pool.query(
     `
-    WITH user_events AS (
+  WITH user_events AS (
   SELECT ae.*
   FROM attendance_expanded ae
   WHERE ae.user_id = $1

@@ -1,5 +1,5 @@
 import { IdProps } from "@/types/props";
-import { BioCard } from "@/components/pax/BioCard";
+import { PageHeader } from "@/components/pageHeader";
 import { PAXSummaryCard } from "@/components/pax/PAXSummaryCard";
 import { AOBreakdownCard } from "@/components/pax/AOBreakdownCard";
 import { AchievementsCard } from "@/components/pax/AchievementsCard";
@@ -25,8 +25,12 @@ export default async function PaxDetailPage({ params }: IdProps) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-start pt-10 pb-10">
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
-        {/* Bio Card */}
-        <BioCard paxInfo={paxInfo} />
+        {/* Page Header */}
+        <PageHeader
+          image={paxInfo?.avatar ? paxInfo.avatar : "https://placehold.in/300x200.png"}
+          name={paxInfo.f3_name}
+          link={`/stats/region/${paxInfo.region_id}`} 
+          linkName={paxInfo.region || paxInfo.region_default || "Unknown Region"}/>
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4">
         {/* Workout Summary Card */}

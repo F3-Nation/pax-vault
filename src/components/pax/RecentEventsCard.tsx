@@ -9,7 +9,7 @@ import { Link } from "@heroui/link";
 import { Divider } from "@heroui/divider";
 
 export function RecentEventsCard({ paxEvents }: { paxEvents: PaxEvents[] }) {
-  paxEvents = paxEvents.slice(0, 10); // Limit to the most recent 6 events
+  paxEvents = paxEvents.slice(0, 10); // Limit to the most recent 10 events
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="text-center font-semibold text-xl px-6">
@@ -26,7 +26,7 @@ export function RecentEventsCard({ paxEvents }: { paxEvents: PaxEvents[] }) {
             <p className="italic text-center text-sm text-default">
               Has not posted yet
             </p>
-          ) : (
+            ) : (
             paxEvents.map(
               ({
                 id,

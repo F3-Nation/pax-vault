@@ -59,3 +59,20 @@ export function formatChangeDescription(change: number | null, label: string): s
     return `There is no change in ${label} volume from last month.`;
   }
 }
+
+export function toTitleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .split(" ")
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+export function formatTime(time: string): string {
+  if (!time || time.length !== 4) return time;
+  const hours = parseInt(time.substring(0, 2), 10);
+  const minutes = time.substring(2);
+  const suffix = hours >= 12 ? "pm" : "am";
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${minutes}${suffix}`;
+}
