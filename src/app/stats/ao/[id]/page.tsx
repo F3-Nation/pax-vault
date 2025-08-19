@@ -1,11 +1,9 @@
 import { IdProps } from "@/types/props";
 import { loadAOStats } from "./loader";
 import { PageHeader } from "@/components/pageHeader";
-import MapView from "@/components/map";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { EmailIcon, InstagramIcon, TwitterIcon, WebsiteIcon, FacebookIcon } from "@/components/icons";
-import { Button } from "@heroui/button";
 
 export default async function AODetailPage({ params }: IdProps) {
   const { id } = await params;
@@ -36,15 +34,15 @@ export default async function AODetailPage({ params }: IdProps) {
               <div className="w-1/2 pr-4">
                 <strong className="text-primary">Event Address:</strong>
                 <div className="text-sm mt-2">
-                  {AOInfo.meta?.address1 ? (
+                  {typeof AOInfo.meta?.address1 === "string" && AOInfo.meta.address1 ? (
                     <div>{AOInfo.meta.address1}</div>
                   ) : null}
-                  {AOInfo.meta?.address2 ? (
+                  {typeof AOInfo.meta?.address2 === "string" && AOInfo.meta.address2 ? (
                     <div className="">{AOInfo.meta.address2}</div>
                   ) : null}
                   <div className="">
-                    {AOInfo.meta?.city}, {AOInfo.meta?.state}{" "}
-                    {AOInfo.meta?.postalCode}
+                    {String(AOInfo.meta?.city)}, {String(AOInfo.meta?.state)}{" "}
+                    {String(AOInfo.meta?.postalCode)}
                   </div>
                 </div>
                 {(AOInfo.email || AOInfo.website || AOInfo.twitter || AOInfo.instagram || AOInfo.facebook) && (

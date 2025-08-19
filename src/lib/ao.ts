@@ -47,8 +47,18 @@ export async function getAOData(id: number): Promise<AOData | null> {
   );
 
   // Loop through rows and add event data to an array
-  let eventSchedules: Array<Record<string, any> | null> = [];
-  let schedule: Record<string, any> | null = {};
+  interface EventSchedule {
+    id: number;
+    name: string;
+    description: string;
+    start_time: string;
+    end_time: string;
+    day_of_week: string;
+    event_type: string;
+  }
+
+  const eventSchedules: Array<EventSchedule | null> = [];
+  let schedule: EventSchedule | null = null;
 
   rows.forEach((row) => {
     if (row.event_id) {

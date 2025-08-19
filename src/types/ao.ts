@@ -11,7 +11,7 @@ export interface AOData {
   instagram: string | null; // Instagram handle of the organization, can be null
   logo: string | null; // Logo URL of the organization, can be null
   active: boolean; // Indicates if the organization is active
-  meta: Record<string, any> | null; // Additional metadata about the organization, can be null
+  meta: Record<string, unknown> | null; // Additional metadata about the organization, can be null
   eventSchedule: {
     id: number; // Unique identifier for the event
     name: string; // Name of the event
