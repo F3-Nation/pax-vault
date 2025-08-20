@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@heroui/button";
 import { Card, CardBody } from "@heroui/card";
+import { Chip } from "@heroui/chip";
 
 export default function App() {
   return (
@@ -10,6 +11,11 @@ export default function App() {
         <CardBody className="p-6">
           {/* <p className="text-gray-700">This is a simple card component using HeroUI.</p> */}
           {/* <Link href="/stats/pax/3559"> */}
+          <div className="pb-5 flex flex-col items-center justify-center">
+            <Chip color={process.env.ENVIRONMENT === "production" ? "success" : "warning"}>
+              {process.env.ENVIRONMENT === "production" ? "Production" : "Staging"}
+            </Chip>
+          </div>
           <Link href={`/stats/pax/${process.env.SAMPLE_PAX}`}>
             <Button variant="bordered" color="primary">
               View Sample Pax Stats
