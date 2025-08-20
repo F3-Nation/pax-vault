@@ -10,13 +10,13 @@ export default function App() {
         <CardBody className="p-6">
           {/* <p className="text-gray-700">This is a simple card component using HeroUI.</p> */}
           {/* <Link href="/stats/pax/3559"> */}
-          <Link href="/stats/pax/3270">
+          <Link href={`/stats/pax/${process.env.SAMPLE_PAX}`}>
             <Button variant="bordered" color="primary">
               View Sample Pax Stats
             </Button>
           </Link>
           {/* <Link href="/stats/ao/37815"> */}
-          <Link href="/stats/ao/25174">
+          <Link href={`/stats/ao/${process.env.SAMPLE_AO}`}>
               <Button variant="bordered" color="primary" className="mt-4">
                 View Sample AO Stats
               </Button>
