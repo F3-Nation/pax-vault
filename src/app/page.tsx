@@ -13,7 +13,7 @@ export default function App() {
           {/* <Link href="/stats/pax/3559"> */}
           <div className="pb-5 flex flex-col items-center justify-center">
             <Chip color={process.env.ENVIRONMENT === "production" ? "success" : "warning"}>
-              {process.env.ENVIRONMENT === "production" ? "Production" : "Staging"}
+              {process.env.ENVIRONMENT === "production" ? "Production Environment" : "Staging Environment"}
             </Chip>
           </div>
           <Link href={`/stats/pax/${process.env.SAMPLE_PAX}`}>
