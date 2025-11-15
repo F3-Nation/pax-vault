@@ -4,7 +4,6 @@ import { PageHeader } from "@/components/pageHeader";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { ScrollShadow } from "@heroui/scroll-shadow";
 import { Link } from "@heroui/link";
-import { Tab, Tabs } from "@heroui/tabs";
 import { Divider } from "@heroui/divider";
 
 export default async function AODetailPage({ params }: IdProps) {
