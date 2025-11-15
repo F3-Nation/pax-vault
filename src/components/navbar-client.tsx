@@ -172,7 +172,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
           <Autocomplete
             className="w-full"
             label="SEARCH FOR A PAX"
-            defaultItems={paxData}
+            defaultItems={paxData.filter((p) => p && p.f3_name)}
             inputValue={paxInput}
             isLoading={paxLoading}
             // placeholder="F3 PAX NAME"
@@ -273,7 +273,7 @@ export default function NavbarClient({ regionData, paxData }: Props) {
             <Autocomplete
               className="w-full"
               label="SEARCH FOR A PAX"
-              defaultItems={paxData}
+              defaultItems={paxData.filter((p) => p && p.f3_name)}
               inputValue={paxInput}
               isLoading={paxLoading}
               // placeholder="F3 PAX NAME"
@@ -303,89 +303,8 @@ export default function NavbarClient({ regionData, paxData }: Props) {
             )}
             </Autocomplete>
           </DrawerBody>
-          {/* <DrawerFooter>
-            <Button color="danger" variant="light" onPress={onClose}>
-              Close
-            </Button>
-            <Button color="primary" onPress={onClose}>
-              Action
-            </Button>
-          </DrawerFooter> */}
         </DrawerContent>
       </Drawer>
-
-
-
-      {/* Mobile Menu */}
-      {/* <NavbarMenu className="pt-6">
-        <NavbarMenuItem className="mb-6">
-          <Autocomplete
-            className="w-full"
-            label="SEARCH FOR A REGION"
-            defaultItems={regionData}
-            inputValue={regionInput}
-            isLoading={regionLoading}
-            placeholder="F3 REGION NAME"
-            itemHeight={40}
-            selectedKey={String(regionKey)}
-            onInputChange={handleRegionInputChange}
-            onSelectionChange={(key) => {
-              handleRegionSelection(key);
-              setIsMenuOpen(false);
-            }}
-            variant="underlined"
-            isClearable
-          >
-          {(region) => (
-            <AutocompleteItem key={region.id} textValue={region.name}>
-              <div className="flex gap-2 items-center">
-                <Avatar alt={region.name} className="flex-shrink-0" size="sm" src={region.logo ?? undefined} />
-                <div className="flex flex-col">
-                  <span className="text-small">{region.name}</span>
-                </div>
-              </div>
-            </AutocompleteItem>
-          )}
-          </Autocomplete>
-        </NavbarMenuItem>
-        <NavbarMenuItem className="mb-6">
-          <Autocomplete
-            className="w-full"
-            label="SEARCH FOR A PAX"
-            defaultItems={paxData}
-            inputValue={paxInput}
-            isLoading={paxLoading}
-            placeholder="F3 PAX NAME"
-            itemHeight={40}
-            selectedKey={String(paxKey)}
-            onInputChange={handlePaxInputChange}
-            onSelectionChange={(key) => {
-              handlePaxSelection(key);
-              setIsMenuOpen(false);
-            }}
-            variant="underlined"
-            isClearable
-          >
-          {(pax) => (
-            <AutocompleteItem key={pax.id} textValue={pax.f3_name} className="py-2">
-              <div className="flex gap-2 items-center">
-                <Avatar alt={pax.f3_name} className="flex-shrink-0" size="sm" src={pax.avatar} />
-                <div className="flex flex-col">
-                  <span className="text-small">
-                    {pax.f3_name && pax.f3_name.length > 20
-                      ? pax.f3_name.slice(0, 20) + '...'
-                      : pax.f3_name || 'Unknown PAX'}
-                  </span>
-                  <span className="text-tiny text-default-400">{pax.region || pax.region_default || "Unknown Region"}</span>
-                </div>
-              </div>
-            </AutocompleteItem>
-          )}
-          </Autocomplete>
-        </NavbarMenuItem>
-      </NavbarMenu> */}
-
-
     </Navbar>
   );
 }

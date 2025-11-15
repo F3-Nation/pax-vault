@@ -1,9 +1,8 @@
 // src/lib/data/pax.ts
 import pool from '@/lib/db';
-import { unstable_cache } from 'next/cache';
 import { PaxList } from '@/types/pax';
 
-export async function getPaxListUncached(): Promise<PaxList[]> {
+export async function getPaxList(): Promise<PaxList[]> {
     const { rows } = await pool.query(`
         WITH earliest_regions AS (
             SELECT DISTINCT ON (ae.user_id)
@@ -34,12 +33,7 @@ export async function getPaxListUncached(): Promise<PaxList[]> {
             LEFT JOIN earliest_regions er ON us.id = er.user_id
             ORDER BY us.id DESC;
         `);
-    console.log('Pax data fetched from database');
+    console.log(rows.length + ' Pax rows fetched from database');
     return rows as PaxList[];
-}
 
-export const getPaxList = unstable_cache(
-  async () => await getPaxListUncached(),
-  ['pax-list'],
-  { revalidate: 900 } // 15 minutes
-);
+}

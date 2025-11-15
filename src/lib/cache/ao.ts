@@ -1,9 +1,8 @@
 // src/lib/data/ao.ts
 import pool from '@/lib/db';
-import { unstable_cache } from 'next/cache';
 import { AOData } from '@/types/ao';
 
-export async function getAoDataUncached(): Promise<AOData[]> {
+export async function getAoData(): Promise<AOData[]> {
     const { rows } = await pool.query(`
       SELECT 
         id, 
@@ -19,12 +18,6 @@ export async function getAoDataUncached(): Promise<AOData[]> {
       ORDER BY 
         id DESC
     `);
-    console.log('Ao data fetched from database');
+    console.log(rows.length + ' Ao rows fetched from database');
     return rows as AOData[];
 }
-
-export const getAoData = unstable_cache(
-  async () => await getAoDataUncached(),
-  ['ao-data'],
-  { revalidate: 900 } // 15 minutes
-);

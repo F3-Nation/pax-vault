@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardBody, CardHeader } from "@heroui/card";
+import { ScrollShadow } from "@heroui/scroll-shadow";
 import { Link } from "@heroui/link";
 import { PaxEventsCalculations } from "@/types/pax";
 import { Tab, Tabs } from "@heroui/tabs";
@@ -33,6 +34,7 @@ export function AOBreakdownCard({
       </CardHeader>
       <Divider />
       <CardBody className="px-6">
+        <ScrollShadow className="h-[320px]">
         <div className="space-y-1 text-sm">
           {Array.isArray(paxData?.[selected as keyof typeof paxData]) &&
           (paxData?.[selected as keyof typeof paxData] as Array<unknown>)
@@ -89,6 +91,7 @@ export function AOBreakdownCard({
             </p>
           )}
         </div>
+        </ScrollShadow>
       </CardBody>
     </Card>
   );

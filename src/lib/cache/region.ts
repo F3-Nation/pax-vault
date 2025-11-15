@@ -1,9 +1,8 @@
 // src/lib/data/region.ts
 import pool from '@/lib/db';
-import { unstable_cache } from 'next/cache';
 import { RegionList } from '@/types/region';
 
-export async function getRegionListUncached(): Promise<RegionList[]> {
+export async function getRegionList(): Promise<RegionList[]> {
     const { rows } = await pool.query(`
       SELECT 
         id, 
@@ -19,12 +18,6 @@ export async function getRegionListUncached(): Promise<RegionList[]> {
       ORDER BY 
         id DESC
     `);
-    console.log('Region data fetched from database');
+    console.log(rows.length + ' Region rows fetched from database');
     return rows as RegionList[];
 }
-
-export const getRegionList = unstable_cache(
-  async () => await getRegionListUncached(),
-  ['region-list'],
-  { revalidate: 900 } // 15 minutes
-);

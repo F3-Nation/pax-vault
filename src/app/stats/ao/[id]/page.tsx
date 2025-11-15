@@ -2,8 +2,10 @@ import { IdProps } from "@/types/props";
 import { loadAOStats } from "./loader";
 import { PageHeader } from "@/components/pageHeader";
 import { Card, CardBody, CardHeader } from "@heroui/card";
+import { ScrollShadow } from "@heroui/scroll-shadow";
+import { Link } from "@heroui/link";
+import { Tab, Tabs } from "@heroui/tabs";
 import { Divider } from "@heroui/divider";
-import { EmailIcon, InstagramIcon, TwitterIcon, WebsiteIcon, FacebookIcon } from "@/components/icons";
 
 export default async function AODetailPage({ params }: IdProps) {
   const { id } = await params;
@@ -23,89 +25,121 @@ export default async function AODetailPage({ params }: IdProps) {
           link={`/stats/region/${AOInfo.region_id}`}
           linkName={AOInfo.region_name}
         />
-        {/* Location View */}
-        <Card className="bg-background/60 dark:bg-default-100/50 w-full">
-          <CardHeader className="text-center font-semibold text-xl px-6">
-            Location Details
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4">
+        {/* Workout Summary Card */}
+        <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
+          <CardHeader className="flex justify-between items-center px-6">
+            <div className="font-semibold text-xl">AO Summary</div>
           </CardHeader>
           <Divider />
           <CardBody className="px-6">
-            <div className="w-full flex flex-col lg:flex-row justify-between items-start">
-              <div className="w-1/2 pr-4">
-                <strong className="text-primary">Event Address:</strong>
-                <div className="text-sm mt-2">
-                  {typeof AOInfo.meta?.address1 === "string" && AOInfo.meta.address1 ? (
-                    <div>{AOInfo.meta.address1}</div>
-                  ) : null}
-                  {typeof AOInfo.meta?.address2 === "string" && AOInfo.meta.address2 ? (
-                    <div className="">{AOInfo.meta.address2}</div>
-                  ) : null}
-                  <div className="">
-                    {String(AOInfo.meta?.city)}, {String(AOInfo.meta?.state)}{" "}
-                    {String(AOInfo.meta?.postalCode)}
-                  </div>
-                </div>
-                {(AOInfo.email || AOInfo.website || AOInfo.twitter || AOInfo.instagram || AOInfo.facebook) && (
-                  <div className="mt-2">
-                    <strong className="text-primary">Social Links:</strong>
-                    <div className="text-sm flex mt-2 space-x-2">
-                      {AOInfo.email && (
-                        <div>
-                          <a href={`mailto:${AOInfo.email}`} target="_blank" rel="noopener noreferrer">
-                            <EmailIcon className="h-7 w-7" />
-                          </a>
-                        </div>
-                      )}
-                      {AOInfo.website && (
-                        <div>
-                          <a href={AOInfo.website} target="_blank" rel="noopener noreferrer">
-                            <WebsiteIcon className="h-7 w-7" />
-                          </a>
-                        </div>
-                      )}
-                      {AOInfo.twitter && (
-                        <div>
-                          <a href={AOInfo.twitter} target="_blank" rel="noopener noreferrer">
-                            <TwitterIcon className="h-7 w-7" />
-                          </a>
-                        </div>
-                      )}
-                      {AOInfo.instagram && (
-                        <div>
-                          <a href={AOInfo.instagram} target="_blank" rel="noopener noreferrer">
-                            <InstagramIcon className="h-7 w-7" />
-                          </a>
-                        </div>
-                      )}
-                      {AOInfo.facebook && (
-                        <div>
-                          <a href={AOInfo.facebook} target="_blank" rel="noopener noreferrer">
-                            <FacebookIcon className="h-7 w-7" />
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="w-1/2 text-right">
-                {AOInfo.eventSchedule && AOInfo.eventSchedule.length > 0 && (
-                  <div>
-                    <strong className="text-primary">Event Schedule:</strong>
-                    <div className="text-sm mt-2">
-                      <ul className="list-disc pl-5 inline-block">
-                        {AOInfo.eventSchedule.map((event) => (
-                          <div key={event.id} className="mb-3">
-                            <span className="font-semibold">{event.day_of_week}</span> : <span className="italic">{event.event_type}</span>
-                            <div className="mt-1">{event.start_time} to {event.end_time}</div>
-                          </div>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-              </div>
+            <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
+              <span className="text-primary">First Workout:</span>
+              <span>TBD</span>
             </div>
+            <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
+              <span className="text-primary">Total Posts:</span>
+              <span>TBD</span>
+            </div>
+            <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
+              <span className="text-primary">Unique PAX:</span>
+              <span>TBD</span>
+            </div>
+            <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
+              <span className="text-primary">Unique Qs:</span>
+              <span>TBD</span>
+            </div>
+            <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
+              <span className="text-primary">FNGs:</span>
+              <span>TBD</span>
+            </div>
+            <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
+              <span className="text-primary">Average PAX:</span>
+              <span>TBD</span>
+            </div>
+            <div className="flex justify-between py-1 pb-2">
+              <span className="text-primary">Peak PAX:</span>
+              <span>TBD</span>
+            </div>
+          </CardBody>
+        </Card>
+        {/* Leaderboard Card */}
+        <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
+          <CardHeader className="flex justify-between items-center px-6">
+            <div className="font-semibold text-xl">AO Leaderboards</div>
+          </CardHeader>
+          <Divider />
+          <CardBody className="px-6">
+            <ScrollShadow className="h-[260px]">
+              <div className="space-y-1">
+                <div
+                  key="test1"
+                  className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10"
+                >
+                  <div className="flex gap-2">
+                    <Link color="primary" href={`/stats/pax/123`}>
+                      PAX Name
+                    </Link>
+                  </div>
+                  # Beatdowns
+                </div>
+              </div>
+            </ScrollShadow>
+          </CardBody>
+        </Card>
+      </div>
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
+        {/* Insights Card */}
+        <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
+          <CardHeader className="text-center font-semibold text-xl px-6">
+            AO Insights
+          </CardHeader>
+          <Divider />
+          <CardBody className="px-6">
+            <p className="italic text-center text-sm text-default">
+              AO Insights coming soon...
+            </p>
+          </CardBody>
+        </Card>
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4 pt-6">
+        {/* Alt Chart Card */}
+        <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
+          <CardHeader className="flex justify-between items-center px-6">
+            <div className="font-semibold text-xl">AO Charting</div>
+          </CardHeader>
+          <Divider />
+          <CardBody className="px-6">
+            <p className="italic text-center text-sm text-default">
+              More Charting coming soon...
+            </p>
+          </CardBody>
+        </Card>
+        {/* Q Lineup Card */}
+        <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
+          <CardHeader className="flex justify-between items-center px-6">
+            <div className="font-semibold text-xl">AO Q Lineup</div>
+          </CardHeader>
+          <Divider />
+          <CardBody className="px-6">
+            <p className="italic text-center text-sm text-default">
+              Q Lineup coming soon...
+            </p>
+          </CardBody>
+        </Card>
+      </div>
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
+        {/* Recent Events Card */}
+        <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
+          <CardHeader className="text-center font-semibold text-xl px-6">
+            Recent Events
+          </CardHeader>
+          <Divider />
+          <CardBody className="px-6">
+            <p className="italic text-center text-sm text-default">
+              Recent Events coming soon...
+            </p>
           </CardBody>
         </Card>
       </div>

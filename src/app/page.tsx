@@ -27,6 +27,12 @@ export default function App() {
                 View Sample AO Stats
               </Button>
             </Link>
+          {/* <Link href="/stats/region/1"> */}
+          <Link href={`/stats/region/${process.env.SAMPLE_REGION}`}>
+            <Button variant="bordered" color="primary" className="mt-4">
+              View Sample Region Stats
+            </Button>
+          </Link>
         </CardBody>
       </Card>
     </div>
