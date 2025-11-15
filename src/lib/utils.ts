@@ -16,7 +16,12 @@ export function formatDate(
   date: string | Date,
   format?: "M D Y" | "M Y" // Example option, can be extended as needed
 ): string {
-  const d = new Date(date);
+  const d =
+    typeof date === "string"
+      ? new Date(`${date}T00:00:00Z`)
+      : date instanceof Date
+      ? new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+      : new Date(date);
   const now = new Date();
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday as start of week
@@ -31,7 +36,7 @@ export function formatDate(
     // Else, show e.g., Tue, Jan 3 2003
     const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
     const month = d.toLocaleDateString('en-US', { month: 'short' });
-    const day = d.getDate();
+    const day = d.getUTCDate();
     const year = d.toLocaleDateString('en-US', { year: 'numeric' });
 
     switch (format) {
