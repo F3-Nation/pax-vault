@@ -389,19 +389,21 @@ export async function processPaxData(
     }
   > = {};
   paxData.forEach((pax) => {
-    if (pax.ao_org_id && pax.ao_name) {
-      if (!aoCounts[pax.ao_org_id]) {
-        aoCounts[pax.ao_org_id] = {
-          ao_name: pax.ao_name,
+    const aoID = pax.ao_org_id || pax.region_org_id;
+    const aoName = pax.ao_name || "Unknown AO";
+
+      if (!aoCounts[aoID]) {
+        aoCounts[aoID] = {
+          ao_name: aoName,
           count: 1,
           region_name: pax.region_name,
           region_org_id: pax.region_org_id,
         };
       } else {
-        aoCounts[pax.ao_org_id].count += 1;
+        aoCounts[aoID].count += 1;
       }
     }
-  });
+  );
 
   // Convert to sorted array
   const aoNameCounts = Object.entries(aoCounts)
@@ -427,19 +429,20 @@ export async function processPaxData(
   paxData
     .filter((p) => p.q_ind === "1")
     .forEach((pax) => {
-      if (pax.ao_org_id && pax.ao_name) {
-        if (!aoQCounts[pax.ao_org_id]) {
-          aoQCounts[pax.ao_org_id] = {
-            ao_name: pax.ao_name,
+      const aoID = pax.ao_org_id || pax.region_org_id;
+      const aoName = pax.ao_name || "Unknown AO";
+        if (!aoQCounts[aoID]) {
+          aoQCounts[aoID] = {
+            ao_name: aoName,
             count: 1,
             region_name: pax.region_name,
             region_org_id: pax.region_org_id,
           };
         } else {
-          aoQCounts[pax.ao_org_id].count += 1;
+          aoQCounts[aoID].count += 1;
         }
       }
-    });
+    );
 
   // Convert to sorted array
   const aoNameQCounts = Object.entries(aoQCounts)

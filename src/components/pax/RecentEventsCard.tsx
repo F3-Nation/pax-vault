@@ -35,6 +35,8 @@ export function RecentEventsCard({ paxEvents }: { paxEvents: PaxEvents[] }) {
                 name,
                 ao_name,
                 ao_org_id,
+                region_name,
+                region_org_id,
                 start_date,
                 f3_name,
                 avatar,
@@ -60,9 +62,14 @@ export function RecentEventsCard({ paxEvents }: { paxEvents: PaxEvents[] }) {
                           </Link>
                           <div className="text-default-400">
                             {formatDate(start_date, "M D Y")} @{" "}
-                            <Link href={`/stats/ao/${ao_org_id}`}>
+                            <Link href={
+                              ao_name
+                               ? `/stats/ao/${ao_org_id}` 
+                               : `/stats/region/${region_org_id}`
+                               }
+                            >
                               <span className="text-default-400 text-sm italic">
-                                {ao_name}
+                                {ao_name ?? region_name}
                               </span>
                             </Link>
                           </div>
