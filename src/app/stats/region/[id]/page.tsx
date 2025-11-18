@@ -27,9 +27,9 @@ export default async function RegionDetailPage({ params }: IdProps) {
     <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
             {/* Page Header */}
             <PageHeader
-              image={regionData.region?.logo ? regionData.region.logo : "https://placehold.in/300x200.png"}
+              image={regionData.region?.logo ?? undefined}
               name={regionData.region?.name}
-              link={`/stats/region/${regionData.region?.id}`}
+              link={regionData.region ? `/stats/region/${regionData.region.id}` : undefined}
               linkName={regionData.region?.name}
             />
           </div>

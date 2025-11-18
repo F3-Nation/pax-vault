@@ -37,3 +37,20 @@ export interface AODetail {
   ao_count: number; // Number of AOs (Areas of Operation) in the region
   active: boolean; // Indicates if the region is active
 }
+
+export interface AOSummary {
+  first_start_time: string; // The earliest start time of any event associated with the AO, can be null
+  total_workouts: number; // Total number of workout events associated with the AO
+  unique_pax: number; // Number of unique participants (pax) who have attended events at the AO
+  unique_qs: number; // Number of unique Qs (leaders) who have led events at the AO
+  total_fngs: number; // Total number of first-time participants (FNGs) at the AO
+  avg_pax_count: number; // Average number of participants (pax) per event at the AO
+  peak_pax_count: number; // Highest number of participants (pax) recorded at a single event at the AO
+}
+
+export interface AOLeaders {
+  user_id: number; // Unique identifier for the user
+  f3_name: string; // F3 name (nickname) of the user
+  posts: number; // Total number of posts (events attended) by the user at the AO
+  qs: number; // Total number of Q appearances by the user at the AO
+}

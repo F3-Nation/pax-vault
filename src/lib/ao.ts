@@ -1,7 +1,110 @@
 // src/lib/region.ts
-import { AOData } from "@/types/ao";
+import { AOData, AOSummary, AOLeaders } from "@/types/ao";
 import pool from "@/lib/db";
-import { toTitleCase, formatTime } from "@/lib/utils";
+import { toTitleCase, formatTime, formatDate } from "@/lib/utils";
+
+export async function getAOSummary(id: number): Promise<AOSummary | null> {
+  const { rows } = await pool.query(
+    `
+    SELECT
+    -- First-ever workout date for this AO
+    MIN(ei.start_date) AS first_start_time,
+
+    -- Total workouts (unique instances)
+    COUNT(DISTINCT ei.id) AS total_workouts,
+
+    -- Unique PAX (distinct user IDs across all attendance records)
+    COUNT(DISTINCT ae.user_id) AS unique_pax,
+
+    -- Unique Qs (distinct user IDs that have q_ind = 1)
+    COUNT(DISTINCT CASE WHEN ae.q_ind = 1 THEN ae.user_id END) AS unique_qs,
+
+    -- Total FNGs (sum from unique instances)
+    SUM(DISTINCT ei.fng_count) AS total_fngs,
+
+    -- Average PAX Count (avg from unique instances)
+    AVG(DISTINCT ei.pax_count) AS avg_pax_count,
+
+    -- Peak PAX Count
+    MAX(ei.pax_count) AS peak_pax_count
+
+FROM attendance_expanded ae
+JOIN event_instance_expanded ei
+    ON ae.event_instance_id = ei.id
+WHERE ei.ao_org_id = $1`,
+    [id]
+  );
+
+  // If no rows found, return null
+  if (rows.length === 0) {
+    return null;
+  }
+
+  // Format the first_start_time to a readable date format
+  if (rows[0].first_start_time) {
+    rows[0].first_start_time = formatDate(new Date(rows[0].first_start_time), "M D Y");
+  }
+
+  // Round numeric fields to x.xx decimal places
+  if (rows[0].avg_pax_count !== null) {
+    rows[0].avg_pax_count = parseFloat(rows[0].avg_pax_count).toFixed(2);
+  }
+
+  return rows[0] as AOSummary;
+  
+}
+
+export async function getAOLeaders(id: number): Promise<AOLeaders | null> {
+  const { rows } = await pool.query(
+    `
+    SELECT
+    ae.user_id,
+    ae.f3_name,
+    ae.q_ind
+    FROM attendance_expanded ae
+    JOIN event_instance_expanded ei
+        ON ae.event_instance_id = ei.id
+    WHERE ei.ao_org_id = $1`,
+    [id]
+  );
+
+    if (rows.length === 0) {
+    return null;
+  }
+
+  if (!rows) {
+    return null;
+  }
+
+  // Aggregate by unique user_id
+  const leaders: Record<
+    string,
+    { user_id: string; f3_name: string; posts: number; qs: number }
+  > = {};
+
+  for (const row of rows) {
+    const uid = row.user_id;
+
+    if (!leaders[uid]) {
+      leaders[uid] = {
+        user_id: uid,
+        f3_name: row.f3_name,
+        posts: 0,
+        qs: 0,
+      };
+    }
+
+    // Count total appearances
+    leaders[uid].posts += 1;
+
+    // Count Q appearances
+    if (row.q_ind == 1) {
+      leaders[uid].qs += 1;
+    }
+  }
+  
+  return Object.values(leaders) as unknown as AOLeaders;
+}
 
 export async function getAOData(id: number): Promise<AOData | null> {
   const { rows } = await pool.query(

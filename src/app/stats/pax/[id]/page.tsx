@@ -27,7 +27,7 @@ export default async function PaxDetailPage({ params }: IdProps) {
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
         {/* Page Header */}
         <PageHeader
-          image={paxInfo?.avatar ? paxInfo.avatar : "https://placehold.in/300x200.png"}
+          image={paxInfo?.avatar ?? undefined}
           name={paxInfo.f3_name}
           link={`/stats/region/${paxInfo.region_id}`} 
           linkName={paxInfo.region || paxInfo.region_default || "Unknown Region"}/>
