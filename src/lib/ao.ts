@@ -297,8 +297,7 @@ FROM
     ) q_data ON ei.id = q_data.event_instance_id
 WHERE
     ao.id = $1
-    --l.org_id = 25174 -- Geneva Region ID
-    AND ei.start_date >= CURRENT_DATE
+    AND ei.start_date >= CURRENT_DATE + 1
 GROUP BY
     ei.id,
     ei.start_date,

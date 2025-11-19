@@ -19,9 +19,7 @@ export function formatDate(
   const d =
     typeof date === "string"
       ? new Date(`${date}T00:00:00Z`)
-      : date instanceof Date
-      ? new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-      : new Date(date);
+      : new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const now = new Date();
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday as start of week
@@ -34,10 +32,10 @@ export function formatDate(
     return d.toLocaleDateString('en-US', { weekday: 'long' });
   } else {
     // Else, show e.g., Tue, Jan 3 2003
-    const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
-    const month = d.toLocaleDateString('en-US', { month: 'short' });
+    const weekday = d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+    const month = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
     const day = d.getUTCDate();
-    const year = d.toLocaleDateString('en-US', { year: 'numeric' });
+    const year = d.toLocaleDateString('en-US', { year: 'numeric', timeZone: 'UTC' });
 
     switch (format) {
       case "M D Y":
