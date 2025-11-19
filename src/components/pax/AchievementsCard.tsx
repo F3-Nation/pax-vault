@@ -23,7 +23,7 @@ export function AchievementsCard({
         <CardBody className="px-6">
           {achievements.length === 0 ? (
             <div className="text-center italic text-default text-sm">
-              No achievements earned
+              Coming soon...
             </div>
           ) : (
             <div className="flex flex-wrap justify-center gap-4">

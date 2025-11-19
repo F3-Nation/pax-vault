@@ -53,4 +53,41 @@ export interface AOLeaders {
   f3_name: string; // F3 name (nickname) of the user
   posts: number; // Total number of posts (events attended) by the user at the AO
   qs: number; // Total number of Q appearances by the user at the AO
+  avatar_url?: string; // Optional URL to the user's avatar image
+}
+
+export interface AOEvents {
+  id: number; // Unique identifier for the record
+  user_id: number; // Unique identifier for the user
+  f3_name: string; // F3 name (nickname) of the user
+  avatar: string | null; // Avatar URL of the user
+  event_instance_id: number; // Unique identifier for the event instance
+  name: string; // Name of the event
+  start_date: string; // Start date of the event
+  ao_name: string; // Name of the Area of Operation (AO)
+  ao_org_id: number; // ID of the AO organization
+  q_ind: string; // Indicates if the user held a Q (leadership role) for this event
+  region_name: string; // Name of the region where the event took place
+  region_org_id: number; // ID of the region organization
+  pax_list: string; // Comma-separated list of PAX (participants) in the event
+  pax_count: number; // Total number of PAX (participants) in the event
+  q_list: string; // Comma-separated list of users who held a Q for the event
+}
+
+export interface AOQLineup {
+  start_date: string; // Start date of the event
+  start_time: string; // Start time of the event
+  ao_name: string; // Name of the Area of Operation (AO)
+  ao_org_id: number; // ID of the AO organization
+  location_name: string; // Name of the event location
+  latitude: number | null; // Latitude of the event location, can be null
+  longitude: number | null; // Longitude of the event location, can be null
+  event_types: string; // Type of the event (e.g., meeting, training)
+  event_tags: string; // Tags associated with the event
+  q_list: Array<{
+    user_id: number;
+    name: string;
+    avatar_url: string;
+  }> | null; // List of Qs (leaders) for the event with their details, can be null
+  q_who: string | null; // Comma-separated list of users who held a Q for the event, can be null
 }

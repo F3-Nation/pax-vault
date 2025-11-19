@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Tabs, Tab } from "@heroui/tabs";
-
+import { Avatar } from "@heroui/avatar";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { ScrollShadow } from "@heroui/scroll-shadow";
@@ -52,7 +52,8 @@ export function AOLeadersCard({
                     key={leader.user_id}
                     className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10"
                   >
-                  <div className="flex text-sm">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Avatar alt={leader.f3_name} className="flex-shrink-0 w-5 h-5" size="sm" src={leader.avatar_url} />
                     <Link className="text-sm" color="primary" href={`/stats/pax/${leader.user_id}`}>
                       {leader.f3_name}
                     </Link>

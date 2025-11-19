@@ -12,11 +12,11 @@ export function AOSummaryCard({
   return (
     (
       <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
-          <CardHeader className="flex justify-between items-center px-6 py-4">
+          <CardHeader className="flex justify-between items-center px-6">
             <div className="font-semibold text-xl">AO Summary</div>
           </CardHeader>
           <Divider />
-          <CardBody className="px-6 text-sm">
+          <CardBody className="px-6">
             <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
               <span className="text-primary">First Workout:</span>
               <span>{summary?.first_start_time ?? "Unknown Start Date"}</span>

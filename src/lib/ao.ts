@@ -1,5 +1,5 @@
 // src/lib/region.ts
-import { AOData, AOSummary, AOLeaders } from "@/types/ao";
+import { AOData, AOSummary, AOLeaders, AOEvents, AOQLineup } from "@/types/ao";
 import pool from "@/lib/db";
 import { toTitleCase, formatTime, formatDate } from "@/lib/utils";
 
@@ -60,7 +60,8 @@ export async function getAOLeaders(id: number): Promise<AOLeaders | null> {
     SELECT
     ae.user_id,
     ae.f3_name,
-    ae.q_ind
+    ae.q_ind,
+    ae.avatar_url
     FROM attendance_expanded ae
     JOIN event_instance_expanded ei
         ON ae.event_instance_id = ei.id
@@ -79,7 +80,7 @@ export async function getAOLeaders(id: number): Promise<AOLeaders | null> {
   // Aggregate by unique user_id
   const leaders: Record<
     string,
-    { user_id: string; f3_name: string; posts: number; qs: number }
+    { user_id: string; f3_name: string; posts: number; qs: number; avatar_url: string | undefined }
   > = {};
 
   for (const row of rows) {
@@ -91,6 +92,7 @@ export async function getAOLeaders(id: number): Promise<AOLeaders | null> {
         f3_name: row.f3_name,
         posts: 0,
         qs: 0,
+        avatar_url: row.avatar_url,
       };
     }
 
@@ -198,4 +200,119 @@ export async function getAOData(id: number): Promise<AOData | null> {
   rows[0].eventSchedule = eventSchedules.filter((event) => event !== null);
 
   return rows[0] as AOData;
+}
+
+export async function getAOEvents(id: number): Promise<AOEvents[]> {
+  const { rows } = await pool.query(
+    `
+  WITH pax_lists AS (
+  SELECT 
+    ae.event_instance_id,
+    STRING_AGG(
+      ae.user_id || '|||' || ae.f3_name || '|||' || COALESCE(ae.avatar_url, ''),
+      '###'
+    ) AS pax_list
+  FROM attendance_expanded ae
+  JOIN event_instance_expanded ei ON ae.event_instance_id = ei.id
+  WHERE ei.ao_org_id = $1
+  GROUP BY ae.event_instance_id
+),
+
+q_lists AS (
+  SELECT 
+    ae.event_instance_id,
+    STRING_AGG(
+      ae.user_id || '|||' || ae.f3_name || '|||' || COALESCE(ae.avatar_url, ''),
+      '###'
+    ) AS q_list
+  FROM attendance_expanded ae
+  JOIN event_instance_expanded ei ON ae.event_instance_id = ei.id
+  WHERE ei.ao_org_id = $1
+    AND ae.q_ind = 1
+  GROUP BY ae.event_instance_id
+)
+
+SELECT 
+  ei.*,              -- ONE ROW PER EVENT INSTANCE
+  pl.pax_list,
+  ql.q_list
+FROM event_instance_expanded ei
+LEFT JOIN pax_lists pl ON ei.id = pl.event_instance_id
+LEFT JOIN q_lists ql ON ei.id = ql.event_instance_id
+WHERE ei.ao_org_id = $1
+ORDER BY ei.start_date DESC;
+    `,
+    [id]
+  );
+  return rows as AOEvents[];
+}
+
+export async function getAOQLineup(id: number): Promise<AOQLineup[]> {
+  const { rows } = await pool.query(
+    `
+-- Upcoming Qs for a Region (Fixed for JSON Grouping Error)
+SELECT
+    ei.start_date,
+    ei.start_time,
+    ao.name AS ao_name,
+    ao.id AS ao_org_id,
+    l.name AS location_name,
+    l.latitude,
+    l.longitude,
+    STRING_AGG(DISTINCT et.name, ', ') AS event_types,
+    STRING_AGG(DISTINCT tag.name, ', ') AS event_tags,
+    -- FIX: Wrap in MAX() and cast to text->json to avoid GROUP BY error
+    COALESCE(MAX(q_data.q_details::text)::json, '[]'::json) AS q_list,
+    COALESCE(MAX(q_data.q_names), null) AS q_who
+FROM
+    event_instances ei
+    JOIN locations l ON ei.location_id = l.id
+    JOIN orgs ao ON ei.org_id = ao.id AND ao.org_type = 'ao'
+    LEFT JOIN event_instances_x_event_types eixet ON ei.id = eixet.event_instance_id
+    LEFT JOIN event_types et ON eixet.event_type_id = et.id
+    LEFT JOIN event_tags_x_event_instances etxei ON ei.id = etxei.event_instance_id
+    LEFT JOIN event_tags tag ON etxei.event_tag_id = tag.id
+    -- Join Q Data
+    LEFT JOIN (
+        SELECT
+            a.event_instance_id,
+            STRING_AGG(u.f3_name, ', ') AS q_names,
+            -- Creates the JSON array of Q details
+            JSON_AGG(
+                JSON_BUILD_OBJECT(
+                    'user_id', u.id,
+                    'name', u.f3_name,
+                    'avatar_url', u.avatar_url
+                )
+            ) AS q_details
+        FROM
+            attendance a
+            JOIN attendance_x_attendance_types axat ON a.id = axat.attendance_id
+            JOIN attendance_types at ON axat.attendance_type_id = at.id
+            JOIN users u ON a.user_id = u.id
+        WHERE
+            at.type = 'Q'
+        GROUP BY
+            a.event_instance_id
+    ) q_data ON ei.id = q_data.event_instance_id
+WHERE
+    ao.id = $1
+    --l.org_id = 25174 -- Geneva Region ID
+    AND ei.start_date >= CURRENT_DATE
+GROUP BY
+    ei.id,
+    ei.start_date,
+    ei.start_time,
+    ao.name,
+    ao.id,
+    l.name,
+    l.latitude,
+    l.longitude
+ORDER BY
+    ei.start_date,
+    ei.start_time;
+    `,
+    [id]
+  );
+  return rows as AOQLineup[];
 }
