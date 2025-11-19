@@ -14,28 +14,34 @@ export function getBaseUrl() {
 
 export function formatDate(
   date: string | Date,
-  format?: "M D Y" | "M Y" // Example option, can be extended as needed
+  format?: "M D Y" | "M Y"
 ): string {
+  // Normalize input to a pure UTC date (no local conversion!)
   const d =
     typeof date === "string"
-      ? new Date(`${date}T00:00:00Z`)
-      : new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday as start of week
+      ? new Date(date + "T00:00:00Z")
+      : new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 
-  // If options?.types exists, you can use it as needed in your logic
-  // For now, just demonstrating its presence
+  // Always use UTC now
+  const now = new Date();
+  const utcNow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+  // Compute start of week in UTC
+  const startOfWeek = new Date(utcNow);
+  startOfWeek.setUTCDate(utcNow.getUTCDate() - utcNow.getUTCDay());
+
+  const optionsUTC = (opts: Intl.DateTimeFormatOptions) => ({
+    ...opts,
+    timeZone: "UTC"
+  });
 
   if (d >= startOfWeek && !format) {
-    // If date is this week, show day of week (e.g., Monday)
-    return d.toLocaleDateString('en-US', { weekday: 'long' });
+    return d.toLocaleDateString("en-US", optionsUTC({ weekday: "long" }));
   } else {
-    // Else, show e.g., Tue, Jan 3 2003
-    const weekday = d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
-    const month = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+    const weekday = d.toLocaleDateString("en-US", optionsUTC({ weekday: "short" }));
+    const month = d.toLocaleDateString("en-US", optionsUTC({ month: "short" }));
     const day = d.getUTCDate();
-    const year = d.toLocaleDateString('en-US', { year: 'numeric', timeZone: 'UTC' });
+    const year = d.toLocaleDateString("en-US", optionsUTC({ year: "numeric" }));
 
     switch (format) {
       case "M D Y":
