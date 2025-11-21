@@ -6,7 +6,7 @@ import { Pagination } from "@heroui/pagination";
 import { Input } from "@heroui/input";
 import { Button } from "@heroui/button";
 
-import { Card, CardHeader, CardBody } from "@heroui/card";
+import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { RegionData } from "@/types/region";
 import { formatDate, cleanEventName, formatNumber } from "@/lib/utils";
@@ -107,21 +107,6 @@ export function RegionEventsCard({ events }: { events: RegionData[] }) {
         <div className="flex items-center justify-between w-full">
           {/* Left: Title */}
           <div className="flex items-center justify-start">Recent Events</div>
-
-          {/* Middle: Pagination */}
-          <div className="flex items-center justify-center">
-            {events.length > 0 && (
-              <Pagination
-                page={page}
-                total={totalPages}
-                onChange={setPage}
-                showShadow
-                size="sm"
-                color="default"
-                variant="bordered"
-              />
-            )}
-          </div>
 
           {/* Right: Filters button */}
           <div className="flex items-center justify-end">
@@ -327,6 +312,21 @@ export function RegionEventsCard({ events }: { events: RegionData[] }) {
           })}
         </div>
       </CardBody>
+      <Divider />
+      <CardFooter className="flex justify-center items-center font-semibold text-xl px-6">
+        {/* Middle: Pagination */}
+        {events.length > 0 && (
+          <Pagination
+        page={page}
+        total={totalPages}
+        onChange={setPage}
+        showShadow
+        showControls
+        color="default"
+        variant="bordered"
+          />
+        )}
+      </CardFooter>
     </Card>
   );
 }

@@ -87,7 +87,6 @@ export function DateFilter({
       {["Overall", "YTD", "Current Month"].map((range) => (
         <Button
           key={range}
-          size="lg"
           variant={selectedRange === range ? "solid" : "ghost"}
           color={selectedRange === range ? "primary" : "default"}
           className="flex-1"
@@ -113,7 +112,6 @@ export function DateFilter({
                 ? "primary"
                 : "default"
             }
-            size="lg"
             className="flex-1"
           >
             {["Overall", "YTD", "Current Month"].includes(selectedRange)
