@@ -1,53 +1,53 @@
 // src/lib/region.ts
 import { AOData, AOSummary, AOLeaders, AOEvents, AOQLineup } from "@/types/ao";
 import pool from "@/lib/db";
-import { toTitleCase, formatTime, formatDate } from "@/lib/utils";
+import { toTitleCase, formatTime } from "@/lib/utils";
 
 export async function getAOSummary(id: number): Promise<AOSummary | null> {
   const { rows } = await pool.query(
     `
+   WITH instance_stats AS (
     SELECT
-    -- First-ever workout date for this AO
-    MIN(ei.start_date) AS first_start_time,
+        ao_org_id,
+        MIN(start_date) AS first_start_time,
+        COUNT(*) AS total_workouts,
+        SUM(fng_count) AS total_fngs,
+        AVG(pax_count::double precision) AS avg_pax_count,
+        MAX(pax_count) AS peak_pax_count
+    FROM event_instance_expanded
+    WHERE ao_org_id = $1
+    GROUP BY ao_org_id
+),
 
-    -- Total workouts (unique instances)
-    COUNT(DISTINCT ei.id) AS total_workouts,
+attendance_stats AS (
+    SELECT
+        ei.ao_org_id,
+        COUNT(DISTINCT ae.user_id) AS unique_pax,
+        COUNT(DISTINCT CASE WHEN ae.q_ind = 1 THEN ae.user_id END) AS unique_qs
+    FROM attendance_expanded ae
+    JOIN event_instance_expanded ei
+      ON ae.event_instance_id = ei.id
+    WHERE ei.ao_org_id = $1
+    GROUP BY ei.ao_org_id
+)
 
-    -- Unique PAX (distinct user IDs across all attendance records)
-    COUNT(DISTINCT ae.user_id) AS unique_pax,
-
-    -- Unique Qs (distinct user IDs that have q_ind = 1)
-    COUNT(DISTINCT CASE WHEN ae.q_ind = 1 THEN ae.user_id END) AS unique_qs,
-
-    -- Total FNGs (sum from unique instances)
-    SUM(DISTINCT ei.fng_count) AS total_fngs,
-
-    -- Average PAX Count (avg from unique instances)
-    AVG(DISTINCT ei.pax_count) AS avg_pax_count,
-
-    -- Peak PAX Count
-    MAX(ei.pax_count) AS peak_pax_count
-
-FROM attendance_expanded ae
-JOIN event_instance_expanded ei
-    ON ae.event_instance_id = ei.id
-WHERE ei.ao_org_id = $1`,
+SELECT
+    ins.first_start_time,
+    ins.total_workouts,
+    ins.total_fngs,
+    ins.avg_pax_count,
+    ins.peak_pax_count,
+    COALESCE(ae_stats.unique_pax, 0) AS unique_pax,
+    COALESCE(ae_stats.unique_qs, 0) AS unique_qs
+FROM instance_stats ins
+LEFT JOIN attendance_stats ae_stats
+    ON ins.ao_org_id = ae_stats.ao_org_id;`,
     [id]
   );
 
   // If no rows found, return null
   if (rows.length === 0) {
     return null;
-  }
-
-  // Format the first_start_time to a readable date format
-  if (rows[0].first_start_time) {
-    rows[0].first_start_time = formatDate(new Date(rows[0].first_start_time), "M D Y");
-  }
-
-  // Round numeric fields to x.xx decimal places
-  if (rows[0].avg_pax_count !== null) {
-    rows[0].avg_pax_count = parseFloat(rows[0].avg_pax_count).toFixed(2);
   }
 
   return rows[0] as AOSummary;

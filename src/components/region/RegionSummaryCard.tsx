@@ -2,29 +2,33 @@
 
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { AOSummary } from "@/types/ao";
-import { formatNumber, formatDate } from "@/lib/utils";
+import { RegionSummary } from "@/types/region";
+import { formatNumber } from "@/lib/utils";
 
-export function AOSummaryCard({
+export function RegionSummaryCard({
   summary,
 }: {
-  summary: AOSummary;
+  summary: RegionSummary;
 }) {
   return (
     (
       <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
-          <CardHeader className="flex justify-between items-center px-6">
-            <div className="font-semibold text-xl">AO Summary</div>
+          <CardHeader className="flex justify-between items-center px-6 lg:min-h-16">
+            <div className="font-semibold text-xl">Region Summary</div>
           </CardHeader>
           <Divider />
           <CardBody className="px-6">
             <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
-              <span className="text-primary">First Workout:</span>
-              <span>{summary?.first_start_time ? formatDate(summary.first_start_time, "M D Y") : "Unknown Start Date"}</span>
+              <span className="text-primary">Total Workouts:</span>
+              <span>{summary?.event_count ? formatNumber(summary.event_count) : "Unknown"} Workouts</span>
             </div>
             <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
-              <span className="text-primary">Total Workouts:</span>
-              <span>{summary?.total_workouts ? formatNumber(summary.total_workouts) : "Unknown"} Workouts</span>
+              <span className="text-primary">AO Count:</span>
+              <span>{summary?.ao_count ? formatNumber(summary.ao_count) : "Unknown"} AOs</span>
+            </div>
+            <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
+              <span className="text-primary">Active PAX:</span>
+              <span>{summary?.active_pax ? formatNumber(summary.active_pax) : "Unknown"} PAX</span>
             </div>
             <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
               <span className="text-primary">Unique PAX:</span>
@@ -36,15 +40,11 @@ export function AOSummaryCard({
             </div>
             <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
               <span className="text-primary">FNGs:</span>
-              <span>{summary?.total_fngs ? formatNumber(summary.total_fngs) : "Unknown"} FNGs</span>
-            </div>
-            <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
-              <span className="text-primary">Average PAX:</span>
-              <span>{summary?.avg_pax_count ? formatNumber(summary.avg_pax_count, 2) : "Unknown"} PAX</span>
+              <span>{summary?.fng_count ? formatNumber(summary.fng_count) : "Unknown"} FNGs</span>
             </div>
             <div className="flex justify-between py-1 pb-2">
-              <span className="text-primary">Peak PAX:</span>
-              <span>{summary?.peak_pax_count ? formatNumber(summary.peak_pax_count) : "Unknown"} PAX</span>
+              <span className="text-primary">Average PAX:</span>
+              <span>{summary?.pax_count_average ? formatNumber(summary.pax_count_average, 2) : "Unknown"} PAX</span>
             </div>
           </CardBody>
         </Card>

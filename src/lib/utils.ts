@@ -12,6 +12,17 @@ export function getBaseUrl() {
   throw new Error('NEXT_PUBLIC_SITE_URL must be defined in production');
 }
 
+export function formatNumber(num: number | null, decimals: number = 0, thousandSeparator: string = ","): string {
+  if (num === null || isNaN(num)) {
+    return "N/A";
+  }
+  const formatted = Number(num).toFixed(decimals);
+  const parts = formatted.split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousandSeparator);
+  
+  return parts.join(".");
+}
+
 export function formatDate(
   date: string | Date,
   format?: "M D Y" | "M Y"

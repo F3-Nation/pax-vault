@@ -7,10 +7,12 @@ import { AOSummaryCard } from "@/components/ao/AOSummaryCard";
 import { AOLeadersCard } from "@/components/ao/AOLeadersCard";
 import { RecentEventsCard } from "@/components/ao/RecentEventsCard";
 import { AOQLineupCard } from "@/components/ao/AOQLineupCard";
+import { Button, ButtonGroup } from "@heroui/button";
 
 export default async function AODetailPage({ params }: IdProps) {
   const { id } = await params;
   const { AOInfo, AOSummary, AOLeaders, AOEvents, AOQLineup } = await loadAOStats(Number(id));
+  const dateRanges = ["All Time","Current Year", "Current Month"] as const;
 
   if (!AOInfo) {
     return <div className="p-8 text-center text-red-600">AO not found</div>;
@@ -26,6 +28,22 @@ export default async function AODetailPage({ params }: IdProps) {
           link={`/stats/region/${AOInfo.region_id}`}
           linkName={AOInfo.region_name}
         />
+        <div className="flex gap-2 w-full">
+          <ButtonGroup className="w-full">
+            {dateRanges.map((range) => (
+              
+          <Button
+          size="lg"
+          variant={range === "All Time" ? "flat" : "ghost"}
+          color={range === "All Time" ? "primary" : "default"}
+          key={range}
+          className="flex-1"
+          >
+          {range}
+          </Button>
+            ))}
+          </ButtonGroup>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4">
         {/* Workout Summary Card */}
