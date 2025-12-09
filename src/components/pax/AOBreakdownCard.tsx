@@ -9,7 +9,7 @@ import { ScrollShadow } from "@heroui/scroll-shadow";
 import { Tab, Tabs } from "@heroui/tabs";
 import { useState } from "react";
 
-export function PaxAOBreakdownCard({
+export function AOBreakdownCard({
   AOBreakdown,
 }: {
   AOBreakdown: PaxAOBreakdown[];

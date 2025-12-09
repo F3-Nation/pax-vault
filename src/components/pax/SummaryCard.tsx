@@ -6,7 +6,7 @@ import { PaxSummary } from "@/types/pax";
 import { formatNumber } from "@/lib/utils";
 import { Link } from "@heroui/link";
 
-export function PaxSummaryCard({
+export function SummaryCard({
   summary,
 }: {
   summary: PaxSummary;

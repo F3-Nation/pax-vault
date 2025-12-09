@@ -5,7 +5,7 @@ import { PaxInsights } from "@/types/pax";
 import { Divider } from "@heroui/divider";
 import { CustomBarChart as InsightsBarChart } from "@/components/charts/barChart";
 
-export function PAXInsightsCard({
+export function InsightsCard({
   paxInsights,
 }: {
   paxInsights: PaxInsights[];

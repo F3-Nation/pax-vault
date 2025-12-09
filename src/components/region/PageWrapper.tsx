@@ -3,9 +3,9 @@
 import { RegionData } from "@/types/region";
 import { getSummary, getLeaderboards } from "@/utils/region";
 import { Filter } from "./PageFilter";
-import { RegionSummaryCard } from "./RegionSummaryCard";
-import { RegionLeadersCard } from "./RegionLeadersCard";
-import { RegionEventsCard } from "./RegionEventsCard";
+import { SummaryCard } from "./SummaryCard";
+import { LeadersCard } from "./LeadersCard";
+import { EventsCard } from "./EventsCard";
 import { useState, useMemo } from "react";
 
 export function RegionalPageWrapper({
@@ -51,9 +51,9 @@ export function RegionalPageWrapper({
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4">
         {/* Workout Summary Card */}
-        <RegionSummaryCard summary={region_summary!} />
+        <SummaryCard summary={region_summary!} />
         {/* Leaderboard Card */}
-        <RegionLeadersCard leaders={region_leaders ? (Array.isArray(region_leaders) ? region_leaders : [region_leaders]) : []} />
+        <LeadersCard leaders={region_leaders ? (Array.isArray(region_leaders) ? region_leaders : [region_leaders]) : []} />
       </div>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
         {/* Insights Card */}
@@ -68,7 +68,7 @@ export function RegionalPageWrapper({
       </div>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
         {/* Recent Events Card */}
-        <RegionEventsCard events={region_events} />
+        <EventsCard events={region_events} />
       </div>
     </>
   );

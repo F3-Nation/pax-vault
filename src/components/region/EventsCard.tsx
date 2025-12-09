@@ -1,23 +1,65 @@
 "use client";
 
 import { useState } from "react";
+import { Select, SelectItem } from "@heroui/select";
 import { Pagination } from "@heroui/pagination";
 import { Input } from "@heroui/input";
+import { Button } from "@heroui/button";
 
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { PaxEventData } from "@/types/pax";
+import { RegionData } from "@/types/region";
 import { formatDate, cleanEventName, formatNumber } from "@/lib/utils";
 import { Link } from "@heroui/link";
 import { Chip } from "@heroui/chip";
 import { Avatar } from "@heroui/avatar";
+import { Popover, PopoverTrigger, PopoverContent } from "@heroui/popover";
 
-export function PaxEventsCard({ events, thisUserId }: { events: PaxEventData[], thisUserId?: number }) {
+function toUTCDate(dateStr: string | Date | number | null | undefined): number {
+  if (!dateStr) return 0;
+
+  // If already a Date instance
+  if (dateStr instanceof Date) {
+    return Date.UTC(dateStr.getUTCFullYear(), dateStr.getUTCMonth(), dateStr.getUTCDate());
+  }
+
+  // If it's a number (timestamp)
+  if (typeof dateStr === "number") {
+    const d = new Date(dateStr);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+
+  // Ensure we are dealing with a string
+  const str = String(dateStr);
+
+  // Expecting YYYY-MM-DD
+  const [y, m, d] = str.split("-").map(Number);
+  if (!y || !m || !d) return 0; // invalid date
+
+  return Date.UTC(y, m - 1, d);
+}
+
+export function EventsCard({ events }: { events: RegionData[] }) {
   events = events.toReversed(); // Show most recent events first
 
   const perPage = 10;
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const [aoFilter, setAoFilter] = useState("any");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const aoOptions = [
+    { key: "any", label: "Any AO" },
+    ...Array.from(new Set(events.map((ev) => ev.ao_name)))
+      .filter(Boolean)
+      .sort()
+      .map((name) => ({
+        key: name,
+        label: name,
+      })),
+  ];
 
   const filteredEvents = events.filter((ev) => {
     const term = searchTerm.toLowerCase();
@@ -42,7 +84,18 @@ export function PaxEventsCard({ events, thisUserId }: { events: PaxEventData[], 
       paxNames.includes(term) ||
       qNames.includes(term);
 
-    return matchesFree;
+    // AO filter match
+    const matchesAoFilter = aoFilter === "any" || ev.ao_name === aoFilter;
+
+    // Date range filter
+    const evDate = toUTCDate(ev.event_date);
+    const afterStart =
+      !startDate || evDate >= toUTCDate(startDate);
+    const beforeEnd =
+      !endDate || evDate <= toUTCDate(endDate);
+    const matchesDate = afterStart && beforeEnd;
+
+    return matchesFree && matchesAoFilter && matchesDate;
   });
 
   const totalPages = Math.ceil(filteredEvents.length / perPage);
@@ -55,20 +108,74 @@ export function PaxEventsCard({ events, thisUserId }: { events: PaxEventData[], 
           {/* Left: Title */}
           <div className="flex items-center justify-start">Recent Events</div>
 
-          {/* Right: Search Input */}
+          {/* Right: Filters button */}
           <div className="flex items-center justify-end">
-            <Input
-              aria-label="Search events"
-              placeholder="Search events..."
-              variant="flat"
-              size="sm"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPage(1);
-              }}
-              className="max-w-xs"
-            />
+            <Popover placement="bottom-end">
+              <PopoverTrigger>
+                <Button variant="ghost">Search</Button>
+              </PopoverTrigger>
+              <PopoverContent className="p-4 w-64 flex flex-col gap-4">
+                <Input
+                  label="Search Events"
+                  variant="bordered"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setPage(1);
+                  }}
+                />
+
+                {/* Search by AO */}
+                <Select
+                  items={aoOptions}
+                  label="Filter by AO"
+                  variant="bordered"
+                  selectedKeys={[aoFilter]}
+                  onSelectionChange={(keys) => {
+                    const val = Array.from(keys)[0] as string;
+                    setAoFilter(val);
+                    setPage(1);
+                  }}
+                >
+                  {(item) => <SelectItem key={item.key}>{item.label}</SelectItem>}
+                </Select>
+
+                {/* Date Range */}
+                <Input
+                  label="From Date"
+                  type="date"
+                  variant="bordered"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setPage(1);
+                  }}
+                />
+                <Input
+                  label="To Date"
+                  type="date"
+                  variant="bordered"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setPage(1);
+                  }}
+                />
+                <Button
+                  color="danger"
+                  variant="flat"
+                  onPress={() => {
+                    setSearchTerm("");
+                    setAoFilter("any");
+                    setStartDate("");
+                    setEndDate("");
+                    setPage(1);
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </CardHeader>
@@ -96,9 +203,7 @@ export function PaxEventsCard({ events, thisUserId }: { events: PaxEventData[], 
               .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
             return (
               <div key={event.event_instance_id || index}>
-                <Card
-                  className={`bg-background/60 dark:bg-default-100/50 border ${q_list.some(q => q.user_id === thisUserId) ? "border-secondary" : "border-default-200 dark:border-default-300"}`}
-                >
+                <Card className="bg-background/60 dark:bg-default-100/50 border border-default-200 dark:border-default-300">
                   <CardBody className="text-sm">
                     <div className="flex justify-between gap-4">
                       <div className="pb-4 justify-start">
@@ -189,7 +294,7 @@ export function PaxEventsCard({ events, thisUserId }: { events: PaxEventData[], 
                                     />
                                   }
                                   variant="bordered"
-                                  color={"default"}
+                                  color="default"
                                   size="sm"
                                 >
                                   {pax.f3_name}
@@ -212,13 +317,13 @@ export function PaxEventsCard({ events, thisUserId }: { events: PaxEventData[], 
         {/* Middle: Pagination */}
         {events.length > 0 && (
           <Pagination
-            page={page}
-            total={totalPages}
-            onChange={setPage}
-            showShadow
-            showControls
-            color="default"
-            variant="bordered"
+        page={page}
+        total={totalPages}
+        onChange={setPage}
+        showShadow
+        showControls
+        color="default"
+        variant="bordered"
           />
         )}
       </CardFooter>

@@ -5,7 +5,7 @@ import { Divider } from "@heroui/divider";
 import { RegionSummary } from "@/types/region";
 import { formatNumber } from "@/lib/utils";
 
-export function RegionSummaryCard({
+export function SummaryCard({
   summary,
 }: {
   summary: RegionSummary;

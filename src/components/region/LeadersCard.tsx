@@ -10,7 +10,7 @@ import { Link } from "@heroui/link";
 import { RegionLeaders } from "@/types/region";
 import { formatNumber } from "@/lib/utils";
 
-export function RegionLeadersCard({
+export function LeadersCard({
   leaders,
 }: {
   leaders: RegionLeaders[];

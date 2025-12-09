@@ -4,10 +4,10 @@ import { PaxData } from "@/types/pax";
 import { getSummary, getAOBreakdown, getPaxCharting } from "@/utils/pax";
 import { Filter } from "./PageFilter";
 import { useState, useMemo } from "react";
-import { PaxSummaryCard } from "./PaxSummaryCard";
-import { PaxAOBreakdownCard } from "./PaxAOBreakdownCard";
-import { PaxEventsCard } from "./PaxEventsCard";
-import { PAXInsightsCard } from "./PaxInsightsCard";
+import { SummaryCard } from "./SummaryCard";
+import { AOBreakdownCard } from "./AOBreakdownCard";
+import { EventsCard } from "./EventsCard";
+import { InsightsCard } from "./InsightsCard";
 
 export function PaxPageWrapper({ pax_data }: { pax_data: PaxData }) {
   const [startDate, setStartDate] = useState<string | undefined>();
@@ -71,7 +71,7 @@ export function PaxPageWrapper({ pax_data }: { pax_data: PaxData }) {
     events: filteredPaxData,
   });
   const pax_charting = getPaxCharting({ ...pax_data, events: filteredPaxData });
-  
+
   return (
     <>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
@@ -97,13 +97,13 @@ export function PaxPageWrapper({ pax_data }: { pax_data: PaxData }) {
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4">
         {/* Workout Summary Card */}
-        <PaxSummaryCard summary={pax_summary!} />
+        <SummaryCard summary={pax_summary!} />
         {/* AO Breakdown Card */}
-        <PaxAOBreakdownCard AOBreakdown={pax_ao_breakdown} />
+        <AOBreakdownCard AOBreakdown={pax_ao_breakdown} />
       </div>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
         {/* Insights Card */}
-        <PAXInsightsCard
+        <InsightsCard
           paxInsights={
             Array.isArray(pax_charting) ? pax_charting : [pax_charting]
           }
@@ -111,7 +111,7 @@ export function PaxPageWrapper({ pax_data }: { pax_data: PaxData }) {
       </div>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
         {/* Recent Events Card */}
-        <PaxEventsCard events={filteredPaxData} thisUserId={this_user_id} />
+        <EventsCard events={filteredPaxData} thisUserId={this_user_id} />
       </div>
     </>
   );
