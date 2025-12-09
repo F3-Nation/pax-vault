@@ -1,103 +1,91 @@
-export interface PaxList {
-  id: number; // Unique identifier for the user
-  f3_name: string; // F3 name (nickname)
-  first_name: string; // First name of the user
-  last_name: string; // Last name of the user
-  email: string; // Email address of the user
-  region: string; // Home region (if set)
-  region_id: number; // ID of the home region
-  region_default: string; // First-attended region
-  region_default_id: number; // ID of the first-attended region
-  avatar: string; // Avatar URL of the user
-  created: string; // Timestamp when the user was created
-  updated: string; // Timestamp when the user was last updated
-  status: string; // Status of the user (e.g., active, inactive)
+export interface PaxData {
+    info: PaxInfo; // Information about the pax
+    events: PaxEventData[]; // List of event data associated with the pax
 }
 
-export interface PaxDetail {
-  id: number; // Unique identifier for the user
-  f3_name: string; // F3 name (nickname)
-  first_name: string; // First name of the user
-  last_name: string; // Last name of the user
-  email: string; // Email address of the user
-  region: string; // Home region (if set)
-  region_id: number; // ID of the home region
-  region_default: string; // First-attended region
-  region_default_id: number; // ID of the first-attended region
-  avatar: string; // Avatar URL of the user
-  created: string; // Timestamp when the user was created
-  updated: string; // Timestamp when the user was last updated
-  status: string; // Status of the user (e.g., active, inactive)
+export interface PaxInfo {
+    user_id: number; // Unique identifier for the user
+    f3_name: string; // F3 name (nickname) of the user
+    region: string | null; // Unique identifier for the user's home region
+    region_id: number | null; // Unique identifier for the user's home region
+    region_default: string | null; // Default region name associated with the user
+    region_default_id: number | null; // Default region ID associated with the user
+    avatar_url: string | null; // URL to the user's avatar image, can be null
+    status: string; // Status of the user (e.g., active, inactive)
 }
 
-export interface PaxEvents {
-  id: number; // Unique identifier for the record
+export interface PaxEventData {
+  event_instance_id: number; // Unique identifier for the event instance
+  event_date: string; // Date of the workout event
+  event_name: string; // Name of the workout event
+  pax_count: number; // Number of participants (pax) who attended the event
+  fng_count: number; // Number of first-time participants (FNGs) at the event
+  location_id: number | null; // Unique identifier for the location of the event
+  location_name: string | null; // Name of the location of the event
+  location_latitude: number | null; // Latitude of the event location, can be null
+  location_longitude: number | null; // Longitude of the event location, can be null
+  ao_org_id: number; // Unique identifier for the AO organization
+  ao_name: string; // Name of the AO organization
+  region_org_id: number; // Unique identifier for the region organization
+  region_name: string; // Name of the region organization
+  region_logo_url: string | null; // Logo URL of the region, can be null
+  sector_org_id: number; // Unique identifier for the sector organization
+  sector_name: string; // Name of the sector organization
+  first_f_ind: string; // Indicates if the event is a 1st F
+  second_f_ind: string; // Indicates if the event is a 2nd F
+  third_f_ind: string; // Indicates if the event is a 3rd F
+  all_types: string[] | null; // List of all types/categories associated with the event
+  all_tags: string[] | null; // List of all tags associated with the event
+  attendance: PaxAttendance[]; // List of attendance records for the event
+}
+
+export interface PaxAttendance {
+  id: number; // Unique identifier for the attendance record
   user_id: number; // Unique identifier for the user
   f3_name: string; // F3 name (nickname) of the user
-  avatar: string | null; // Avatar URL of the user
-  event_instance_id: number; // Unique identifier for the event instance
-  name: string; // Name of the event
-  start_date: string; // Start date of the event
-  ao_name: string; // Name of the Area of Operation (AO)
-  ao_org_id: number; // ID of the AO organization
-  q_ind: string; // Indicates if the user held a Q (leadership role) for this event
-  region_name: string; // Name of the region where the event took place
-  region_org_id: number; // ID of the region organization
-  pax_list: string; // Comma-separated list of PAX (participants) in the event
-  pax_count: number; // Total number of PAX (participants) in the event
-  q_list: string; // Comma-separated list of users who held a Q for the event
+  q_ind: boolean; // Indicates if the user was a Q (leader) for the event
+  coq_ind: boolean; // Indicates if the user was a co-Q (co-leader) for the event
+  avatar_url: string | null; // Optional URL to the user's avatar image
+}
+
+export interface PaxSummary {
+  event_count: number; // Total number of events held in the region
+  q_count: number; // Total number of Qs (leaders) across all events
+  first_event_date: string | null; // Date of the first event in the region
+  first_event_ao_id: number | null; // ID of the first event in the region
+  first_event_ao_name: string | null; // Name of the AO (Area of Operation) for the first event
+  last_event_date: string | null; // Date of the last event in the region
+  last_event_ao_id: number | null; // ID of the last event in the region
+  last_event_ao_name: string | null; // Name of the AO (Area of Operation) for the last event
+  bestie_user_id: number | null; // User ID of the bestie (most attended by the main user)
+  bestie_count: number; // Number of events attended by the bestie
+  bestie_f3_name: string | null; // F3 name of the bestie
+  unique_users_met: number; // Number of unique users met by the main user
+  first_q_date: string | null; // Date of the first event where the main user was a Q
+  first_q_ao_id: number | null; // ID of the AO for the first Q event
+  first_q_ao_name: string | null; // Name of the AO for the first Q event
+  last_q_date: string | null; // Date of the last event where the main user was a Q
+  last_q_ao_id: number | null; // ID of the AO for the last Q event
+  last_q_ao_name: string | null; // Name of the AO for the last Q event
+  unique_pax_when_q: number; // Number of unique pax who attended events when the main user was a Q
+  effective_percentage: number | null; // Percentage of events where the main user was an effective Q
+}
+
+export interface PaxAOBreakdown {
+  ao_org_id: number; // Unique identifier for the AO organization
+  ao_name: string; // Name of the AO organization
+  region_org_id: number; // Unique identifier for the region organization
+  region_name: string; // Name of the region organization
+  total_events: number; // Number of events held by the AO
+  total_q_count: number; // Number of Qs (leaders) held by the AO
 }
 
 export interface PaxInsights {
   paxData: {
-    date: string;
-    events: number;
-    qs: number;
+    month: string; // Month in 'YYYY-MM' format
+    events: number; // Number of events in that month
+    qs: number; // Number of Qs (leaders) in that month
   }[];
-  eventsChange: number;
-  qsChange: number; // Key-value map of date to post count
-}
-
-export interface PaxEventsCalculations {
-  totalEvents: number; // Total number of events attended by the user
-  totalQ: number; // Total number of Qs (leadership roles) taken by the user
-  firstBD: string; // Start date of the first event
-  firstBDLocation: { id: number; name: string } | null; // Location of the first event
-  lastBD: string; // Start date of the last event
-  lastBDLocation: { id: number; name: string } | null; // Location of the last event
-  firstQ: string; // Start date of the first Q event
-  firstQLocation: { id: number; name: string } | null; // Location of the first Q event
-  lastQ: string; // Start date of the last Q event
-  lastQLocation: { id: number; name: string } | null; // Location of the last Q event
-  aoNameCounts: {
-    id: number;
-    ao_name: string;
-    count: number;
-    region_name: string;
-    region_org_id: number;
-  }[]; // Counts of events per AO
-  aoNameQCounts: {
-    id: number;
-    ao_name: string;
-    count: number;
-    region_name: string;
-    region_org_id: number;
-  }[]; // Counts of Qs per AO
-}
-
-export interface PaxEventsResults {
-  nation: PaxEventsCalculations; // Calculations for all events nationwide
-  region: PaxEventsCalculations; // Calculations for events in the user's home region
-}
-
-export interface PaxAchievements {
-  achievement_id: number; // Unique identifier for the achievement
-  user_id: number; // Unique identifier for the user
-  name: string; // Name of the achievement
-  description: string; // Description of the achievement
-  verb: string; // Verb associated with the achievement
-  image_url: string | null; // URL of the achievement image
-  specific_org_id: number | null; // Specific organization ID if applicable
-  date_awarded: string; // Date when the achievement was awarded
-  times: number; // Number of times the achievement has been earned
+  eventsChange: number; // Percentage change in events compared to the previous period
+  qsChange: number; // Percentage change in Qs compared to the previous period
 }

@@ -26,7 +26,7 @@ export function PAXInsightsCard({
           <div className="flex flex-col lg:flex-row gap-6">
             <InsightsBarChart
               title="Monthly Post Volume"
-              data={paxInsights[0].paxData}
+              data={paxInsights[0].paxData.map(item => ({ date: item.month, events: item.events, qs: item.qs }))}
               dataKey="events"
               valueLabel="Post"
               color="var(--primary)"
@@ -34,7 +34,7 @@ export function PAXInsightsCard({
             />
             <InsightsBarChart
               title="Monthly Q Volume"
-              data={paxInsights[0].paxData}
+              data={paxInsights[0].paxData.map(item => ({ date: item.month, events: item.events, qs: item.qs }))}
               dataKey="qs"
               valueLabel="Q"
               color="var(--secondary)"

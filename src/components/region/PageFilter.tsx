@@ -11,7 +11,7 @@ function toUTCDateString(date: Date) {
   return date.toISOString().split("T")[0];
 }
 
-export function DateFilter({
+export function Filter({
   start_date,
   end_date,
   selectedRange,

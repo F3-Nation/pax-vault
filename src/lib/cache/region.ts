@@ -1,10 +1,11 @@
 // src/lib/data/region.ts
-import pool from '@/lib/db';
-import { RegionList } from '@/types/region';
+import { RegionDetails } from '@/types/region';
+import { queryBigQuery } from '../db';
 
-export async function getRegionList(): Promise<RegionList[]> {
-    const { rows } = await pool.query(`
-      SELECT 
+
+export async function getRegionList(): Promise<RegionDetails[]> {
+  const query = `
+    SELECT 
         id, 
         name, 
         email, 
@@ -16,8 +17,10 @@ export async function getRegionList(): Promise<RegionList[]> {
       WHERE 
         org_type = 'region' 
       ORDER BY 
-        id DESC
-    `);
-    console.log(rows.length + ' Region rows fetched from database');
-    return rows as RegionList[];
+        id DESC;
+  `;
+  
+  const results = await queryBigQuery<RegionDetails>(query);
+
+  return results;
 }

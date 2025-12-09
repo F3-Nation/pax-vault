@@ -1,9 +1,9 @@
 // src/lib/region.ts
 import { getRegionList } from '@/lib/cache/region';
-import { RegionList} from '@/types/region';
+import { RegionDetails} from '@/types/region';
 import { cache } from 'react';
 
-export const getCachedRegionList = cache(async (): Promise<RegionList[]> => {
+export const getCachedRegionList = cache(async (): Promise<RegionDetails[]> => {
   try {
     return await getRegionList();
   } catch (err) {

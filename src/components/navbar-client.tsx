@@ -12,23 +12,10 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerBody } from "@heroui/drawer"
 import { useDisclosure } from "@heroui/use-disclosure";
 import { Divider } from "@heroui/divider";
 import { ThemeSwitcher } from "@/lib/theme-switcher";
+import { PaxInfo } from "@/types/pax";
+import { RegionDetails } from "@/types/region";
 
-type Props = {
-  regionData: {
-    id: string;
-    logo: string | null;
-    name: string;
-  }[];
-  paxData: {
-    avatar: string | undefined;
-    f3_name: string;
-    id: string;
-    region: string;
-    region_default: string;
-  }[];
-};
-
-export default function NavbarClient({ regionData, paxData }: Props) {
+export default function NavbarClient({ regionData, paxData }: { regionData: RegionDetails[]; paxData: PaxInfo[] }) {
   const router = useRouter();
   const {isOpen, onOpen, onOpenChange} = useDisclosure();
 
@@ -186,9 +173,9 @@ export default function NavbarClient({ regionData, paxData }: Props) {
             isClearable
           >
           {(pax) => (
-            <AutocompleteItem key={pax.id} textValue={pax.f3_name}>
+            <AutocompleteItem key={pax.user_id} textValue={pax.f3_name}>
               <div className="flex gap-2 items-center">
-                <Avatar alt={pax.f3_name} className="flex-shrink-0" size="sm" src={pax.avatar} />
+                <Avatar alt={pax.f3_name} className="flex-shrink-0" size="sm" src={pax.avatar_url ?? undefined} />
                 <div className="flex flex-col">
                   <span className="text-small">
                     {pax.f3_name && pax.f3_name.length > 20
@@ -287,9 +274,9 @@ export default function NavbarClient({ regionData, paxData }: Props) {
               isClearable
             >
             {(pax) => (
-              <AutocompleteItem key={pax.id} textValue={pax.f3_name}>
+              <AutocompleteItem key={pax.user_id} textValue={pax.f3_name}>
                 <div className="flex gap-2 items-center">
-                  <Avatar alt={pax.f3_name} className="flex-shrink-0" size="sm" src={pax.avatar} />
+                  <Avatar alt={pax.f3_name} className="flex-shrink-0" size="sm" src={pax.avatar_url ?? undefined} />
                   <div className="flex flex-col">
                     <span className="text-small">
                       {pax.f3_name && pax.f3_name.length > 20

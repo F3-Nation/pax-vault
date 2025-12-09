@@ -2,7 +2,7 @@
 
 import { RegionData } from "@/types/region";
 import { getSummary, getLeaderboards } from "@/utils/region";
-import { DateFilter } from "../dateFilter";
+import { Filter } from "./PageFilter";
 import { RegionSummaryCard } from "./RegionSummaryCard";
 import { RegionLeadersCard } from "./RegionLeadersCard";
 import { RegionEventsCard } from "./RegionEventsCard";
@@ -37,7 +37,7 @@ export function RegionalPageWrapper({
     <>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
         <div className="flex gap-2 w-full">
-          <DateFilter
+          <Filter
             start_date={startDate || ""}
             end_date={endDate || ""}
             selectedRange={selectedRange}
