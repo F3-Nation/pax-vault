@@ -8,12 +8,13 @@ import { CustomBarChart as InsightsBarChart } from "@/components/charts/barChart
 export function InsightsCard({
   paxInsights,
 }: {
-  paxInsights: PaxInsights[];
+  paxInsights: PaxInsights;
 }) {
-  const totalEvents = paxInsights[0].paxData.reduce(
+  const totalEvents = paxInsights.paxData.reduce(
     (sum, entry) => sum + entry.events,
     0
   );
+  console.log("Pax Insights Data:", paxInsights);
 
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
@@ -26,19 +27,19 @@ export function InsightsCard({
           <div className="flex flex-col lg:flex-row gap-6">
             <InsightsBarChart
               title="Monthly Post Volume"
-              data={paxInsights[0].paxData.map(item => ({ date: item.month, events: item.events, qs: item.qs }))}
+              data={paxInsights.paxData.map(item => ({ date: item.month, events: item.events, qs: item.qs }))}
               dataKey="events"
               valueLabel="Post"
               color="var(--primary)"
-              change={paxInsights[0].eventsChange}
+              change={paxInsights.eventsChange}
             />
             <InsightsBarChart
               title="Monthly Q Volume"
-              data={paxInsights[0].paxData.map(item => ({ date: item.month, events: item.events, qs: item.qs }))}
+              data={paxInsights.paxData.map(item => ({ date: item.month, events: item.events, qs: item.qs }))}
               dataKey="qs"
               valueLabel="Q"
               color="var(--secondary)"
-              change={paxInsights[0].qsChange}
+              change={paxInsights.qsChange}
             />
           </div>
         ) : (
