@@ -10,11 +10,24 @@ export function InsightsCard({
 }: {
   paxInsights: PaxInsights[];
 }) {
-  const totalEvents = paxInsights[0].paxData.reduce(
-    (sum, entry) => sum + entry.events,
-    0
-  );
-  console.log("Pax Insights Data:", paxInsights[0].paxData);
+  const paxData = paxInsights?.[0]?.paxData ?? [];
+
+  const totalEvents = paxData.reduce((sum, entry, idx) => {
+    const value = Number((entry as any)?.events ?? 0);
+    console.log("totalEvents step", {
+      idx,
+      month: entry.month,
+      raw: (entry as any).events,
+      type: typeof (entry as any).events,
+      value,
+      sumBefore: sum,
+      sumAfter: sum + value,
+    });
+    return sum + value;
+  }, 0);
+
+  console.log("Pax Insights Data:", paxData);
+  console.log("Total events final:", totalEvents, "type:", typeof totalEvents);
 
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
@@ -27,7 +40,11 @@ export function InsightsCard({
           <div className="flex flex-col lg:flex-row gap-6">
             <InsightsBarChart
               title="Monthly Post Volume"
-              data={paxInsights[0].paxData.map(item => ({ date: item.month, events: item.events, qs: item.qs }))}
+              data={paxData.map(item => ({
+                date: item.month,
+                events: item.events,
+                qs: item.qs,
+              }))}
               dataKey="events"
               valueLabel="Post"
               color="var(--primary)"
@@ -35,7 +52,11 @@ export function InsightsCard({
             />
             <InsightsBarChart
               title="Monthly Q Volume"
-              data={paxInsights[0].paxData.map(item => ({ date: item.month, events: item.events, qs: item.qs }))}
+              data={paxData.map(item => ({
+                date: item.month,
+                events: item.events,
+                qs: item.qs,
+              }))}
               dataKey="qs"
               valueLabel="Q"
               color="var(--secondary)"
