@@ -36,11 +36,11 @@ export function PaxPageWrapper({ pax_data }: { pax_data: PaxData }) {
     let data = pax_data.events;
     // Filter by event type (1st F, 2nd F, 3rd F) when not "all"
     if (eventTypeFilter !== "all" && eventTypeFilter == "1st F") {
-      data = data.filter((d) => d.first_f_ind === "1");
+      data = data.filter((d) => d.first_f_ind == "1");
     } else if (eventTypeFilter !== "all" && eventTypeFilter == "2nd F") {
-      data = data.filter((d) => d.second_f_ind === "1");
+      data = data.filter((d) => d.second_f_ind == "1");
     } else if (eventTypeFilter !== "all" && eventTypeFilter == "3rd F") {
-      data = data.filter((d) => d.third_f_ind === "1");
+      data = data.filter((d) => d.third_f_ind == "1");
     }
 
     // Filter by region
