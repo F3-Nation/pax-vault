@@ -119,7 +119,12 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
           className="lg:hidden"
         /> */}
         <NavbarBrand>
-          <Link href="/" className="flex items-center gap-2 font-bold text-inherit">PAX VAULT</Link>
+          <Link href="/" className="flex items-center gap-2 font-bold text-inherit">
+            PAX VAULT
+            <span className="px-2 py-[2px] text-[10px] rounded-md bg-warning-200 text-warning-800 dark:bg-warning-300/20 dark:text-warning-300 font-semibold tracking-wide">
+              ALPHA 0.1
+            </span>
+          </Link>
         </NavbarBrand>
       </NavbarContent>
 

@@ -14,25 +14,25 @@ export function InsightsCard({
 
   const totalEvents = paxData.reduce((sum, entry, idx) => {
     const value = Number((entry as any)?.events ?? 0);
-    console.log("totalEvents step", {
-      idx,
-      month: entry.month,
-      raw: (entry as any).events,
-      type: typeof (entry as any).events,
-      value,
-      sumBefore: sum,
-      sumAfter: sum + value,
-    });
+    // console.log("totalEvents step", {
+    //   idx,
+    //   month: entry.month,
+    //   raw: (entry as any).events,
+    //   type: typeof (entry as any).events,
+    //   value,
+    //   sumBefore: sum,
+    //   sumAfter: sum + value,
+    // });
     return sum + value;
   }, 0);
 
-  console.log("Pax Insights Data:", paxData);
-  console.log("Total events final:", totalEvents, "type:", typeof totalEvents);
+  // console.log("Pax Insights Data:", paxData);
+  // console.log("Total events final:", totalEvents, "type:", typeof totalEvents);
 
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="text-center font-semibold text-xl px-6">
-        PAX Insights {totalEvents}
+        PAX Insights
       </CardHeader>
       <Divider />
       <CardBody className="px-6">

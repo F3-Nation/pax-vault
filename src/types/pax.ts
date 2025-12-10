@@ -20,22 +20,24 @@ export interface PaxEventData {
   event_name: string; // Name of the workout event
   pax_count: number; // Number of participants (pax) who attended the event
   fng_count: number; // Number of first-time participants (FNGs) at the event
-  location_id: number | null; // Unique identifier for the location of the event
-  location_name: string | null; // Name of the location of the event
-  location_latitude: number | null; // Latitude of the event location, can be null
-  location_longitude: number | null; // Longitude of the event location, can be null
+  // location_id: number | null; // Unique identifier for the location of the event
+  // location_name: string | null; // Name of the location of the event
+  // location_latitude: number | null; // Latitude of the event location, can be null
+  // location_longitude: number | null; // Longitude of the event location, can be null
   ao_org_id: number; // Unique identifier for the AO organization
   ao_name: string; // Name of the AO organization
   region_org_id: number; // Unique identifier for the region organization
   region_name: string; // Name of the region organization
-  region_logo_url: string | null; // Logo URL of the region, can be null
-  sector_org_id: number; // Unique identifier for the sector organization
-  sector_name: string; // Name of the sector organization
+  // region_logo_url: string | null; // Logo URL of the region, can be null
+  // area_org_id: number | null; // Unique identifier for the area organization
+  // area_name: string | null; // Name of the area organization
+  // sector_org_id: number; // Unique identifier for the sector organization
+  // sector_name: string; // Name of the sector organization
   first_f_ind: string; // Indicates if the event is a 1st F
   second_f_ind: string; // Indicates if the event is a 2nd F
   third_f_ind: string; // Indicates if the event is a 3rd F
-  all_types: string[] | null; // List of all types/categories associated with the event
-  all_tags: string[] | null; // List of all tags associated with the event
+  // all_types: string[] | null; // List of all types/categories associated with the event
+  // all_tags: string[] | null; // List of all tags associated with the event
   attendance: PaxAttendance[]; // List of attendance records for the event
 }
 

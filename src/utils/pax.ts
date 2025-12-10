@@ -185,6 +185,9 @@ export function getAOBreakdown(data: PaxData): PaxAOBreakdown[] {
 }
 
 export function getPaxCharting(data: PaxData): PaxInsights {
+
+  // console.log("Pax Info:", data.info);
+  // console.log("Pax Data Events Count:", data.events[0]);
   const summaryMap: Record<
     string,
     {
