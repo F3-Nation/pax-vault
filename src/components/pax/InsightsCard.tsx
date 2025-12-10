@@ -18,7 +18,7 @@ export function InsightsCard({
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="text-center font-semibold text-xl px-6">
-        PAX Insights
+        PAX Insights ({totalEvents} Events)
       </CardHeader>
       <Divider />
       <CardBody className="px-6">
