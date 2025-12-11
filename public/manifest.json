@@ -1,0 +1,45 @@
+{
+  "name": "F3 PAX Vault",
+  "short_name": "PAX Vault",
+  "description": "PAX Vault is a web application that provides real-time statistics and information about the F3 PAX (Fitness, Fellowship, Faith) community.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2E2E2E",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "theme_color": "#FFFFFF",
+  "orientation": "portrait",
+  "lang": "en-US",
+  "icons": [
+    {
+      "src": "/icons/icon-144x144.png",
+      "type": "image/png",
+      "sizes": "144x144"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/screenshot-600x1200.png",
+      "type": "image/png",
+      "sizes": "600x1200",
+      "form_factor": "narrow",
+      "label": "Mobile view"
+    },
+    {
+      "src": "/screenshots/screenshot-1200x600.png",
+      "type": "image/png",
+      "sizes": "1200x600",
+      "form_factor": "wide",
+      "label": "Desktop view"
+    }
+  ]
+}

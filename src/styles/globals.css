@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+:root {
+  --background: #fff;
+  --foreground: #000;
+}
+
+.dark {
+  --background: #121212;
+  --foreground: #fff;
+  --primary: #ccff00;
+  --secondary: #ff0000;
+  --success: #17c964;
+  --warning: #f5a524;
+  --danger: #f31260;
+}
+
+.light {
+  --background: #fff;
+  --foreground: #121212;
+  --primary: #b50000;
+  --secondary: #7828c8;
+  --success: #17c964;
+  --warning: #f5a524;
+  --danger: #f31260;
+}
+
+body {
+    font-family: 'Titillium Web', sans-serif;
+    background-color: var(--background);
+    color: var(--foreground);
+    }
+     */
+
+/* ------------------------------------------------------ */
+/* Light Mode — Clean, Professional, Modern               */
+/* ------------------------------------------------------ */
+:root {
+  --background: #fafafa;
+  --foreground: #1a1a1a;
+
+  /* Brand Colors */
+  --primary: #0058ff;      /* modern blue */
+  --primary-foreground: #ffffff;
+
+  --secondary: #5865f2;    /* subtle purple accent */
+  --secondary-foreground: #ffffff;
+
+  /* Semantic Colors */
+  --success: #12b76a;
+  --warning: #f79009;
+  --danger:  #d92d20;
+
+  /* Grays / Neutrals (UI foundation) */
+  --card: #ffffff;
+  --card-border: #e5e7eb;
+  --muted: #6b7280;
+  --muted-background: #f3f4f6;
+  --divider: #e5e7eb;
+
+  /* Subtle elevation */
+  --surface-1: #ffffff;
+  --surface-2: #f7f9fb;
+  --surface-3: #eef1f5;
+}
+
+/* ------------------------------------------------------ */
+/* Dark Mode — Softer, Neutral, No Neon Colors            */
+/* ------------------------------------------------------ */
+.dark {
+  --background: #0f1115;
+  --foreground: #e5e7eb;
+
+  /* Brand Colors */
+  --primary: #3b82f6;               /* soft blue */
+  --primary-foreground: #ffffff;
+
+  --secondary: #8b5cf6;
+  --secondary-foreground: #ffffff;
+
+  /* Semantic Colors */
+  --success: #4ade80;
+  --warning: #fb923c;
+  --danger:  #f87171;
+
+  /* Neutrals */
+  --card: #1a1d23;
+  --card-border: #2a2d33;
+  --muted: #9ca3af;
+  --muted-background: #1f2329;
+  --divider: #2a2d33;
+
+  /* Elevation */
+  --surface-1: #171a1f;
+  --surface-2: #1e2228;
+  --surface-3: #232830;
+}
+
+/* ------------------------------------------------------ */
+/* Global Styles                                           */
+/* ------------------------------------------------------ */
+body {
+  font-family: 'Titillium Web', sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+}
