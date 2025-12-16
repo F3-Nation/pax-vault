@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+out/
+build/
+dist/
+
+# Coverage reports
+coverage/
+
+# Package manager files
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Auto-generated files
+public/sw.js
+public/workbox-*.js
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
