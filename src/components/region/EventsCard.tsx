@@ -72,12 +72,12 @@ export function EventsCard({ events }: { events: RegionData[] }) {
     const region = ev.region_name?.toLowerCase() || "";
 
     const paxNames = ev.attendance
-      .map((a) => a.f3_name?.toLowerCase() || "")
+      .map((a) => a.f3_name?.toLowerCase() || a.user_id.toString())
       .join(" ");
 
     const qNames = ev.attendance
       .filter((a) => a.q_ind)
-      .map((a) => a.f3_name?.toLowerCase() || "")
+      .map((a) => a.f3_name?.toLowerCase() || a.user_id.toString())
       .join(" ");
 
     // Free text match
@@ -202,12 +202,12 @@ export function EventsCard({ events }: { events: RegionData[] }) {
           {paginatedEvents.map((event, index) => {
             const pax_list = event.attendance
               .slice()
-              .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
+              .sort((a, b) => (a.f3_name || a.user_id.toString()).localeCompare(b.f3_name || b.user_id.toString()));
 
             const q_list = event.attendance
               .filter((att) => att.q_ind)
               .slice()
-              .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
+              .sort((a, b) => (a.f3_name || a.user_id.toString()).localeCompare(b.f3_name || b.user_id.toString()));
             return (
               <div key={event.event_instance_id || index}>
                 <Card className="bg-background/60 dark:bg-default-100/50 border border-default-200 dark:border-default-300">
@@ -270,7 +270,7 @@ export function EventsCard({ events }: { events: RegionData[] }) {
                                   color="secondary"
                                   size="sm"
                                 >
-                                  {q.f3_name}
+                                  {q.f3_name ?? q.user_id.toString()}
                                 </Chip>
                               </Link>
                             );
@@ -304,7 +304,7 @@ export function EventsCard({ events }: { events: RegionData[] }) {
                                   color="default"
                                   size="sm"
                                 >
-                                  {pax.f3_name}
+                                  {pax.f3_name ?? pax.user_id.toString()}
                                 </Chip>
                               </Link>
                             );

@@ -7,12 +7,12 @@ async function getPaxInfo(id: number): Promise<PaxInfo | null> {
     SELECT
       user_id,
       region_name,
-      org_id
+      region_org_id
     FROM (
       SELECT
         ae.user_id,
         ei.region_name,
-        ei.org_id,
+        ei.region_org_id,
         ROW_NUMBER() OVER (
           PARTITION BY ae.user_id
           ORDER BY ei.start_date ASC
@@ -33,7 +33,7 @@ async function getPaxInfo(id: number): Promise<PaxInfo | null> {
     org.name AS region,
     org.id AS region_id,
     er.region_name AS region_default,
-    er.org_id AS region_default_id,
+    er.region_org_id AS region_default_id,
     us.avatar_url,
     us.status
   FROM
