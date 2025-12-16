@@ -273,8 +273,8 @@ create_temp_secret_files() {
     local secret_id="${SECRET_IDS[$i]}"
     local temp_file="$temp_dir/$secret_id.txt"
     
-    # Write the environment variable value to a temporary file
-    echo "${!envvar}" > "$temp_file"
+    # Write the environment variable value to a temporary file (no trailing newline)
+    printf '%s' "${!envvar}" > "$temp_file"
     log_info "Created temporary file: $temp_file"
   done
 }
