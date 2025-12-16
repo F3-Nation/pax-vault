@@ -279,23 +279,79 @@ create_temp_secret_files() {
   done
 }
 
+# Get current secret value from GCP
+get_current_secret_value() {
+  local project_id="$1"
+  local secret_id="$2"
+
+  gcloud secrets versions access latest \
+    --secret="$secret_id" \
+    --project="$project_id" \
+    2>/dev/null || echo ""
+}
+
+# Delete old secret versions (keep only the latest)
+delete_old_secret_versions() {
+  local project_id="$1"
+  local secret_id="$2"
+
+  # List all versions except the latest, then destroy them
+  local versions=$(gcloud secrets versions list "$secret_id" \
+    --project="$project_id" \
+    --filter="state:ENABLED AND NOT name~versions/latest" \
+    --format="value(name)" \
+    2>/dev/null)
+
+  if [[ -n "$versions" ]]; then
+    # Get the latest version number to exclude it
+    local latest_version=$(gcloud secrets versions list "$secret_id" \
+      --project="$project_id" \
+      --filter="state:ENABLED" \
+      --sort-by="~createTime" \
+      --limit=1 \
+      --format="value(name)" | grep -oE '[0-9]+$')
+
+    while IFS= read -r version; do
+      local version_num=$(echo "$version" | grep -oE '[0-9]+$')
+      if [[ "$version_num" != "$latest_version" ]]; then
+        log_info "Destroying old version $version_num of '$secret_id'…"
+        gcloud secrets versions destroy "$version_num" \
+          --secret="$secret_id" \
+          --project="$project_id" \
+          --quiet
+      fi
+    done <<< "$versions"
+  fi
+}
+
 # Create or update secrets in Google Cloud Secret Manager
 create_or_update_secrets() {
   local project_id="$1"
   local temp_dir="$2"
-  
+
   log_step "Creating or updating secrets in Google Cloud Secret Manager..."
-  
+
   for i in "${!SECRET_VARS[@]}"; do
     local secret_id="${SECRET_IDS[$i]}"
     local temp_file="$temp_dir/$secret_id.txt"
-    
+    local new_value=$(cat "$temp_file")
+
     if gcloud secrets describe "$secret_id" --project="$project_id" --quiet &>/dev/null; then
-      log_info "Secret '$secret_id' exists, adding new version…"
-      gcloud secrets versions add "$secret_id" \
-        --data-file="$temp_file" \
-        --project="$project_id" \
-        --quiet
+      # Secret exists - check if value has changed
+      local current_value=$(get_current_secret_value "$project_id" "$secret_id")
+
+      if [[ "$current_value" == "$new_value" ]]; then
+        log_info "Secret '$secret_id' unchanged, skipping…"
+      else
+        log_info "Secret '$secret_id' changed, adding new version…"
+        gcloud secrets versions add "$secret_id" \
+          --data-file="$temp_file" \
+          --project="$project_id" \
+          --quiet
+
+        # Delete old versions to keep only the latest
+        delete_old_secret_versions "$project_id" "$secret_id"
+      fi
     else
       log_info "Creating secret '$secret_id'…"
       gcloud secrets create "$secret_id" \
