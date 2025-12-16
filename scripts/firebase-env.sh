@@ -35,7 +35,7 @@ main() {
 
   # Get project root and file paths
   local project_root=$(get_project_root)
-  local env_file="$project_root/.env.local"
+  local env_file="$project_root/.env.firebase"
   
   # Load configuration
   log_step "Loading configuration from Firebase files..."
