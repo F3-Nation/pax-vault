@@ -47,3 +47,5 @@ public/workbox-*.js
 
 # BigQuery credentials
 pax-vault-bq*.json
+
+pr.md
