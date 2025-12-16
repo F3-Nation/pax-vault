@@ -35,7 +35,7 @@ main() {
 
   # Get project root and file paths
   local project_root=$(get_project_root)
-  local env_file="$project_root/.env.local"
+  local env_file="$project_root/.env.firebase"
   
   # Load configuration
   log_step "Loading configuration from Firebase files..."
@@ -165,25 +165,25 @@ read_backend_id() {
 # ENVIRONMENT VALIDATION FUNCTIONS (used by main)
 #####################################
 
-# Validate .env.local file exists
+# Validate .env.firebase file exists
 validate_env_file() {
   local env_file="$1"
-  
+
   if [[ ! -f "$env_file" ]]; then
-    log_error ".env.local file not found at $env_file"
+    log_error ".env.firebase file not found at $env_file"
     log_error "Please create this file with your environment variables."
     log_error "Required variables: POSTGRES_URL, BIGQUERY_CREDS"
     return 1
   fi
-  
-  log_success "Found .env.local file: $env_file"
+
+  log_success "Found .env.firebase file: $env_file"
 }
 
-# Load environment variables from .env.local
+# Load environment variables from .env.firebase
 load_environment_variables() {
   local env_file="$1"
 
-  log_step "Loading environment variables from .env.local..."
+  log_step "Loading environment variables from .env.firebase..."
 
   # Read file and handle multi-line values properly
   local current_var=""
@@ -242,15 +242,15 @@ validate_environment_variables() {
     local envvar="${SECRET_VARS[$i]}"
     
     if [[ -z "${!envvar:-}" ]]; then
-      log_error "$envvar is not set in .env.local"
-      log_error "Please add $envvar=your_value to your .env.local file"
+      log_error "$envvar is not set in .env.firebase"
+      log_error "Please add $envvar=your_value to your .env.firebase file"
       return 1
     fi
-    
+
     # Check if variable contains placeholder values
     if [[ "${!envvar}" == *"YOUR_"* ]] || [[ "${!envvar}" == *"your-"* ]]; then
       log_warning "$envvar appears to contain placeholder values."
-      log_error "Please update it with your actual value in .env.local"
+      log_error "Please update it with your actual value in .env.firebase"
       return 1
     fi
     
@@ -279,23 +279,79 @@ create_temp_secret_files() {
   done
 }
 
+# Get current secret value from GCP
+get_current_secret_value() {
+  local project_id="$1"
+  local secret_id="$2"
+
+  gcloud secrets versions access latest \
+    --secret="$secret_id" \
+    --project="$project_id" \
+    2>/dev/null || echo ""
+}
+
+# Delete old secret versions (keep only the latest)
+delete_old_secret_versions() {
+  local project_id="$1"
+  local secret_id="$2"
+
+  # List all versions except the latest, then destroy them
+  local versions=$(gcloud secrets versions list "$secret_id" \
+    --project="$project_id" \
+    --filter="state:ENABLED AND NOT name~versions/latest" \
+    --format="value(name)" \
+    2>/dev/null)
+
+  if [[ -n "$versions" ]]; then
+    # Get the latest version number to exclude it
+    local latest_version=$(gcloud secrets versions list "$secret_id" \
+      --project="$project_id" \
+      --filter="state:ENABLED" \
+      --sort-by="~createTime" \
+      --limit=1 \
+      --format="value(name)" | grep -oE '[0-9]+$')
+
+    while IFS= read -r version; do
+      local version_num=$(echo "$version" | grep -oE '[0-9]+$')
+      if [[ "$version_num" != "$latest_version" ]]; then
+        log_info "Destroying old version $version_num of '$secret_id'…"
+        gcloud secrets versions destroy "$version_num" \
+          --secret="$secret_id" \
+          --project="$project_id" \
+          --quiet
+      fi
+    done <<< "$versions"
+  fi
+}
+
 # Create or update secrets in Google Cloud Secret Manager
 create_or_update_secrets() {
   local project_id="$1"
   local temp_dir="$2"
-  
+
   log_step "Creating or updating secrets in Google Cloud Secret Manager..."
-  
+
   for i in "${!SECRET_VARS[@]}"; do
     local secret_id="${SECRET_IDS[$i]}"
     local temp_file="$temp_dir/$secret_id.txt"
-    
+    local new_value=$(cat "$temp_file")
+
     if gcloud secrets describe "$secret_id" --project="$project_id" --quiet &>/dev/null; then
-      log_info "Secret '$secret_id' exists, adding new version…"
-      gcloud secrets versions add "$secret_id" \
-        --data-file="$temp_file" \
-        --project="$project_id" \
-        --quiet
+      # Secret exists - check if value has changed
+      local current_value=$(get_current_secret_value "$project_id" "$secret_id")
+
+      if [[ "$current_value" == "$new_value" ]]; then
+        log_info "Secret '$secret_id' unchanged, skipping…"
+      else
+        log_info "Secret '$secret_id' changed, adding new version…"
+        gcloud secrets versions add "$secret_id" \
+          --data-file="$temp_file" \
+          --project="$project_id" \
+          --quiet
+
+        # Delete old versions to keep only the latest
+        delete_old_secret_versions "$project_id" "$secret_id"
+      fi
     else
       log_info "Creating secret '$secret_id'…"
       gcloud secrets create "$secret_id" \
