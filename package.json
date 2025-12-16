@@ -11,7 +11,9 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "firebase:env": "bash scripts/firebase-env.sh",
+    "firebase:deploy": "firebase apphosting:rollouts:create pax-vault"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",
@@ -76,7 +78,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@types/next-pwa": "^5.6.9",
-    "@types/node": "^20",
+    "@types/node": "^22",
     "@types/pg": "^8.15.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
