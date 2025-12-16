@@ -8,8 +8,8 @@ import { CustomBarChart as InsightsBarChart } from "@/components/charts/barChart
 export function InsightsCard({ paxInsights }: { paxInsights: PaxInsights[] }) {
   const paxData = paxInsights?.[0]?.paxData ?? [];
 
-  const totalEvents = paxData.reduce((sum, entry, idx) => {
-    const value = Number((entry as any)?.events ?? 0);
+  const totalEvents = paxData.reduce((sum, entry) => {
+    const value = Number(entry.events ?? 0);
     // console.log("totalEvents step", {
     //   idx,
     //   month: entry.month,
