@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -8,26 +8,37 @@ import { Link } from "@heroui/link";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
-import { Drawer, DrawerContent, DrawerHeader, DrawerBody } from "@heroui/drawer";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerBody,
+} from "@heroui/drawer";
 import { useDisclosure } from "@heroui/use-disclosure";
 import { Divider } from "@heroui/divider";
 import { ThemeSwitcher } from "@/lib/theme-switcher";
 import { PaxInfo } from "@/types/pax";
 import { RegionDetails } from "@/types/region";
 
-export default function NavbarClient({ regionData, paxData }: { regionData: RegionDetails[]; paxData: PaxInfo[] }) {
+export default function NavbarClient({
+  regionData,
+  paxData,
+}: {
+  regionData: RegionDetails[];
+  paxData: PaxInfo[];
+}) {
   const router = useRouter();
-  const {isOpen, onOpen, onOpenChange} = useDisclosure();
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
   // Pax search state
   const [paxKey, setPaxKey] = useState<React.Key | null>(null);
   const [paxLoading, setPaxLoading] = useState(false);
-  const [paxInput, setPaxInput] = useState<string>('');
+  const [paxInput, setPaxInput] = useState<string>("");
 
   // Region search state
   const [regionKey, setRegionKey] = useState<React.Key | null>(null);
   const [regionLoading, setRegionLoading] = useState(false);
-  const [regionInput, setRegionInput] = useState<string>('');
+  const [regionInput, setRegionInput] = useState<string>("");
 
   // Navigation state
   // const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -60,7 +71,7 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
     if (key !== "null") {
       router.push(`/stats/pax/${key}`);
       setTimeout(() => {
-        setPaxInput(''); // Clear input after selection
+        setPaxInput(""); // Clear input after selection
         setPaxKey(null); // Reset key after selection
       }, 100); // Clear input after selection
     }
@@ -73,7 +84,7 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
     if (key !== "null") {
       router.push(`/stats/pax/${key}`);
       setTimeout(() => {
-        setPaxInput(''); // Clear input after selection
+        setPaxInput(""); // Clear input after selection
         setPaxKey(null); // Reset key after selection
         onOpenChange(); // Close drawer after selection
       }, 100); // Clear input after selection
@@ -86,7 +97,7 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
     if (key !== "null") {
       router.push(`/stats/region/${key}`);
       setTimeout(() => {
-        setRegionInput(''); // Clear input after selection
+        setRegionInput(""); // Clear input after selection
         setRegionKey(null); // Reset key after selection
       }, 100); // Clear input after selection
     }
@@ -99,7 +110,7 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
     if (key !== "null") {
       router.push(`/stats/region/${key}`);
       setTimeout(() => {
-        setRegionInput(''); // Clear input after selection
+        setRegionInput(""); // Clear input after selection
         setRegionKey(null); // Reset key after selection
         onOpenChange(); // Close drawer after selection
       }, 100); // Clear input after selection
@@ -111,7 +122,7 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
       isBordered
       // isMenuOpen={isMenuOpen}
       // onMenuOpenChange={setIsMenuOpen}
-      className="bg-background/70 backgdrop-blur-md backgrop-saturate-150"  
+      className="bg-background/70 backgdrop-blur-md backgrop-saturate-150"
     >
       <NavbarContent>
         {/* <NavbarMenuToggle
@@ -119,7 +130,10 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
           className="lg:hidden"
         /> */}
         <NavbarBrand>
-          <Link href="/" className="flex items-center gap-2 font-bold text-inherit">
+          <Link
+            href="/"
+            className="flex items-center gap-2 font-bold text-inherit"
+          >
             PAX VAULT
             <span className="px-2 py-[2px] text-[10px] rounded-md bg-warning-200 text-warning-800 dark:bg-warning-300/20 dark:text-warning-300 font-semibold tracking-wide">
               ALPHA 0.1
@@ -147,16 +161,21 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
             size="sm"
             isClearable
           >
-          {(region) => (
-            <AutocompleteItem key={region.id} textValue={region.name}>
-              <div className="flex gap-2 items-center">
-                <Avatar alt={region.name} className="flex-shrink-0" size="sm" src={region.logo ?? undefined} />
-                <div className="flex flex-col">
-                  <span className="text-small">{region.name}</span>
+            {(region) => (
+              <AutocompleteItem key={region.id} textValue={region.name}>
+                <div className="flex gap-2 items-center">
+                  <Avatar
+                    alt={region.name}
+                    className="flex-shrink-0"
+                    size="sm"
+                    src={region.logo ?? undefined}
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-small">{region.name}</span>
+                  </div>
                 </div>
-              </div>
-            </AutocompleteItem>
-          )}
+              </AutocompleteItem>
+            )}
           </Autocomplete>
         </NavbarItem>
 
@@ -177,26 +196,31 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
             size="sm"
             isClearable
           >
-          {(pax) => (
-            <AutocompleteItem key={pax.user_id} textValue={pax.f3_name}>
-              <div className="flex gap-2 items-center">
-                <Avatar alt={pax.f3_name} className="flex-shrink-0" size="sm" src={pax.avatar_url ?? undefined} />
-                <div className="flex flex-col">
-                  <span className="text-small">
-                    {pax.f3_name && pax.f3_name.length > 20
-                      ? pax.f3_name.slice(0, 20) + '...'
-                      : pax.f3_name || 'Unknown PAX'}
-                  </span>
-                  <span className="text-tiny text-default-400">{pax.region || pax.region_default || "Unknown Region"}</span>
+            {(pax) => (
+              <AutocompleteItem key={pax.user_id} textValue={pax.f3_name}>
+                <div className="flex gap-2 items-center">
+                  <Avatar
+                    alt={pax.f3_name}
+                    className="flex-shrink-0"
+                    size="sm"
+                    src={pax.avatar_url ?? undefined}
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-small">
+                      {pax.f3_name && pax.f3_name.length > 20
+                        ? pax.f3_name.slice(0, 20) + "..."
+                        : pax.f3_name || "Unknown PAX"}
+                    </span>
+                    <span className="text-tiny text-default-400">
+                      {pax.region || pax.region_default || "Unknown Region"}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </AutocompleteItem>
-          )}
+              </AutocompleteItem>
+            )}
           </Autocomplete>
         </NavbarItem>
-        <NavbarItem>
-          {ThemeSwitcher({ size: "lg" }, { type: "md" })}
-        </NavbarItem>
+        <NavbarItem>{ThemeSwitcher({ size: "lg" }, { type: "md" })}</NavbarItem>
       </NavbarContent>
 
       {/* Mobile Search Buttons */}
@@ -209,30 +233,29 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
             color="primary"
             size="sm"
             onPress={() => onOpen()}
-            >
-              FIND REGION OR PAX
+          >
+            FIND REGION OR PAX
           </Button>
         </NavbarItem>
-        <NavbarItem>
-           {ThemeSwitcher({ size: "md" }, { type: "sm" })}
-        </NavbarItem>
+        <NavbarItem>{ThemeSwitcher({ size: "md" }, { type: "sm" })}</NavbarItem>
       </NavbarContent>
 
-      <Drawer 
-        isOpen={isOpen} 
-        key={isOpen ? 'mobile_open' : 'mobile_closed'} 
-        backdrop="blur" 
-        placement="top" 
+      <Drawer
+        isOpen={isOpen}
+        key={isOpen ? "mobile_open" : "mobile_closed"}
+        backdrop="blur"
+        placement="top"
         classNames={{
-          wrapper: 'h-full',
+          wrapper: "h-full",
         }}
         onOpenChange={onOpenChange}
         isDismissable={false}
-        
         isKeyboardDismissDisabled={true}
       >
         <DrawerContent>
-          <DrawerHeader className="flex flex-col gap-1">SEARCH FOR A REGION OR A PAX</DrawerHeader>
+          <DrawerHeader className="flex flex-col gap-1">
+            SEARCH FOR A REGION OR A PAX
+          </DrawerHeader>
           <Divider />
           <DrawerBody className="flex flex-col gap-10 py-10">
             <Autocomplete
@@ -251,16 +274,21 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
               color="primary"
               isClearable
             >
-            {(region) => (
-              <AutocompleteItem key={region.id} textValue={region.name}>
-                <div className="flex gap-2 items-center">
-                  <Avatar alt={region.name} className="flex-shrink-0" size="sm" src={region.logo ?? undefined} />
-                  <div className="flex flex-col">
-                    <span className="text-small">{region.name}</span>
+              {(region) => (
+                <AutocompleteItem key={region.id} textValue={region.name}>
+                  <div className="flex gap-2 items-center">
+                    <Avatar
+                      alt={region.name}
+                      className="flex-shrink-0"
+                      size="sm"
+                      src={region.logo ?? undefined}
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-small">{region.name}</span>
+                    </div>
                   </div>
-                </div>
-              </AutocompleteItem>
-            )}
+                </AutocompleteItem>
+              )}
             </Autocomplete>
             <Autocomplete
               className="w-full"
@@ -278,21 +306,28 @@ export default function NavbarClient({ regionData, paxData }: { regionData: Regi
               color="primary"
               isClearable
             >
-            {(pax) => (
-              <AutocompleteItem key={pax.user_id} textValue={pax.f3_name}>
-                <div className="flex gap-2 items-center">
-                  <Avatar alt={pax.f3_name} className="flex-shrink-0" size="sm" src={pax.avatar_url ?? undefined} />
-                  <div className="flex flex-col">
-                    <span className="text-small">
-                      {pax.f3_name && pax.f3_name.length > 20
-                        ? pax.f3_name.slice(0, 20) + '...'
-                        : pax.f3_name || 'Unknown PAX'}
-                    </span>
-                    <span className="text-tiny text-default-400">{pax.region || pax.region_default || "Unknown Region"}</span>
+              {(pax) => (
+                <AutocompleteItem key={pax.user_id} textValue={pax.f3_name}>
+                  <div className="flex gap-2 items-center">
+                    <Avatar
+                      alt={pax.f3_name}
+                      className="flex-shrink-0"
+                      size="sm"
+                      src={pax.avatar_url ?? undefined}
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-small">
+                        {pax.f3_name && pax.f3_name.length > 20
+                          ? pax.f3_name.slice(0, 20) + "..."
+                          : pax.f3_name || "Unknown PAX"}
+                      </span>
+                      <span className="text-tiny text-default-400">
+                        {pax.region || pax.region_default || "Unknown Region"}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </AutocompleteItem>
-            )}
+                </AutocompleteItem>
+              )}
             </Autocomplete>
           </DrawerBody>
         </DrawerContent>

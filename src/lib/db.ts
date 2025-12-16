@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool } from "pg";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL, // set in .env.local
@@ -6,12 +6,12 @@ const pool = new Pool({
 
 export default pool;
 
-import { BigQuery } from '@google-cloud/bigquery';
+import { BigQuery } from "@google-cloud/bigquery";
 
 const projectId = process.env.BIGQUERY_PROJECT_ID!;
 const datasetId = process.env.BIGQUERY_DATASET!;
 const clientEmail = process.env.BIGQUERY_CLIENT_EMAIL!;
-const privateKey = process.env.BIGQUERY_PRIVATE_KEY?.replace(/\\n/g, '\n');
+const privateKey = process.env.BIGQUERY_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
 // Create a single BigQuery client per Lambda/Node process
 const bigquery = new BigQuery({
@@ -31,7 +31,11 @@ function normalizeRow(row: BigQueryRow): BigQueryRow {
   // Generic fix: if a property is an object with a `value` key, flatten it.
   for (const key of Object.keys(plain)) {
     const v = plain[key];
-    if (v && typeof v === "object" && "value" in (v as Record<string, unknown>)) {
+    if (
+      v &&
+      typeof v === "object" &&
+      "value" in (v as Record<string, unknown>)
+    ) {
       (plain as Record<string, unknown>)[key] = (v as { value: unknown }).value;
     }
   }
@@ -39,13 +43,17 @@ function normalizeRow(row: BigQueryRow): BigQueryRow {
   return plain;
 }
 
-export async function queryBigQuery<T = BigQueryRow>(sql: string): Promise<T[]> {
+export async function queryBigQuery<T = BigQueryRow>(
+  sql: string,
+): Promise<T[]> {
   const [rawRows] = await bigquery.query({
     query: sql,
     defaultDataset: { datasetId, projectId },
   });
 
-  const rows = (rawRows as BigQueryRow[]).map((row) => normalizeRow(row)) as T[];
+  const rows = (rawRows as BigQueryRow[]).map((row) =>
+    normalizeRow(row),
+  ) as T[];
 
   return rows;
 }

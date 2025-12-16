@@ -1,9 +1,10 @@
 // src/lib/region.ts
-import { EventDetail } from '@/types/event';
-import pool from '@/lib/db';
+import { EventDetail } from "@/types/event";
+import pool from "@/lib/db";
 
 export async function getEventData(id: number): Promise<EventDetail | null> {
-    const { rows } = await pool.query(`
+  const { rows } = await pool.query(
+    `
         SELECT 
             id,
             org_id,
@@ -30,13 +31,13 @@ export async function getEventData(id: number): Promise<EventDetail | null> {
         WHERE 
             id = $1 
         `,
-        [id]
-    );
-    console.log('Event data fetched from database');
-    
-    if (!rows[0]) return null;
+    [id],
+  );
+  console.log("Event data fetched from database");
 
-    // Replace region and region_id with defaults if null
-    const event = rows[0];
-    return event as EventDetail;
+  if (!rows[0]) return null;
+
+  // Replace region and region_id with defaults if null
+  const event = rows[0];
+  return event as EventDetail;
 }

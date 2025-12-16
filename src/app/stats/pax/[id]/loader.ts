@@ -1,9 +1,8 @@
 import { PaxData, PaxInfo, PaxEventData } from "@/types/pax";
 import { queryBigQuery } from "@/lib/db";
 
-
 async function getPaxInfo(id: number): Promise<PaxInfo | null> {
-    const query = `
+  const query = `
       WITH earliest_regions AS (
     SELECT
       user_id,
@@ -101,14 +100,14 @@ async function getPaxEvents(id: number): Promise<PaxEventData[] | null> {
       ei.start_date
   `;
 
-    const results = await queryBigQuery<PaxEventData>(query);
+  const results = await queryBigQuery<PaxEventData>(query);
 
   return results || null;
 }
 
 export async function loadPaxStats(id: number): Promise<PaxData> {
-    let paxInfo: PaxInfo | null = null;
-    let paxEvents: PaxEventData[] | null = null;
+  let paxInfo: PaxInfo | null = null;
+  let paxEvents: PaxEventData[] | null = null;
   try {
     paxInfo = await getPaxInfo(id);
     paxEvents = await getPaxEvents(id);

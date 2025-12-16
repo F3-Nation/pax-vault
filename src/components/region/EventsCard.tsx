@@ -20,7 +20,11 @@ function toUTCDate(dateStr: string | Date | number | null | undefined): number {
 
   // If already a Date instance
   if (dateStr instanceof Date) {
-    return Date.UTC(dateStr.getUTCFullYear(), dateStr.getUTCMonth(), dateStr.getUTCDate());
+    return Date.UTC(
+      dateStr.getUTCFullYear(),
+      dateStr.getUTCMonth(),
+      dateStr.getUTCDate(),
+    );
   }
 
   // If it's a number (timestamp)
@@ -89,17 +93,18 @@ export function EventsCard({ events }: { events: RegionData[] }) {
 
     // Date range filter
     const evDate = toUTCDate(ev.event_date);
-    const afterStart =
-      !startDate || evDate >= toUTCDate(startDate);
-    const beforeEnd =
-      !endDate || evDate <= toUTCDate(endDate);
+    const afterStart = !startDate || evDate >= toUTCDate(startDate);
+    const beforeEnd = !endDate || evDate <= toUTCDate(endDate);
     const matchesDate = afterStart && beforeEnd;
 
     return matchesFree && matchesAoFilter && matchesDate;
   });
 
   const totalPages = Math.ceil(filteredEvents.length / perPage);
-  const paginatedEvents = filteredEvents.slice((page - 1) * perPage, page * perPage);
+  const paginatedEvents = filteredEvents.slice(
+    (page - 1) * perPage,
+    page * perPage,
+  );
 
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
@@ -137,7 +142,9 @@ export function EventsCard({ events }: { events: RegionData[] }) {
                     setPage(1);
                   }}
                 >
-                  {(item) => <SelectItem key={item.key}>{item.label}</SelectItem>}
+                  {(item) => (
+                    <SelectItem key={item.key}>{item.label}</SelectItem>
+                  )}
                 </Select>
 
                 {/* Date Range */}
@@ -317,13 +324,13 @@ export function EventsCard({ events }: { events: RegionData[] }) {
         {/* Middle: Pagination */}
         {events.length > 0 && (
           <Pagination
-        page={page}
-        total={totalPages}
-        onChange={setPage}
-        showShadow
-        showControls
-        color="default"
-        variant="bordered"
+            page={page}
+            total={totalPages}
+            onChange={setPage}
+            showShadow
+            showControls
+            color="default"
+            variant="bordered"
           />
         )}
       </CardFooter>

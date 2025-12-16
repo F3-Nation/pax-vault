@@ -11,8 +11,9 @@ import { Button, ButtonGroup } from "@heroui/button";
 
 export default async function AODetailPage({ params }: IdProps) {
   const { id } = await params;
-  const { AOInfo, AOSummary, AOLeaders, AOEvents, AOQLineup } = await loadAOStats(Number(id));
-  const dateRanges = ["All Time","Current Year", "Current Month"] as const;
+  const { AOInfo, AOSummary, AOLeaders, AOEvents, AOQLineup } =
+    await loadAOStats(Number(id));
+  const dateRanges = ["All Time", "Current Year", "Current Month"] as const;
 
   if (!AOInfo) {
     return <div className="p-8 text-center text-red-600">AO not found</div>;
@@ -31,16 +32,15 @@ export default async function AODetailPage({ params }: IdProps) {
         <div className="flex gap-2 w-full">
           <ButtonGroup className="w-full">
             {dateRanges.map((range) => (
-              
-          <Button
-          size="lg"
-          variant={range === "All Time" ? "flat" : "ghost"}
-          color={range === "All Time" ? "primary" : "default"}
-          key={range}
-          className="flex-1"
-          >
-          {range}
-          </Button>
+              <Button
+                size="lg"
+                variant={range === "All Time" ? "flat" : "ghost"}
+                color={range === "All Time" ? "primary" : "default"}
+                key={range}
+                className="flex-1"
+              >
+                {range}
+              </Button>
             ))}
           </ButtonGroup>
         </div>
@@ -49,7 +49,15 @@ export default async function AODetailPage({ params }: IdProps) {
         {/* Workout Summary Card */}
         <AOSummaryCard summary={AOSummary!} />
         {/* Leaderboard Card */}
-        <AOLeadersCard leaders={AOLeaders ? (Array.isArray(AOLeaders) ? AOLeaders : [AOLeaders]) : []} />
+        <AOLeadersCard
+          leaders={
+            AOLeaders
+              ? Array.isArray(AOLeaders)
+                ? AOLeaders
+                : [AOLeaders]
+              : []
+          }
+        />
       </div>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
         {/* Insights Card */}

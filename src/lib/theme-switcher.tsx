@@ -5,7 +5,10 @@ import { useEffect, useState } from "react";
 import { MoonIcon, SunIcon } from "@/components/icons";
 import { Button } from "@heroui/button";
 
-export function ThemeSwitcher({ size = "sm" }: { size?: "sm" | "md" | "lg" }, { type = "lg" }: { type?: "sm" | "md" | "lg" }) {
+export function ThemeSwitcher(
+  { size = "sm" }: { size?: "sm" | "md" | "lg" },
+  { type = "lg" }: { type?: "sm" | "md" | "lg" },
+) {
   const [mounted, setMounted] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
 
@@ -28,7 +31,11 @@ export function ThemeSwitcher({ size = "sm" }: { size?: "sm" | "md" | "lg" }, { 
       isIconOnly
       radius="full"
     >
-      {isDark ? <SunIcon className={`h-${iconSize} w-${iconSize}`} /> : <MoonIcon className={`h-${iconSize} w-${iconSize}`} />}
+      {isDark ? (
+        <SunIcon className={`h-${iconSize} w-${iconSize}`} />
+      ) : (
+        <MoonIcon className={`h-${iconSize} w-${iconSize}`} />
+      )}
     </Button>
   );
 }

@@ -1,9 +1,9 @@
 // src/lib/data/ao.ts
-import pool from '@/lib/db';
-import { AOData } from '@/types/ao';
+import pool from "@/lib/db";
+import { AOData } from "@/types/ao";
 
 export async function getAoData(): Promise<AOData[]> {
-    const { rows } = await pool.query(`
+  const { rows } = await pool.query(`
       SELECT 
         id, 
         name, 
@@ -18,6 +18,6 @@ export async function getAoData(): Promise<AOData[]> {
       ORDER BY 
         id DESC
     `);
-    console.log(rows.length + ' Ao rows fetched from database');
-    return rows as AOData[];
+  console.log(rows.length + " Ao rows fetched from database");
+  return rows as AOData[];
 }

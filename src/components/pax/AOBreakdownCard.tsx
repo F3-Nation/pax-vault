@@ -65,8 +65,8 @@ export function AOBreakdownCard({
 
                 const count =
                   selected === "asPax"
-                    ? total_events ?? 0
-                    : total_q_count ?? 0;
+                    ? (total_events ?? 0)
+                    : (total_q_count ?? 0);
 
                 if (count === 0) {
                   return null;
@@ -104,9 +104,7 @@ export function AOBreakdownCard({
                     ) : (
                       <div className="flex gap-2">
                         <span className="text-primary">{ao_name}</span>
-                        <span className="text-default-400">
-                          {region_name}
-                        </span>
+                        <span className="text-default-400">{region_name}</span>
                       </div>
                     )}
                     <span>

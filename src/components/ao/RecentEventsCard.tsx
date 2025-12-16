@@ -26,7 +26,7 @@ export function RecentEventsCard({ aoEvents }: { aoEvents: AOEvents[] }) {
             <p className="italic text-center text-sm text-default">
               Has not posted yet
             </p>
-            ) : (
+          ) : (
             aoEvents.map(
               ({
                 id,
@@ -62,11 +62,12 @@ export function RecentEventsCard({ aoEvents }: { aoEvents: AOEvents[] }) {
                           </Link>
                           <div className="text-default-400">
                             {formatDate(start_date, "M D Y")} @{" "}
-                            <Link href={
-                              ao_name
-                               ? `/stats/ao/${ao_org_id}` 
-                               : `/stats/region/${region_org_id}`
-                               }
+                            <Link
+                              href={
+                                ao_name
+                                  ? `/stats/ao/${ao_org_id}`
+                                  : `/stats/region/${region_org_id}`
+                              }
                             >
                               <span className="text-default-400 text-sm italic">
                                 {ao_name ?? region_name}
@@ -186,7 +187,7 @@ export function RecentEventsCard({ aoEvents }: { aoEvents: AOEvents[] }) {
                     </CardBody>
                   </Card>
                 </div>
-              )
+              ),
             )
           )}
         </div>

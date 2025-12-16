@@ -60,7 +60,7 @@ export function CustomBarChart({
           (max[dataKey as keyof typeof entry] as number))
         ? entry
         : max,
-    null as (typeof data)[0] | null
+    null as (typeof data)[0] | null,
   );
 
   const maxValue = maxEntry?.[dataKey as keyof typeof maxEntry] ?? 0;
@@ -99,8 +99,8 @@ export function CustomBarChart({
           change === null || change === 0
             ? "text-default-400"
             : change > 0
-            ? "text-success"
-            : "text-danger"
+              ? "text-success"
+              : "text-danger"
         }`}
       >
         {formatChangeDescription(change, valueLabel)}

@@ -43,16 +43,16 @@ body {
   --foreground: #1a1a1a;
 
   /* Brand Colors */
-  --primary: #0058ff;      /* modern blue */
+  --primary: #0058ff; /* modern blue */
   --primary-foreground: #ffffff;
 
-  --secondary: #5865f2;    /* subtle purple accent */
+  --secondary: #5865f2; /* subtle purple accent */
   --secondary-foreground: #ffffff;
 
   /* Semantic Colors */
   --success: #12b76a;
   --warning: #f79009;
-  --danger:  #d92d20;
+  --danger: #d92d20;
 
   /* Grays / Neutrals (UI foundation) */
   --card: #ffffff;
@@ -75,7 +75,7 @@ body {
   --foreground: #e5e7eb;
 
   /* Brand Colors */
-  --primary: #3b82f6;               /* soft blue */
+  --primary: #3b82f6; /* soft blue */
   --primary-foreground: #ffffff;
 
   --secondary: #8b5cf6;
@@ -84,7 +84,7 @@ body {
   /* Semantic Colors */
   --success: #4ade80;
   --warning: #fb923c;
-  --danger:  #f87171;
+  --danger: #f87171;
 
   /* Neutrals */
   --card: #1a1d23;
@@ -103,7 +103,7 @@ body {
 /* Global Styles                                           */
 /* ------------------------------------------------------ */
 body {
-  font-family: 'Titillium Web', sans-serif;
+  font-family: "Titillium Web", sans-serif;
   background-color: var(--background);
   color: var(--foreground);
 }

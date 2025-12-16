@@ -1,7 +1,6 @@
 // src/lib/data/region.ts
-import { RegionDetails } from '@/types/region';
-import { queryBigQuery } from '../db';
-
+import { RegionDetails } from "@/types/region";
+import { queryBigQuery } from "../db";
 
 export async function getRegionList(): Promise<RegionDetails[]> {
   const query = `
@@ -19,7 +18,7 @@ export async function getRegionList(): Promise<RegionDetails[]> {
       ORDER BY 
         id DESC;
   `;
-  
+
   const results = await queryBigQuery<RegionDetails>(query);
 
   return results;

@@ -1,8 +1,10 @@
 // src/app/stats/pax/[id]/loading.tsx
 
-function SkeletonCard({ height = 'h-40' }: { height?: string }) {
+function SkeletonCard({ height = "h-40" }: { height?: string }) {
   return (
-    <div className={`rounded-lg bg-gray-200 dark:bg-gray-800 animate-pulse ${height}`} />
+    <div
+      className={`rounded-lg bg-gray-200 dark:bg-gray-800 animate-pulse ${height}`}
+    />
   );
 }
 

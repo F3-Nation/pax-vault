@@ -20,7 +20,7 @@ export interface AOData {
     end_time: string; // End time of the event
     day_of_week: string; // Day of the week the event occurs
     event_type: string; // Type of the event (e.g., meeting, training)
-  }[]
+  }[];
 }
 
 export interface AODetail {

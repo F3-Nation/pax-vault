@@ -1,6 +1,6 @@
 // src/lib/data/pax.ts
-import { PaxInfo } from '@/types/pax';
-import { queryBigQuery } from '../db';
+import { PaxInfo } from "@/types/pax";
+import { queryBigQuery } from "../db";
 
 export async function getPaxList(): Promise<PaxInfo[]> {
   const query = `
@@ -55,7 +55,7 @@ export async function getPaxList(): Promise<PaxInfo[]> {
     ORDER BY
       us.id DESC;
   `;
-  
+
   const results = await queryBigQuery<PaxInfo>(query);
 
   return results;

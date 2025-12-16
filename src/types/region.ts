@@ -1,4 +1,4 @@
-import { AODetail } from '@/types/ao';
+import { AODetail } from "@/types/ao";
 
 export interface RegionDetail {
   id: number; // Unique identifier for the region
@@ -36,8 +36,6 @@ export interface RegionLeaders {
   qs: number; // Total number of Q appearances by the user at the AO
   avatar_url?: string; // Optional URL to the user's avatar image
 }
-
-
 
 export interface RegionData {
   event_instance_id: number; // Unique identifier for the event instance
