@@ -165,25 +165,25 @@ read_backend_id() {
 # ENVIRONMENT VALIDATION FUNCTIONS (used by main)
 #####################################
 
-# Validate .env.local file exists
+# Validate .env.firebase file exists
 validate_env_file() {
   local env_file="$1"
-  
+
   if [[ ! -f "$env_file" ]]; then
-    log_error ".env.local file not found at $env_file"
+    log_error ".env.firebase file not found at $env_file"
     log_error "Please create this file with your environment variables."
     log_error "Required variables: POSTGRES_URL, BIGQUERY_CREDS"
     return 1
   fi
-  
-  log_success "Found .env.local file: $env_file"
+
+  log_success "Found .env.firebase file: $env_file"
 }
 
-# Load environment variables from .env.local
+# Load environment variables from .env.firebase
 load_environment_variables() {
   local env_file="$1"
 
-  log_step "Loading environment variables from .env.local..."
+  log_step "Loading environment variables from .env.firebase..."
 
   # Read file and handle multi-line values properly
   local current_var=""
@@ -242,15 +242,15 @@ validate_environment_variables() {
     local envvar="${SECRET_VARS[$i]}"
     
     if [[ -z "${!envvar:-}" ]]; then
-      log_error "$envvar is not set in .env.local"
-      log_error "Please add $envvar=your_value to your .env.local file"
+      log_error "$envvar is not set in .env.firebase"
+      log_error "Please add $envvar=your_value to your .env.firebase file"
       return 1
     fi
-    
+
     # Check if variable contains placeholder values
     if [[ "${!envvar}" == *"YOUR_"* ]] || [[ "${!envvar}" == *"your-"* ]]; then
       log_warning "$envvar appears to contain placeholder values."
-      log_error "Please update it with your actual value in .env.local"
+      log_error "Please update it with your actual value in .env.firebase"
       return 1
     fi
     
