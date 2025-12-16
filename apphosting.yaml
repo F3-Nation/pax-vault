@@ -1,0 +1,71 @@
+# Settings for Backend (on Cloud Run).
+# See https://firebase.google.com/docs/app-hosting/configure#cloud-run
+runConfig:
+  minInstances: 0
+  # maxInstances: 100
+  # concurrency: 80
+  # cpu: 1
+  # memoryMiB: 512
+
+# Environment variables and secrets.
+env:
+  # Configure environment variables.
+  # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
+  - variable: NEXT_PUBLIC_SITE_URL
+    secret: next-public-site-url
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: SAMPLE_PAX
+    secret: sample-pax
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: SAMPLE_AO
+    secret: sample-ao
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: SAMPLE_REGION
+    secret: sample-region
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: ENVIRONMENT
+    secret: environment
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: BIGQUERY_PROJECT_ID
+    secret: bigquery-project-id
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: BIGQUERY_DATASET
+    secret: bigquery-dataset
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: BIGQUERY_CLIENT_EMAIL
+    secret: bigquery-client-email
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: BIGQUERY_PRIVATE_KEY
+    secret: bigquery-private-key
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # Grant access to secrets in Cloud Secret Manager.
+  # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
+  # - variable: MY_SECRET
+  #   secret: mySecretRef
