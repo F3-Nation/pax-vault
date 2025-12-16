@@ -1,4 +1,10 @@
-import { getAOData, getAOSummary, getAOLeaders, getAOEvents, getAOQLineup } from "@/lib/ao";
+import {
+  getAOData,
+  getAOSummary,
+  getAOLeaders,
+  getAOEvents,
+  getAOQLineup,
+} from "@/lib/ao";
 import { AOData, AOSummary, AOLeaders, AOEvents, AOQLineup } from "@/types/ao";
 
 export async function loadAOStats(id: number) {

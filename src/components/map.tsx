@@ -1,8 +1,16 @@
-'use client';
+"use client";
 
 import { Card, CardHeader } from "@heroui/card";
 
-export default function MapView({ latLonKey, zoom = 10, address = ""}: { latLonKey: string; zoom?: number; address?: string;}) {
+export default function MapView({
+  latLonKey,
+  zoom = 10,
+  address = "",
+}: {
+  latLonKey: string;
+  zoom?: number;
+  address?: string;
+}) {
   const [lat, lon] = latLonKey.split(",");
 
   console.log("MapView latLonKey:", latLonKey);

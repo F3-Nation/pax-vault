@@ -1,41 +1,53 @@
 export function getBaseUrl() {
-  const isServer = typeof window === 'undefined';
+  const isServer = typeof window === "undefined";
 
   if (process.env.NEXT_PUBLIC_SITE_URL) {
     return process.env.NEXT_PUBLIC_SITE_URL;
   }
 
-  if (isServer && process.env.NODE_ENV === 'development') {
-    return 'http://localhost:3000';
+  if (isServer && process.env.NODE_ENV === "development") {
+    return "http://localhost:3000";
   }
 
-  throw new Error('NEXT_PUBLIC_SITE_URL must be defined in production');
+  throw new Error("NEXT_PUBLIC_SITE_URL must be defined in production");
 }
 
-export function formatNumber(num: number | null, decimals: number = 0, thousandSeparator: string = ","): string {
+export function formatNumber(
+  num: number | null,
+  decimals: number = 0,
+  thousandSeparator: string = ",",
+): string {
   if (num === null || isNaN(num)) {
     return "N/A";
   }
   const formatted = Number(num).toFixed(decimals);
   const parts = formatted.split(".");
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousandSeparator);
-  
+
   return parts.join(".");
 }
 
 export function formatDate(
   date: string | Date,
-  format?: "M D Y" | "M Y"
+  format?: "M D Y" | "M Y",
 ): string {
   // Normalize input to a pure UTC date (no local conversion!)
   const d =
     typeof date === "string"
       ? new Date(date + "T00:00:00Z")
-      : new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+      : new Date(
+          Date.UTC(
+            date.getUTCFullYear(),
+            date.getUTCMonth(),
+            date.getUTCDate(),
+          ),
+        );
 
   // Always use UTC now
   const now = new Date();
-  const utcNow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const utcNow = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
 
   // Compute start of week in UTC
   const startOfWeek = new Date(utcNow);
@@ -43,13 +55,16 @@ export function formatDate(
 
   const optionsUTC = (opts: Intl.DateTimeFormatOptions) => ({
     ...opts,
-    timeZone: "UTC"
+    timeZone: "UTC",
   });
 
   if (d >= startOfWeek && !format) {
     return d.toLocaleDateString("en-US", optionsUTC({ weekday: "long" }));
   } else {
-    const weekday = d.toLocaleDateString("en-US", optionsUTC({ weekday: "short" }));
+    const weekday = d.toLocaleDateString(
+      "en-US",
+      optionsUTC({ weekday: "short" }),
+    );
     const month = d.toLocaleDateString("en-US", optionsUTC({ month: "short" }));
     const day = d.getUTCDate();
     const year = d.toLocaleDateString("en-US", optionsUTC({ year: "numeric" }));
@@ -66,10 +81,13 @@ export function formatDate(
 }
 
 export function cleanEventName(name: string): string {
-  return name.replace(/^Backblast!\s*/i, '').trim();
-} 
+  return name.replace(/^Backblast!\s*/i, "").trim();
+}
 
-export function formatChangeDescription(change: number | null, label: string): string {
+export function formatChangeDescription(
+  change: number | null,
+  label: string,
+): string {
   if (change === null) return "";
   if (change > 0) {
     return `${label} volume is up ${change.toFixed(2)}% from last month.`;
@@ -84,7 +102,7 @@ export function toTitleCase(str: string): string {
   return str
     .toLowerCase()
     .split(" ")
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
 

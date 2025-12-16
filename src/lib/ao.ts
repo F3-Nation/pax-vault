@@ -42,7 +42,7 @@ SELECT
 FROM instance_stats ins
 LEFT JOIN attendance_stats ae_stats
     ON ins.ao_org_id = ae_stats.ao_org_id;`,
-    [id]
+    [id],
   );
 
   // If no rows found, return null
@@ -51,7 +51,6 @@ LEFT JOIN attendance_stats ae_stats
   }
 
   return rows[0] as AOSummary;
-  
 }
 
 export async function getAOLeaders(id: number): Promise<AOLeaders | null> {
@@ -66,10 +65,10 @@ export async function getAOLeaders(id: number): Promise<AOLeaders | null> {
     JOIN event_instance_expanded ei
         ON ae.event_instance_id = ei.id
     WHERE ei.ao_org_id = $1`,
-    [id]
+    [id],
   );
 
-    if (rows.length === 0) {
+  if (rows.length === 0) {
     return null;
   }
 
@@ -80,7 +79,13 @@ export async function getAOLeaders(id: number): Promise<AOLeaders | null> {
   // Aggregate by unique user_id
   const leaders: Record<
     string,
-    { user_id: string; f3_name: string; posts: number; qs: number; avatar_url: string | undefined }
+    {
+      user_id: string;
+      f3_name: string;
+      posts: number;
+      qs: number;
+      avatar_url: string | undefined;
+    }
   > = {};
 
   for (const row of rows) {
@@ -104,7 +109,7 @@ export async function getAOLeaders(id: number): Promise<AOLeaders | null> {
       leaders[uid].qs += 1;
     }
   }
-  
+
   return Object.values(leaders) as unknown as AOLeaders;
 }
 
@@ -148,7 +153,7 @@ export async function getAOData(id: number): Promise<AOData | null> {
       WHERE 
         orgs.id = $1
     `,
-    [id]
+    [id],
   );
 
   // Loop through rows and add event data to an array
@@ -184,13 +189,21 @@ export async function getAOData(id: number): Promise<AOData | null> {
 
   // sort eventSchedules by days of the week
   eventSchedules.sort((a, b) => {
-    const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", ];
+    const daysOfWeek = [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday",
+    ];
     if (!a || !b) return 0;
     const dayA = daysOfWeek.indexOf(a.day_of_week);
     const dayB = daysOfWeek.indexOf(b.day_of_week);
     return dayA - dayB;
   });
-  
+
   // If no rows found, return null
   if (rows.length === 0) {
     return null;
@@ -242,7 +255,7 @@ LEFT JOIN q_lists ql ON ei.id = ql.event_instance_id
 WHERE ei.ao_org_id = $1
 ORDER BY ei.start_date DESC;
     `,
-    [id]
+    [id],
   );
   return rows as AOEvents[];
 }
@@ -311,7 +324,7 @@ ORDER BY
     ei.start_date,
     ei.start_time;
     `,
-    [id]
+    [id],
   );
   return rows as AOQLineup[];
 }

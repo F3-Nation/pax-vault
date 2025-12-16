@@ -24,11 +24,9 @@ export function Filter({
 }) {
   const handlePredefinedRange = (range: string) => {
     const now = new Date();
-    const todayUTC = new Date(Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate()
-    ));
+    const todayUTC = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
 
     let start: Date;
     const end: Date = todayUTC;
@@ -41,22 +39,26 @@ export function Filter({
         start = new Date(Date.UTC(todayUTC.getUTCFullYear(), 0, 1));
         break;
       case "Current Month":
-        start = new Date(Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), 1));
+        start = new Date(
+          Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), 1),
+        );
         break;
       default:
         start = new Date(0);
     }
-    console.log("Rendering DateFilter with:", { start_date, end_date, selectedRange });
+    console.log("Rendering DateFilter with:", {
+      start_date,
+      end_date,
+      selectedRange,
+    });
     onRangeChange(range, toUTCDateString(start), toUTCDateString(end));
   };
 
   const handleCustomRange = (option: string) => {
     const now = new Date();
-    const todayUTC = new Date(Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate()
-    ));
+    const todayUTC = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
 
     let start: Date;
     let end: Date = todayUTC;
@@ -78,10 +80,14 @@ export function Filter({
       default:
         start = new Date(0);
     }
-    console.log("Rendering DateFilter with:", { start_date, end_date, selectedRange });
+    console.log("Rendering DateFilter with:", {
+      start_date,
+      end_date,
+      selectedRange,
+    });
     onRangeChange(option, toUTCDateString(start), toUTCDateString(end));
   };
-  
+
   return (
     <ButtonGroup className="w-full">
       {["Overall", "YTD", "Current Month"].map((range) => (

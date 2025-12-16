@@ -2,7 +2,7 @@ import { RegionData } from "@/types/region";
 import { queryBigQuery } from "@/lib/db";
 
 async function getRegionalData(id: number): Promise<RegionData[] | null> {
-    const query = `
+  const query = `
     SELECT
       ei.id AS event_instance_id,
       ei.start_date AS event_date,
@@ -49,15 +49,14 @@ async function getRegionalData(id: number): Promise<RegionData[] | null> {
     ORDER BY
       ei.start_date
   `;
-  
-  const results = await queryBigQuery<RegionData>(query);
-  
-  return results || null;
 
+  const results = await queryBigQuery<RegionData>(query);
+
+  return results || null;
 }
 
 export async function loadRegionStats(id: number) {
-    let RegionData: RegionData[] | null = null;
+  let RegionData: RegionData[] | null = null;
   try {
     RegionData = await getRegionalData(id);
   } catch (err) {

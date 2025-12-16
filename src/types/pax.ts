@@ -1,17 +1,17 @@
 export interface PaxData {
-    info: PaxInfo; // Information about the pax
-    events: PaxEventData[]; // List of event data associated with the pax
+  info: PaxInfo; // Information about the pax
+  events: PaxEventData[]; // List of event data associated with the pax
 }
 
 export interface PaxInfo {
-    user_id: number; // Unique identifier for the user
-    f3_name: string; // F3 name (nickname) of the user
-    region: string | null; // Unique identifier for the user's home region
-    region_id: number | null; // Unique identifier for the user's home region
-    region_default: string | null; // Default region name associated with the user
-    region_default_id: number | null; // Default region ID associated with the user
-    avatar_url: string | null; // URL to the user's avatar image, can be null
-    status: string; // Status of the user (e.g., active, inactive)
+  user_id: number; // Unique identifier for the user
+  f3_name: string; // F3 name (nickname) of the user
+  region: string | null; // Unique identifier for the user's home region
+  region_id: number | null; // Unique identifier for the user's home region
+  region_default: string | null; // Default region name associated with the user
+  region_default_id: number | null; // Default region ID associated with the user
+  avatar_url: string | null; // URL to the user's avatar image, can be null
+  status: string; // Status of the user (e.g., active, inactive)
 }
 
 export interface PaxEventData {

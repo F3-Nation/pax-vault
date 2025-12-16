@@ -31,7 +31,10 @@ export function PageHeader({
 
       // Observe changes to the class attribute on <html>
       const observer = new MutationObserver(() => updateLogo());
-      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
 
       return () => observer.disconnect();
     }

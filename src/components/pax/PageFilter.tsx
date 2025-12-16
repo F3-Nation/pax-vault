@@ -26,7 +26,7 @@ export function Filter({
   selectedRange: string;
   eventTypeFilter: "all" | "1st F" | "2nd F" | "3rd F";
   regionFilter: "all" | string;
-  regions: { id:  string; name: string }[];
+  regions: { id: string; name: string }[];
   onRangeChange: (range: string, start: string, end: string) => void;
   onEventTypeChange: (type: "all" | "1st F" | "2nd F" | "3rd F") => void;
   onRegionChange: (regionId: "all" | string) => void;
@@ -34,7 +34,7 @@ export function Filter({
   const handleRangeChange = (option: string) => {
     const now = new Date();
     const todayUTC = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     );
 
     let start: Date;
@@ -49,7 +49,7 @@ export function Filter({
         break;
       case "Current Month":
         start = new Date(
-          Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), 1)
+          Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), 1),
         );
         break;
       case "Last 90 Days":
@@ -73,16 +73,13 @@ export function Filter({
     });
     onRangeChange(option, toUTCDateString(start), toUTCDateString(end));
   };
-  
+
   return (
     <div className="flex w-full gap-2">
       {/* Event type dropdown */}
       <Dropdown backdrop="blur">
         <DropdownTrigger>
-          <Button
-            variant="flat"
-            className="flex-1"
-          >
+          <Button variant="flat" className="flex-1">
             {eventTypeFilter === "all" ? "All Event Types" : eventTypeFilter}
           </Button>
         </DropdownTrigger>
@@ -103,27 +100,23 @@ export function Filter({
       {/* Region dropdown */}
       <Dropdown backdrop="blur">
         <DropdownTrigger>
-          <Button
-            variant="flat"
-            className="flex-1"
-          >
+          <Button variant="flat" className="flex-1">
             {regionFilter === "all"
               ? "All Regions"
-              : regions.find((r) => r.id === regionFilter)?.name || "Select Region"}
+              : regions.find((r) => r.id === regionFilter)?.name ||
+                "Select Region"}
           </Button>
         </DropdownTrigger>
         <DropdownMenu
           disallowEmptySelection
           selectionMode="single"
-          onAction={(key) =>
-            onRegionChange(key as "all" | string)
-          }
+          onAction={(key) => onRegionChange(key as "all" | string)}
         >
           {[
             <DropdownItem key="all">All Regions</DropdownItem>,
             ...regions.map((region) => (
               <DropdownItem key={region.id}>{region.name}</DropdownItem>
-            ))
+            )),
           ]}
         </DropdownMenu>
       </Dropdown>
@@ -131,10 +124,7 @@ export function Filter({
       {/* Date range dropdown */}
       <Dropdown backdrop="blur" placement="bottom-end">
         <DropdownTrigger>
-          <Button
-            variant="flat"
-            className="flex-1"
-          >
+          <Button variant="flat" className="flex-1">
             {selectedRange}
           </Button>
         </DropdownTrigger>
@@ -146,11 +136,16 @@ export function Filter({
             handleRangeChange(value);
           }}
         >
-          {["All History", "YTD", "Current Month", "Last 90 Days", "Last 180 Days", "Prior Year"].map(
-            (option) => (
-              <DropdownItem key={option}>{option}</DropdownItem>
-            )
-          )}
+          {[
+            "All History",
+            "YTD",
+            "Current Month",
+            "Last 90 Days",
+            "Last 180 Days",
+            "Prior Year",
+          ].map((option) => (
+            <DropdownItem key={option}>{option}</DropdownItem>
+          ))}
         </DropdownMenu>
       </Dropdown>
     </div>

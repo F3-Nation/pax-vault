@@ -64,7 +64,7 @@ export function PaxPageWrapper({ pax_data }: { pax_data: PaxData }) {
   const pax_summary = getSummary(
     { ...pax_data, events: filteredPaxData },
     startDate,
-    endDate
+    endDate,
   );
   const pax_ao_breakdown = getAOBreakdown({
     ...pax_data,

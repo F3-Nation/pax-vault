@@ -5,11 +5,7 @@ import { PaxInsights } from "@/types/pax";
 import { Divider } from "@heroui/divider";
 import { CustomBarChart as InsightsBarChart } from "@/components/charts/barChart";
 
-export function InsightsCard({
-  paxInsights,
-}: {
-  paxInsights: PaxInsights[];
-}) {
+export function InsightsCard({ paxInsights }: { paxInsights: PaxInsights[] }) {
   const paxData = paxInsights?.[0]?.paxData ?? [];
 
   const totalEvents = paxData.reduce((sum, entry, idx) => {
@@ -40,7 +36,7 @@ export function InsightsCard({
           <div className="flex flex-col lg:flex-row gap-6">
             <InsightsBarChart
               title="Monthly Post Volume"
-              data={paxData.map(item => ({
+              data={paxData.map((item) => ({
                 date: item.month,
                 events: item.events,
                 qs: item.qs,
@@ -52,7 +48,7 @@ export function InsightsCard({
             />
             <InsightsBarChart
               title="Monthly Q Volume"
-              data={paxData.map(item => ({
+              data={paxData.map((item) => ({
                 date: item.month,
                 events: item.events,
                 qs: item.qs,
