@@ -18,7 +18,11 @@ export default async function PaxDetailPage({ params }: IdProps) {
         {/* Page Header */}
         <PageHeader
           image={pax_data.info?.avatar_url ?? undefined}
-          name={pax_data.info?.f3_name ?? pax_data.info?.user_id.toString() ?? "Unknown Pax"}
+          name={
+            pax_data.info?.f3_name ??
+            pax_data.info?.user_id.toString() ??
+            "Unknown Pax"
+          }
           link={
             pax_data.info.region_id
               ? `/stats/region/${pax_data.info.region_id}`

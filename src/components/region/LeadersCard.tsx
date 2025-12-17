@@ -52,7 +52,7 @@ export function LeadersCard({ leaders }: { leaders: RegionLeaders[] }) {
               >
                 <div className="flex items-center gap-2 text-sm">
                   <Avatar
-                    alt={leader.f3_name?? leader.user_id.toString()}
+                    alt={leader.f3_name ?? leader.user_id.toString()}
                     className="flex-shrink-0 w-5 h-5"
                     size="sm"
                     src={leader.avatar_url}

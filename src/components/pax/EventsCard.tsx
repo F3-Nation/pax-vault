@@ -97,12 +97,20 @@ export function EventsCard({
           {paginatedEvents.map((event, index) => {
             const pax_list = event.attendance
               .slice()
-              .sort((a, b) => (a.f3_name ?? a.user_id.toString()).localeCompare(b.f3_name ?? b.user_id.toString()));
+              .sort((a, b) =>
+                (a.f3_name ?? a.user_id.toString()).localeCompare(
+                  b.f3_name ?? b.user_id.toString(),
+                ),
+              );
 
             const q_list = event.attendance
               .filter((att) => att.q_ind)
               .slice()
-              .sort((a, b) => (a.f3_name ?? a.user_id.toString()).localeCompare(b.f3_name ?? b.user_id.toString()));
+              .sort((a, b) =>
+                (a.f3_name ?? a.user_id.toString()).localeCompare(
+                  b.f3_name ?? b.user_id.toString(),
+                ),
+              );
             return (
               <div key={event.event_instance_id || index}>
                 <Card
