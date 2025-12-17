@@ -1,97 +1,107 @@
-import { IdProps } from "@/types/props";
-import { loadAOStats } from "./loader";
-import { PageHeader } from "@/components/pageHeader";
-import { Card, CardBody, CardHeader } from "@heroui/card";
-import { Divider } from "@heroui/divider";
-import { AOSummaryCard } from "@/components/ao/AOSummaryCard";
-import { AOLeadersCard } from "@/components/ao/AOLeadersCard";
-import { RecentEventsCard } from "@/components/ao/RecentEventsCard";
-import { AOQLineupCard } from "@/components/ao/AOQLineupCard";
-import { Button, ButtonGroup } from "@heroui/button";
+"use client";
 
-export default async function AODetailPage({ params }: IdProps) {
-  const { id } = await params;
-  const { AOInfo, AOSummary, AOLeaders, AOEvents, AOQLineup } =
-    await loadAOStats(Number(id));
-  const dateRanges = ["All Time", "Current Year", "Current Month"] as const;
+import { Card, CardHeader, CardBody } from "@heroui/card";
+import { Chip } from "@heroui/chip";
+import { Progress } from "@heroui/progress";
+import { Skeleton } from "@heroui/skeleton";
 
-  if (!AOInfo) {
-    return <div className="p-8 text-center text-red-600">AO not found</div>;
-  }
-
+export default function PlaceholderPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-start pt-10 pb-10">
-      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
-        {/* Page Header */}
-        <PageHeader
-          image={AOInfo.logo ?? undefined}
-          name={AOInfo.name}
-          link={`/stats/region/${AOInfo.region_id}`}
-          linkName={AOInfo.region_name}
-        />
-        <div className="flex gap-2 w-full">
-          <ButtonGroup className="w-full">
-            {dateRanges.map((range) => (
-              <Button
-                size="lg"
-                variant={range === "All Time" ? "flat" : "ghost"}
-                color={range === "All Time" ? "primary" : "default"}
-                key={range}
-                className="flex-1"
-              >
-                {range}
-              </Button>
-            ))}
-          </ButtonGroup>
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-default-50 px-4">
+      <div className="w-full max-w-4xl space-y-6">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <div className="w-full flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-3xl font-bold">PAX Vault — AO Stats</div>
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="inline-block h-2.5 w-2.5 rounded-full bg-warning animate-pulse"
+                  />
+                  <Chip color="warning" variant="flat">
+                    Under Construction
+                  </Chip>
+                </div>
+              </div>
+              <Progress
+                aria-label="Build progress"
+                value={35}
+                showValueLabel
+                className="max-w-md"
+              />
+            </div>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            <p className="text-gray-700">
+              This page is live and functioning. You are currently viewing a
+              scaffolded AO Stats view.
+            </p>
+            <p className="text-gray-600">
+              This page will serve as the central view for an individual AO,
+              surfacing workout volume, attendance patterns, Q leadership, and
+              participation trends.
+            </p>
+            <p className="text-gray-600">
+              Upcoming iterations will introduce real AO-level metrics,
+              interactive filtering by date and event type, and deeper insights
+              tied directly to this AO.
+            </p>
+          </CardBody>
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="shadow-md">
+            <CardHeader className="text-xl font-semibold">
+              AO Participation
+            </CardHeader>
+            <CardBody>
+              <p className="text-gray-600">
+                This section will highlight attendance over time, returning vs
+                new PAX, and participation density for this AO.
+              </p>
+            </CardBody>
+          </Card>
+
+          <Card className="shadow-md">
+            <CardHeader className="text-xl font-semibold">
+              AO Trends & Leadership
+            </CardHeader>
+            <CardBody>
+              <p className="text-gray-600">
+                This section will spotlight Q frequency, leadership rotation,
+                and trend signals such as growth, consistency, and seasonality
+                at this AO.
+              </p>
+            </CardBody>
+          </Card>
         </div>
-      </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4">
-        {/* Workout Summary Card */}
-        <AOSummaryCard summary={AOSummary!} />
-        {/* Leaderboard Card */}
-        <AOLeadersCard
-          leaders={
-            AOLeaders
-              ? Array.isArray(AOLeaders)
-                ? AOLeaders
-                : [AOLeaders]
-              : []
-          }
-        />
-      </div>
-      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
-        {/* Insights Card */}
-        <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
-          <CardHeader className="text-center font-semibold text-xl px-6">
-            AO Insights
+
+        <Card className="shadow-md">
+          <CardHeader className="text-xl font-semibold">
+            Coming Soon: AO Metrics
           </CardHeader>
-          <Divider />
-          <CardBody className="px-6">
-            <p className="italic text-center text-sm text-default">
-              AO Insights coming soon...
-            </p>
+          <CardBody className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl border border-default-200 bg-background p-4 space-y-3"
+                >
+                  <Skeleton className="h-4 w-2/3 rounded-lg" />
+                  <Skeleton className="h-8 w-1/2 rounded-lg" />
+                  <Skeleton className="h-3 w-full rounded-lg" />
+                  <Skeleton className="h-3 w-5/6 rounded-lg" />
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl border border-default-200 bg-background p-4 space-y-3">
+              <Skeleton className="h-4 w-1/3 rounded-lg" />
+              <Skeleton className="h-40 w-full rounded-lg" />
+            </div>
           </CardBody>
         </Card>
-      </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4 pt-6">
-        {/* Alt Chart Card */}
-        <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
-          <CardHeader className="flex justify-between items-center px-6">
-            <div className="font-semibold text-xl">AO Charting</div>
-          </CardHeader>
-          <Divider />
-          <CardBody className="px-6">
-            <p className="italic text-center text-sm text-default">
-              More Charting coming soon...
-            </p>
-          </CardBody>
-        </Card>
-        {/* Q Lineup Card */}
-        <AOQLineupCard lineup={AOQLineup ?? []} />
-      </div>
-      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
-        {/* Recent Events Card */}
-        <RecentEventsCard aoEvents={AOEvents ?? []} />
       </div>
     </main>
   );

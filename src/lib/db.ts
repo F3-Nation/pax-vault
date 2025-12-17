@@ -1,11 +1,3 @@
-import { Pool } from "pg";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL, // set in .env.local
-});
-
-export default pool;
-
 import { BigQuery } from "@google-cloud/bigquery";
 
 const projectId = process.env.BIGQUERY_PROJECT_ID!;
