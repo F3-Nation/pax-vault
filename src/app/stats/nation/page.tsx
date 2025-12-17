@@ -13,7 +13,9 @@ export default function PlaceholderPage() {
           <CardHeader>
             <div className="w-full flex flex-col gap-3">
               <div className="flex items-start justify-between gap-3">
-                <div className="text-3xl font-bold">PAX Vault — Nation Stats</div>
+                <div className="text-3xl font-bold">
+                  PAX Vault — Nation Stats
+                </div>
                 <div className="flex items-center gap-2">
                   <span
                     aria-hidden
@@ -38,12 +40,14 @@ export default function PlaceholderPage() {
               scaffolded stats view.
             </p>
             <p className="text-gray-600">
-              This page will serve as a central view for nationwide statistics, providing
-              insight into trends, participation, and growth across all regions.
+              This page will serve as a central view for nationwide statistics,
+              providing insight into trends, participation, and growth across
+              all regions.
             </p>
             <p className="text-gray-600">
-              Upcoming iterations will introduce real data, interactive filtering, and
-              composable analytics focused on Nation-level visibility and decision-making.
+              Upcoming iterations will introduce real data, interactive
+              filtering, and composable analytics focused on Nation-level
+              visibility and decision-making.
             </p>
           </CardBody>
         </Card>
@@ -55,8 +59,9 @@ export default function PlaceholderPage() {
             </CardHeader>
             <CardBody>
               <p className="text-gray-600">
-                This view will aggregate data across all regions to surface meaningful
-                Nation-wide metrics and patterns that are not visible at the local level.
+                This view will aggregate data across all regions to surface
+                meaningful Nation-wide metrics and patterns that are not visible
+                at the local level.
               </p>
             </CardBody>
           </Card>
@@ -67,8 +72,9 @@ export default function PlaceholderPage() {
             </CardHeader>
             <CardBody>
               <p className="text-gray-600">
-                Nation-level statistics will help identify long-term trends, regional
-                differences, and opportunities for growth across the organization.
+                Nation-level statistics will help identify long-term trends,
+                regional differences, and opportunities for growth across the
+                organization.
               </p>
             </CardBody>
           </Card>
@@ -80,7 +86,6 @@ export default function PlaceholderPage() {
           </CardHeader>
           <CardBody className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
               {[...Array(3)].map((_, i) => (
                 <div
                   key={i}

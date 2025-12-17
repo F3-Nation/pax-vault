@@ -34,16 +34,18 @@ export default function PlaceholderPage() {
           </CardHeader>
           <CardBody className="space-y-4">
             <p className="text-gray-700">
-              This page is live and functioning. You are currently viewing a scaffolded
-              AO Stats view.
+              This page is live and functioning. You are currently viewing a
+              scaffolded AO Stats view.
             </p>
             <p className="text-gray-600">
-              This page will serve as the central view for an individual AO, surfacing
-              workout volume, attendance patterns, Q leadership, and participation trends.
+              This page will serve as the central view for an individual AO,
+              surfacing workout volume, attendance patterns, Q leadership, and
+              participation trends.
             </p>
             <p className="text-gray-600">
-              Upcoming iterations will introduce real AO-level metrics, interactive filtering
-              by date and event type, and deeper insights tied directly to this AO.
+              Upcoming iterations will introduce real AO-level metrics,
+              interactive filtering by date and event type, and deeper insights
+              tied directly to this AO.
             </p>
           </CardBody>
         </Card>
@@ -55,8 +57,8 @@ export default function PlaceholderPage() {
             </CardHeader>
             <CardBody>
               <p className="text-gray-600">
-                This section will highlight attendance over time, returning vs new PAX,
-                and participation density for this AO.
+                This section will highlight attendance over time, returning vs
+                new PAX, and participation density for this AO.
               </p>
             </CardBody>
           </Card>
@@ -67,8 +69,9 @@ export default function PlaceholderPage() {
             </CardHeader>
             <CardBody>
               <p className="text-gray-600">
-                This section will spotlight Q frequency, leadership rotation, and trend signals
-                such as growth, consistency, and seasonality at this AO.
+                This section will spotlight Q frequency, leadership rotation,
+                and trend signals such as growth, consistency, and seasonality
+                at this AO.
               </p>
             </CardBody>
           </Card>
@@ -80,7 +83,6 @@ export default function PlaceholderPage() {
           </CardHeader>
           <CardBody className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
               {[...Array(3)].map((_, i) => (
                 <div
                   key={i}

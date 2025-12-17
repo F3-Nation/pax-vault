@@ -13,7 +13,9 @@ export default function PlaceholderPage() {
           <CardHeader>
             <div className="w-full flex flex-col gap-3">
               <div className="flex items-start justify-between gap-3">
-                <div className="text-3xl font-bold">PAX Vault — Event Details</div>
+                <div className="text-3xl font-bold">
+                  PAX Vault — Event Details
+                </div>
                 <div className="flex items-center gap-2">
                   <span
                     aria-hidden
@@ -34,16 +36,18 @@ export default function PlaceholderPage() {
           </CardHeader>
           <CardBody className="space-y-4">
             <p className="text-gray-700">
-              This page is live and functioning. You are currently viewing a scaffolded
-              Event Details view.
+              This page is live and functioning. You are currently viewing a
+              scaffolded Event Details view.
             </p>
             <p className="text-gray-600">
-              This page will serve as the central source of truth for an individual event,
-              including attendance (PAX), Qs, backblast content, and key event metadata.
+              This page will serve as the central source of truth for an
+              individual event, including attendance (PAX), Qs, backblast
+              content, and key event metadata.
             </p>
             <p className="text-gray-600">
-              Upcoming iterations will introduce full attendance lists, Q attribution,
-              backblast history, and supporting analytics tied directly to this event.
+              Upcoming iterations will introduce full attendance lists, Q
+              attribution, backblast history, and supporting analytics tied
+              directly to this event.
             </p>
           </CardBody>
         </Card>
@@ -55,8 +59,9 @@ export default function PlaceholderPage() {
             </CardHeader>
             <CardBody>
               <p className="text-gray-600">
-                This section will surface who attended the workout, highlight Q leadership,
-                and provide visibility into participation for this specific event.
+                This section will surface who attended the workout, highlight Q
+                leadership, and provide visibility into participation for this
+                specific event.
               </p>
             </CardBody>
           </Card>
@@ -67,8 +72,9 @@ export default function PlaceholderPage() {
             </CardHeader>
             <CardBody>
               <p className="text-gray-600">
-                Backblast content, notes, and follow-up details will live here, preserving
-                the story and impact of the workout beyond the beatdown itself.
+                Backblast content, notes, and follow-up details will live here,
+                preserving the story and impact of the workout beyond the
+                beatdown itself.
               </p>
             </CardBody>
           </Card>
@@ -80,7 +86,6 @@ export default function PlaceholderPage() {
           </CardHeader>
           <CardBody className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
               {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
