@@ -32,12 +32,12 @@ export function EventsCard({
     const region = ev.region_name?.toLowerCase() || "";
 
     const paxNames = ev.attendance
-      .map((a) => a.f3_name?.toLowerCase() || "")
+      .map((a) => a.f3_name?.toLowerCase() || a.user_id.toString())
       .join(" ");
 
     const qNames = ev.attendance
       .filter((a) => a.q_ind)
-      .map((a) => a.f3_name?.toLowerCase() || "")
+      .map((a) => a.f3_name?.toLowerCase() || a.user_id.toString())
       .join(" ");
 
     // Free text match
@@ -97,12 +97,20 @@ export function EventsCard({
           {paginatedEvents.map((event, index) => {
             const pax_list = event.attendance
               .slice()
-              .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
+              .sort((a, b) =>
+                (a.f3_name ?? a.user_id.toString()).localeCompare(
+                  b.f3_name ?? b.user_id.toString(),
+                ),
+              );
 
             const q_list = event.attendance
               .filter((att) => att.q_ind)
               .slice()
-              .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
+              .sort((a, b) =>
+                (a.f3_name ?? a.user_id.toString()).localeCompare(
+                  b.f3_name ?? b.user_id.toString(),
+                ),
+              );
             return (
               <div key={event.event_instance_id || index}>
                 <Card
@@ -201,7 +209,7 @@ export function EventsCard({
                                   color={"default"}
                                   size="sm"
                                 >
-                                  {pax.f3_name}
+                                  {pax.f3_name ?? pax.user_id.toString()}
                                 </Chip>
                               </Link>
                             );

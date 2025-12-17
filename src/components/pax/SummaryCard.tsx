@@ -164,7 +164,7 @@ export function SummaryCard({ summary }: { summary: PaxSummary }) {
             </span>
           </div>
           <div className="flex justify-between py-1 pb-2">
-            <span className="text-primary">Efficency:</span>
+            <span className="text-primary">Efficiency:</span>
             <span>
               {summary?.event_count === 0 ? (
                 <span className="text-default-500 italic">No Event Data</span>
