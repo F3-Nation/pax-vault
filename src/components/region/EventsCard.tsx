@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Select, SelectItem } from "@heroui/select";
 import { Pagination } from "@heroui/pagination";
 import { Input } from "@heroui/input";
-import { Button } from "@heroui/button";
 
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import { Divider } from "@heroui/divider";
@@ -13,35 +11,6 @@ import { formatDate, cleanEventName, formatNumber } from "@/lib/utils";
 import { Link } from "@heroui/link";
 import { Chip } from "@heroui/chip";
 import { Avatar } from "@heroui/avatar";
-import { Popover, PopoverTrigger, PopoverContent } from "@heroui/popover";
-
-function toUTCDate(dateStr: string | Date | number | null | undefined): number {
-  if (!dateStr) return 0;
-
-  // If already a Date instance
-  if (dateStr instanceof Date) {
-    return Date.UTC(
-      dateStr.getUTCFullYear(),
-      dateStr.getUTCMonth(),
-      dateStr.getUTCDate(),
-    );
-  }
-
-  // If it's a number (timestamp)
-  if (typeof dateStr === "number") {
-    const d = new Date(dateStr);
-    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  }
-
-  // Ensure we are dealing with a string
-  const str = String(dateStr);
-
-  // Expecting YYYY-MM-DD
-  const [y, m, d] = str.split("-").map(Number);
-  if (!y || !m || !d) return 0; // invalid date
-
-  return Date.UTC(y, m - 1, d);
-}
 
 export function EventsCard({ events }: { events: RegionData[] }) {
   events = events.toReversed(); // Show most recent events first
@@ -49,21 +18,6 @@ export function EventsCard({ events }: { events: RegionData[] }) {
   const perPage = 10;
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
-
-  const [aoFilter, setAoFilter] = useState("any");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-
-  const aoOptions = [
-    { key: "any", label: "Any AO" },
-    ...Array.from(new Set(events.map((ev) => ev.ao_name)))
-      .filter(Boolean)
-      .sort()
-      .map((name) => ({
-        key: name,
-        label: name,
-      })),
-  ];
 
   const filteredEvents = events.filter((ev) => {
     const term = searchTerm.toLowerCase();
@@ -88,16 +42,7 @@ export function EventsCard({ events }: { events: RegionData[] }) {
       paxNames.includes(term) ||
       qNames.includes(term);
 
-    // AO filter match
-    const matchesAoFilter = aoFilter === "any" || ev.ao_name === aoFilter;
-
-    // Date range filter
-    const evDate = toUTCDate(ev.event_date);
-    const afterStart = !startDate || evDate >= toUTCDate(startDate);
-    const beforeEnd = !endDate || evDate <= toUTCDate(endDate);
-    const matchesDate = afterStart && beforeEnd;
-
-    return matchesFree && matchesAoFilter && matchesDate;
+    return matchesFree;
   });
 
   const totalPages = Math.ceil(filteredEvents.length / perPage);
@@ -113,76 +58,20 @@ export function EventsCard({ events }: { events: RegionData[] }) {
           {/* Left: Title */}
           <div className="flex items-center justify-start">Recent Events</div>
 
-          {/* Right: Filters button */}
+          {/* Right: Search Input */}
           <div className="flex items-center justify-end">
-            <Popover placement="bottom-end">
-              <PopoverTrigger>
-                <Button variant="ghost">Search</Button>
-              </PopoverTrigger>
-              <PopoverContent className="p-4 w-64 flex flex-col gap-4">
-                <Input
-                  label="Search Events"
-                  variant="bordered"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setPage(1);
-                  }}
-                />
-
-                {/* Search by AO */}
-                <Select
-                  items={aoOptions}
-                  label="Filter by AO"
-                  variant="bordered"
-                  selectedKeys={[aoFilter]}
-                  onSelectionChange={(keys) => {
-                    const val = Array.from(keys)[0] as string;
-                    setAoFilter(val);
-                    setPage(1);
-                  }}
-                >
-                  {(item) => (
-                    <SelectItem key={item.key}>{item.label}</SelectItem>
-                  )}
-                </Select>
-
-                {/* Date Range */}
-                <Input
-                  label="From Date"
-                  type="date"
-                  variant="bordered"
-                  value={startDate}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
-                    setPage(1);
-                  }}
-                />
-                <Input
-                  label="To Date"
-                  type="date"
-                  variant="bordered"
-                  value={endDate}
-                  onChange={(e) => {
-                    setEndDate(e.target.value);
-                    setPage(1);
-                  }}
-                />
-                <Button
-                  color="danger"
-                  variant="flat"
-                  onPress={() => {
-                    setSearchTerm("");
-                    setAoFilter("any");
-                    setStartDate("");
-                    setEndDate("");
-                    setPage(1);
-                  }}
-                >
-                  Clear Filters
-                </Button>
-              </PopoverContent>
-            </Popover>
+            <Input
+              aria-label="Search events"
+              placeholder="Search events..."
+              variant="flat"
+              size="sm"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
+              className="max-w-xs"
+            />
           </div>
         </div>
       </CardHeader>
@@ -203,8 +92,8 @@ export function EventsCard({ events }: { events: RegionData[] }) {
             const pax_list = event.attendance
               .slice()
               .sort((a, b) =>
-                (a.f3_name || a.user_id.toString()).localeCompare(
-                  b.f3_name || b.user_id.toString(),
+                (a.f3_name ?? a.user_id.toString()).localeCompare(
+                  b.f3_name ?? b.user_id.toString(),
                 ),
               );
 
@@ -212,13 +101,15 @@ export function EventsCard({ events }: { events: RegionData[] }) {
               .filter((att) => att.q_ind)
               .slice()
               .sort((a, b) =>
-                (a.f3_name || a.user_id.toString()).localeCompare(
-                  b.f3_name || b.user_id.toString(),
+                (a.f3_name ?? a.user_id.toString()).localeCompare(
+                  b.f3_name ?? b.user_id.toString(),
                 ),
               );
             return (
               <div key={event.event_instance_id || index}>
-                <Card className="bg-background/60 dark:bg-default-100/50 border border-default-200 dark:border-default-300">
+                <Card
+                  className={`bg-background/60 dark:bg-default-100/50 border border-default-200 dark:border-default-300`}
+                >
                   <CardBody className="text-sm">
                     <div className="flex justify-between gap-4">
                       <div className="pb-4 justify-start">
@@ -278,7 +169,7 @@ export function EventsCard({ events }: { events: RegionData[] }) {
                                   color="secondary"
                                   size="sm"
                                 >
-                                  {q.f3_name ?? q.user_id.toString()}
+                                  {q.f3_name}
                                 </Chip>
                               </Link>
                             );
@@ -309,7 +200,7 @@ export function EventsCard({ events }: { events: RegionData[] }) {
                                     />
                                   }
                                   variant="bordered"
-                                  color="default"
+                                  color={"default"}
                                   size="sm"
                                 >
                                   {pax.f3_name ?? pax.user_id.toString()}

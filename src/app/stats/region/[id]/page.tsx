@@ -6,7 +6,7 @@ import { RegionalPageWrapper } from "@/components/region/PageWrapper";
 
 export default async function RegionDetailPage({ params }: IdProps) {
   const { id } = await params;
-  const { region_data } = await loadRegionStats(Number(id));
+  const { region_data, upcoming_events } = await loadRegionStats(Number(id));
 
   if (!region_data) {
     return <div className="p-8 text-center text-red-600">Region not found</div>;
@@ -23,7 +23,10 @@ export default async function RegionDetailPage({ params }: IdProps) {
           linkName={region_data[0].sector_name}
         />
       </div>
-      <RegionalPageWrapper region_data={region_data} />
+      <RegionalPageWrapper
+        region_data={region_data}
+        upcoming_events={upcoming_events ?? []}
+      />
     </main>
   );
 }
