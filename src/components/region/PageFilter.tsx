@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@heroui/button";
-import { ButtonGroup } from "@heroui/button";
 import { Dropdown } from "@heroui/dropdown";
 import { DropdownTrigger } from "@heroui/dropdown";
 import { DropdownMenu } from "@heroui/dropdown";
@@ -12,27 +11,34 @@ function toUTCDateString(date: Date) {
 }
 
 export function Filter({
-  start_date,
-  end_date,
   selectedRange,
+  eventTypeFilter,
+  aoFilter,
+  aos,
   onRangeChange,
+  onEventTypeChange,
+  onAOChange,
 }: {
-  start_date: string;
-  end_date: string;
   selectedRange: string;
+  eventTypeFilter: "all" | "1st F" | "2nd F" | "3rd F";
+  aoFilter: "all" | string;
+  aos: { id: string; name: string }[];
   onRangeChange: (range: string, start: string, end: string) => void;
+  onEventTypeChange: (type: "all" | "1st F" | "2nd F" | "3rd F") => void;
+  onAOChange: (aoId: "all" | string) => void;
 }) {
-  const handlePredefinedRange = (range: string) => {
+  const handleRangeChange = (option: string) => {
     const now = new Date();
     const todayUTC = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     );
+    const futureUTC = new Date(Date.UTC(2050, 11, 31));
 
     let start: Date;
-    const end: Date = todayUTC;
+    let end: Date = futureUTC;
 
-    switch (range) {
-      case "Overall":
+    switch (option) {
+      case "All History":
         start = new Date(0);
         break;
       case "YTD":
@@ -43,98 +49,96 @@ export function Filter({
           Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), 1),
         );
         break;
-      default:
-        start = new Date(0);
-    }
-    console.log("Rendering DateFilter with:", {
-      start_date,
-      end_date,
-      selectedRange,
-    });
-    onRangeChange(range, toUTCDateString(start), toUTCDateString(end));
-  };
-
-  const handleCustomRange = (option: string) => {
-    const now = new Date();
-    const todayUTC = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-    );
-
-    let start: Date;
-    let end: Date = todayUTC;
-
-    switch (option) {
       case "Last 90 Days":
         start = new Date(todayUTC.getTime() - 90 * 24 * 60 * 60 * 1000);
         break;
-
       case "Last 180 Days":
         start = new Date(todayUTC.getTime() - 180 * 24 * 60 * 60 * 1000);
         break;
-
       case "Prior Year":
         start = new Date(Date.UTC(todayUTC.getUTCFullYear() - 1, 0, 1));
         end = new Date(Date.UTC(todayUTC.getUTCFullYear() - 1, 11, 31));
         break;
-
       default:
         start = new Date(0);
     }
-    console.log("Rendering DateFilter with:", {
-      start_date,
-      end_date,
-      selectedRange,
-    });
+
     onRangeChange(option, toUTCDateString(start), toUTCDateString(end));
   };
 
   return (
-    <ButtonGroup className="w-full">
-      {["Overall", "YTD", "Current Month"].map((range) => (
-        <Button
-          key={range}
-          variant={selectedRange === range ? "solid" : "ghost"}
-          color={selectedRange === range ? "primary" : "default"}
-          className="flex-1"
-          onClick={() => handlePredefinedRange(range)}
-        >
-          {range}
-        </Button>
-      ))}
-      <Dropdown placement="bottom-end">
+    <div className="flex w-full gap-2">
+      {/* Event type dropdown */}
+      <Dropdown backdrop="blur">
         <DropdownTrigger>
-          <Button
-            variant={
-              selectedRange !== "Overall" &&
-              selectedRange !== "YTD" &&
-              selectedRange !== "Current Month"
-                ? "solid"
-                : "ghost"
-            }
-            color={
-              selectedRange !== "Overall" &&
-              selectedRange !== "YTD" &&
-              selectedRange !== "Current Month"
-                ? "primary"
-                : "default"
-            }
-            className="flex-1"
-          >
-            {["Overall", "YTD", "Current Month"].includes(selectedRange)
-              ? "Custom"
-              : selectedRange}
+          <Button variant="flat" className="flex-1">
+            {eventTypeFilter === "all" ? "All Event Types" : eventTypeFilter}
           </Button>
         </DropdownTrigger>
         <DropdownMenu
           disallowEmptySelection
           selectionMode="single"
-          onAction={(key) => handleCustomRange(key as string)}
+          onAction={(key) =>
+            onEventTypeChange(key as "all" | "1st F" | "2nd F" | "3rd F")
+          }
         >
-          {["Last 90 Days", "Last 180 Days", "Prior Year"].map((option) => (
+          <DropdownItem key="all">All Event Types</DropdownItem>
+          <DropdownItem key="1st F">1st F</DropdownItem>
+          <DropdownItem key="2nd F">2nd F</DropdownItem>
+          <DropdownItem key="3rd F">3rd F</DropdownItem>
+        </DropdownMenu>
+      </Dropdown>
+
+      {/* Region dropdown */}
+      <Dropdown backdrop="blur">
+        <DropdownTrigger>
+          <Button variant="flat" className="flex-1">
+            {aoFilter === "all"
+              ? "All AOs"
+              : aos.find((r) => r.id === aoFilter)?.name || "Select AO"}
+          </Button>
+        </DropdownTrigger>
+        <DropdownMenu
+          disallowEmptySelection
+          selectionMode="single"
+          onAction={(key) => onAOChange(key as "all" | string)}
+        >
+          {[
+            <DropdownItem key="all">All AOs</DropdownItem>,
+            ...aos.map((ao: { id: string; name: string }) => (
+              <DropdownItem key={ao.id}>{ao.name}</DropdownItem>
+            )),
+          ]}
+        </DropdownMenu>
+      </Dropdown>
+
+      {/* Date range dropdown */}
+      <Dropdown backdrop="blur" placement="bottom-end">
+        <DropdownTrigger>
+          <Button variant="flat" className="flex-1">
+            {selectedRange}
+          </Button>
+        </DropdownTrigger>
+        <DropdownMenu
+          disallowEmptySelection
+          selectionMode="single"
+          onAction={(key) => {
+            const value = key as string;
+            handleRangeChange(value);
+          }}
+        >
+          {[
+            "All History",
+            "YTD",
+            "Current Month",
+            "Last 90 Days",
+            "Last 180 Days",
+            "Prior Year",
+          ].map((option) => (
             <DropdownItem key={option}>{option}</DropdownItem>
           ))}
         </DropdownMenu>
       </Dropdown>
-    </ButtonGroup>
+    </div>
   );
 }
