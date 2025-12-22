@@ -1,14 +1,21 @@
 "use client";
 
 import { RegionData, RegionUpcomingEvents } from "@/types/region";
-import { getSummary, getLeaderboards, getKotterList } from "@/utils/region";
+import {
+  getSummary,
+  getLeaderboards,
+  getKotterList,
+  getChartData,
+} from "@/utils/region";
 import { Filter } from "./PageFilter";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "./LeadersCard";
 import { EventsCard } from "./EventsCard";
 import { KotterCard } from "./KotterCard";
 import { UpcomingEventsCard } from "./UpcomingEventsCard";
+import { ChartsCard } from "./ChartsCard";
 import { useState, useMemo } from "react";
+import { get } from "http";
 
 export function RegionalPageWrapper({
   region_data,
@@ -100,6 +107,7 @@ export function RegionalPageWrapper({
   const region_events = filteredRegionData;
   const region_kotters = getKotterList(filteredRegionData);
   const region_upcoming = filteredEvents.slice(0, 100); // Limit to 100 upcoming events
+  const region_charts = getChartData(filteredRegionData, startDate, endDate);
   return (
     <>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
@@ -134,7 +142,9 @@ export function RegionalPageWrapper({
         />
       </div>
       {/* <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4"></div> */}
-
+      {/* <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4 text-xs">
+        <ChartsCard chartData={region_charts} />
+      </div> */}
       {!endDate || new Date(endDate) >= new Date() ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4 pt-6">
           <KotterCard kotters={region_kotters || []} />
