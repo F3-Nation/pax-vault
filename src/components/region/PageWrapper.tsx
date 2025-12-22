@@ -1,12 +1,7 @@
 "use client";
 
 import { RegionData, RegionUpcomingEvents } from "@/types/region";
-import {
-  getSummary,
-  getLeaderboards,
-  getKotterList,
-  getChartData,
-} from "@/utils/region";
+import { getSummary, getLeaderboards, getKotterList } from "@/utils/region";
 import { Filter } from "./PageFilter";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "./LeadersCard";

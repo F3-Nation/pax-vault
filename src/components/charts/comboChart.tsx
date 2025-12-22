@@ -51,17 +51,6 @@ export function ComboBarLineChart({
   bar_color,
   line_color,
 }: ComboBarLineChartProps) {
-  const maxEntry = data.reduce(
-    (max, entry) =>
-      entry[bar_key as keyof typeof entry] !== undefined &&
-      (max === null ||
-        (entry[bar_key as keyof typeof entry] as number) >
-          (max[bar_key as keyof typeof entry] as number))
-        ? entry
-        : max,
-    null as (typeof data)[0] | null
-  );
-
   return (
     <div className="w-full h-72 flex flex-col">
       <h3 className="text-sm font-semibold text-center mb-1">{title}</h3>
