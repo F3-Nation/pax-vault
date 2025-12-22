@@ -99,3 +99,14 @@ export interface RegionUpcomingEvents {
     },
   ]; // List of Qs (leaders) for the upcoming event
 }
+
+export interface RegionChartData {
+  uniquePax: {
+    itteration_type: "month" | "week" | "day" | ""; // Type of iteration (month, week, day, or none)
+    data: {
+      iteration: string; // e.g., month or week identifier
+      count: number; // Number of unique pax in that month/week
+      average: number; // Average pax count for that month/week
+    }[];
+  };
+}

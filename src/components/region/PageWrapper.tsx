@@ -100,6 +100,7 @@ export function RegionalPageWrapper({
   const region_events = filteredRegionData;
   const region_kotters = getKotterList(filteredRegionData);
   const region_upcoming = filteredEvents.slice(0, 100); // Limit to 100 upcoming events
+  // const region_charts = getChartData(filteredRegionData, startDate, endDate);
   return (
     <>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
@@ -134,7 +135,9 @@ export function RegionalPageWrapper({
         />
       </div>
       {/* <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4"></div> */}
-
+      {/* <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4 text-xs">
+        <ChartsCard chartData={region_charts} />
+      </div> */}
       {!endDate || new Date(endDate) >= new Date() ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4 pt-6">
           <KotterCard kotters={region_kotters || []} />
