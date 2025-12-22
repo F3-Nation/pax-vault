@@ -30,7 +30,7 @@ export function Filter({
   const handleRangeChange = (option: string) => {
     const now = new Date();
     const todayUTC = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     );
     const futureUTC = new Date(Date.UTC(2050, 11, 31));
 
@@ -46,7 +46,7 @@ export function Filter({
         break;
       case "Current Month":
         start = new Date(
-          Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), 1)
+          Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), 1),
         );
         break;
       case "Last 90 Days":

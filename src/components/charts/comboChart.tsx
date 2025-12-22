@@ -7,10 +7,8 @@ import {
   ResponsiveContainer,
   CartesianGrid,
   Bar,
-  BarChart,
   Line,
   ComposedChart,
-  Brush,
 } from "recharts";
 import { TooltipProps } from "recharts";
 
@@ -64,8 +62,6 @@ export function ComboBarLineChart({
     null as (typeof data)[0] | null
   );
 
-  const maxValue = maxEntry?.[bar_key as keyof typeof maxEntry] ?? 0;
-  const maxDate = maxEntry?.iteration ?? null;
   return (
     <div className="w-full h-72 flex flex-col">
       <h3 className="text-sm font-semibold text-center mb-1">{title}</h3>

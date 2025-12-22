@@ -19,15 +19,15 @@ export function getSummary(data: RegionData[]): RegionSummary | null {
   const active_pax = new Set(
     data
       .filter((d) => new Date(d.event_date) >= thirtyDaysAgo)
-      .flatMap((d) => d.attendance.map((att) => att.user_id))
+      .flatMap((d) => d.attendance.map((att) => att.user_id)),
   ).size;
   const unique_pax = new Set(
-    data.flatMap((d) => d.attendance.map((att) => att.user_id))
+    data.flatMap((d) => d.attendance.map((att) => att.user_id)),
   ).size;
   const unique_qs = new Set(
     data.flatMap((d) =>
-      d.attendance.filter((att) => att.q_ind).map((att) => att.user_id)
-    )
+      d.attendance.filter((att) => att.q_ind).map((att) => att.user_id),
+    ),
   ).size;
   const fng_count = data.reduce((sum, d) => sum + d.fng_count, 0);
   const pax_count_average =
@@ -302,7 +302,7 @@ export function getKotterList(data: RegionData[]): RegionKotterList[] | null {
     .filter(
       (u) =>
         u.days_since_last_event >= minWindow &&
-        u.days_since_last_event <= maxWindow
+        u.days_since_last_event <= maxWindow,
     )
     .sort((a, b) => a.days_since_last_event - b.days_since_last_event);
 
@@ -313,7 +313,7 @@ export function getKotterList(data: RegionData[]): RegionKotterList[] | null {
 export function getChartData(
   data: RegionData[],
   start_date?: string,
-  end_date?: string
+  end_date?: string,
 ): RegionChartData | null {
   if (!data || data.length === 0) return null;
 
@@ -380,7 +380,7 @@ export function getChartData(
   // Monday-start week key: ISO date (YYYY-MM-DD) of the Monday in UTC
   const weekStartMondayUTC = (d: Date) => {
     const dt = new Date(
-      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
     );
     const day = dt.getUTCDay(); // 0=Sun..6=Sat
     const diffToMonday = (day + 6) % 7; // Mon->0, Tue->1, ..., Sun->6
@@ -435,15 +435,15 @@ export function getChartData(
       Date.UTC(
         rangeStart.getUTCFullYear(),
         rangeStart.getUTCMonth(),
-        rangeStart.getUTCDate()
-      )
+        rangeStart.getUTCDate(),
+      ),
     );
     const last = new Date(
       Date.UTC(
         rangeEnd.getUTCFullYear(),
         rangeEnd.getUTCMonth(),
-        rangeEnd.getUTCDate()
-      )
+        rangeEnd.getUTCDate(),
+      ),
     );
 
     while (cur.getTime() <= last.getTime()) {

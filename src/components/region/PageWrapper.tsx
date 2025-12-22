@@ -13,9 +13,7 @@ import { LeadersCard } from "./LeadersCard";
 import { EventsCard } from "./EventsCard";
 import { KotterCard } from "./KotterCard";
 import { UpcomingEventsCard } from "./UpcomingEventsCard";
-import { ChartsCard } from "./ChartsCard";
 import { useState, useMemo } from "react";
-import { get } from "http";
 
 export function RegionalPageWrapper({
   region_data,
@@ -107,7 +105,7 @@ export function RegionalPageWrapper({
   const region_events = filteredRegionData;
   const region_kotters = getKotterList(filteredRegionData);
   const region_upcoming = filteredEvents.slice(0, 100); // Limit to 100 upcoming events
-  const region_charts = getChartData(filteredRegionData, startDate, endDate);
+  // const region_charts = getChartData(filteredRegionData, startDate, endDate);
   return (
     <>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
