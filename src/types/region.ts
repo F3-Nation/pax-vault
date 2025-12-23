@@ -88,8 +88,8 @@ export interface RegionUpcomingEvents {
   ao_name: string; // Name of the AO (Area of Operation) hosting the event
   ao_org_id: number; // Unique identifier for the AO organization
   location_name: string; // Name of the location where the event will be held
-  event_types: string; // Types/categories associated with the event
-  event_tags: string | null; // Tags associated with the event
+  event_name: string; // Name of the upcoming event
+  event_type: string; // Types/categories associated with the event
   event_category: string; // Category of the event
   q_list: [
     {
