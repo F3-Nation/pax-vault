@@ -56,7 +56,10 @@ export function UpcomingEventsCard({
                   <div className="text-default-500 text-sm">
                     {formatDate(event.start_date, "M D Y")}
                     {" @ "}
-                    {formatTime(event.start_time)}
+                    {formatTime(event.start_time)} •{" "}
+                    <div className="inline text-default-500 text-sm italic">
+                      {event.event_name}
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -94,7 +97,7 @@ export function UpcomingEventsCard({
                     )}
                   </div>
                   <div className="flex justify-end text-default-500 text-sm italic">
-                    {event.event_types}
+                    {event.event_type}
                   </div>
                 </div>
               </div>

@@ -56,77 +56,68 @@ async function getUpcomingEvents(
   id: number,
 ): Promise<RegionUpcomingEvents[] | null> {
   const query = `
-  WITH q_rows AS (
-    SELECT DISTINCT
-      a.event_instance_id,
-      u.id AS user_id,
-      u.f3_name,
-      u.avatar_url
-    FROM attendance a
-    JOIN attendance_x_attendance_types axat
-      ON a.id = axat.attendance_id
-    JOIN attendance_types att
-      ON axat.attendance_type_id = att.id
-    JOIN users u
-      ON a.user_id = u.id
-    WHERE att.type = 'Q'
-  ),
-  q_data AS (
-    SELECT
-      event_instance_id,
-      STRING_AGG(DISTINCT f3_name, ', ') AS q_names,
-      ARRAY_AGG(STRUCT(
-        user_id,
-        f3_name,
-        avatar_url
-      ) ORDER BY f3_name) AS q_details
-    FROM q_rows
-    GROUP BY event_instance_id
-  )
-
+  -- Upcoming Events with Q List (BigQuery Standard SQL)
+SELECT
+  ei.start_date,
+  ei.start_time,
+  ao.name AS ao_name,
+  ao.id AS ao_org_id,
+  l.name AS location_name,
+  COALESCE(ei.name, e.name) AS event_name,
+  STRING_AGG(DISTINCT et.name, ', ') AS event_type,
+  et.event_category,
+  IFNULL(q_data.q_details, []) AS q_list
+FROM event_instances ei
+LEFT JOIN events e
+  ON ei.series_id = e.id
+LEFT JOIN locations l
+  ON ei.location_id = l.id
+LEFT JOIN orgs ao
+  ON ei.org_id = ao.id
+LEFT JOIN event_instances_x_event_types eixet
+  ON ei.id = eixet.event_instance_id
+LEFT JOIN event_types et
+  ON eixet.event_type_id = et.id
+LEFT JOIN (
   SELECT
-    ei.start_date,
-    ei.start_time,
-    ao.name AS ao_name,
-    ao.id   AS ao_org_id,
-    l.name  AS location_name,
-    STRING_AGG(DISTINCT et.name, ', ')  AS event_types,
-    STRING_AGG(DISTINCT tag.name, ', ') AS event_tags,
-    et.event_category,
-    IFNULL(q_data.q_details, []) AS q_list
-    -- IFNULL(q_data.q_names, 'OPEN') AS q_who
-  FROM event_instances ei
-  JOIN locations l
-    ON ei.location_id = l.id
-  JOIN orgs ao
-    ON ei.org_id = ao.id
-  AND ao.org_type = 'ao'
-  LEFT JOIN event_instances_x_event_types eixet
-    ON ei.id = eixet.event_instance_id
-  LEFT JOIN event_types et
-    ON eixet.event_type_id = et.id
-  LEFT JOIN event_tags_x_event_instances etxei
-    ON ei.id = etxei.event_instance_id
-  LEFT JOIN event_tags tag
-    ON etxei.event_tag_id = tag.id
-  LEFT JOIN q_data
-    ON ei.id = q_data.event_instance_id
-  WHERE
-    l.org_id = ${id}
-    AND ei.start_date > CURRENT_DATE()
-    -- AND ei.start_date < DATE_ADD(CURRENT_DATE(), INTERVAL 14 DAY)
-  GROUP BY
-    ei.id,
-    ei.start_date,
-    ei.start_time,
-    ao.name,
-    ao.id,
-    l.name,
-    q_data.q_details,
-    et.event_category
-  ORDER BY
-    ei.start_date,
-    ei.start_time
+    a.event_instance_id,
+    ARRAY_AGG(
+      STRUCT(
+        u.id        AS user_id,
+        u.f3_name   AS f3_name,
+        u.avatar_url AS avatar_url
+      )
+      ORDER BY u.f3_name
+    ) AS q_details
+  FROM attendance a
+  JOIN attendance_x_attendance_types axat
+    ON a.id = axat.attendance_id
+  JOIN attendance_types att
+    ON axat.attendance_type_id = att.id
+  JOIN users u
+    ON a.user_id = u.id
+  WHERE att.type = 'Q'
+  GROUP BY a.event_instance_id
+) q_data
+  ON ei.id = q_data.event_instance_id
+WHERE
+  ao.parent_id = ${id}
+  AND ei.start_date > CURRENT_DATE()
+  AND ei.is_active = TRUE
+GROUP BY
+  ei.id,
+  ei.start_date,
+  ei.start_time,
+  ao.name,
+  ao.id,
+  l.name,
+  ei.name,
+  e.name,
+  et.event_category,
+  q_data.q_details
+ORDER BY
+  ei.start_date,
+  ei.start_time;
   `;
 
   const results = await queryBigQuery<RegionUpcomingEvents>(query);
