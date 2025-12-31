@@ -101,12 +101,20 @@ export interface RegionUpcomingEvents {
 }
 
 export interface RegionChartData {
-  uniquePax: {
-    itteration_type: "month" | "week" | "day" | ""; // Type of iteration (month, week, day, or none)
-    data: {
-      iteration: string; // e.g., month or week identifier
-      count: number; // Number of unique pax in that month/week
-      average: number; // Average pax count for that month/week
-    }[];
-  };
+  uniquePax: RegionChart_UniquePax;
+  workoutAOCount: RegionChart_WorkoutAOCount[];
+}
+
+export interface RegionChart_UniquePax {
+  itteration_type: "month" | "week" | "day" | ""; // Type of iteration (month, week, day, or none)
+  data: {
+    iteration: string; // e.g., month or week identifier
+    count: number; // Number of unique pax in that month/week
+    average: number; // Average pax count for that month/week
+  }[];
+}
+
+export interface RegionChart_WorkoutAOCount {
+  aoName: string; // Name of the AO
+  count: number; // Number of workouts held at the AO
 }

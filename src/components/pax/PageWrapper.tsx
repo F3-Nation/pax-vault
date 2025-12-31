@@ -78,8 +78,6 @@ export function PaxPageWrapper({ pax_data }: { pax_data: PaxData }) {
         <div className="flex flex-col gap-3 w-full">
           <div className="flex gap-2 w-full">
             <Filter
-              start_date={startDate || ""}
-              end_date={endDate || ""}
               selectedRange={selectedRange}
               eventTypeFilter={eventTypeFilter}
               regionFilter={regionFilter}

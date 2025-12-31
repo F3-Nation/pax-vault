@@ -5,14 +5,14 @@ import { Dropdown } from "@heroui/dropdown";
 import { DropdownTrigger } from "@heroui/dropdown";
 import { DropdownMenu } from "@heroui/dropdown";
 import { DropdownItem } from "@heroui/dropdown";
+import { DateRangePicker } from "@heroui/date-picker";
+import { formatDate } from "@/lib/utils";
 
 function toUTCDateString(date: Date) {
   return date.toISOString().split("T")[0];
 }
 
 export function Filter({
-  start_date,
-  end_date,
   selectedRange,
   eventTypeFilter,
   regionFilter,
@@ -21,8 +21,6 @@ export function Filter({
   onEventTypeChange,
   onRegionChange,
 }: {
-  start_date: string;
-  end_date: string;
   selectedRange: string;
   eventTypeFilter: "all" | "1st F" | "2nd F" | "3rd F";
   regionFilter: "all" | string;
@@ -31,14 +29,19 @@ export function Filter({
   onEventTypeChange: (type: "all" | "1st F" | "2nd F" | "3rd F") => void;
   onRegionChange: (regionId: "all" | string) => void;
 }) {
-  const handleRangeChange = (option: string) => {
+  const handleRangeChange = (
+    option: string,
+    customStart?: string,
+    customEnd?: string,
+  ) => {
     const now = new Date();
     const todayUTC = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     );
+    const futureUTC = new Date(Date.UTC(2050, 11, 31));
 
     let start: Date;
-    let end: Date = todayUTC;
+    let end: Date = futureUTC;
 
     switch (option) {
       case "All History":
@@ -63,14 +66,10 @@ export function Filter({
         end = new Date(Date.UTC(todayUTC.getUTCFullYear() - 1, 11, 31));
         break;
       default:
-        start = new Date(0);
+        start = customStart ? new Date(customStart) : new Date(0);
+        end = customEnd ? new Date(customEnd) : futureUTC;
     }
 
-    console.log("Rendering DateFilter with:", {
-      start_date,
-      end_date,
-      selectedRange: option,
-    });
     onRangeChange(option, toUTCDateString(start), toUTCDateString(end));
   };
 
@@ -114,7 +113,7 @@ export function Filter({
         >
           {[
             <DropdownItem key="all">All Regions</DropdownItem>,
-            ...regions.map((region) => (
+            ...regions.map((region: { id: string; name: string }) => (
               <DropdownItem key={region.id}>{region.name}</DropdownItem>
             )),
           ]}
@@ -136,16 +135,36 @@ export function Filter({
             handleRangeChange(value);
           }}
         >
-          {[
-            "All History",
-            "YTD",
-            "Current Month",
-            "Last 90 Days",
-            "Last 180 Days",
-            "Prior Year",
-          ].map((option) => (
-            <DropdownItem key={option}>{option}</DropdownItem>
-          ))}
+          <>
+            {[
+              "All History",
+              "YTD",
+              "Current Month",
+              "Last 90 Days",
+              "Last 180 Days",
+              "Prior Year",
+            ].map((option) => (
+              <DropdownItem key={option}>{option}</DropdownItem>
+            ))}
+            <DropdownItem
+              key="custom_date_range"
+              textValue="Custom Range"
+              isReadOnly
+            >
+              <DateRangePicker
+                label="Custom Date Range"
+                variant="underlined"
+                labelPlacement="outside"
+                onChange={(range) => {
+                  if (!range || !range.start || !range.end) return;
+                  const start = toUTCDateString(range.start.toDate("UTC"));
+                  const end = toUTCDateString(range.end.toDate("UTC"));
+                  const option = `${formatDate(start, "M D Y")} to ${formatDate(end, "M D Y")}`;
+                  handleRangeChange(option, start, end);
+                }}
+              />
+            </DropdownItem>
+          </>
         </DropdownMenu>
       </Dropdown>
     </div>

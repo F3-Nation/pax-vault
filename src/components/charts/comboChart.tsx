@@ -11,6 +11,7 @@ import {
   ComposedChart,
 } from "recharts";
 import { TooltipProps } from "recharts";
+import { formatDate } from "@/lib/utils";
 
 const CustomTooltip = ({
   active,
@@ -18,10 +19,19 @@ const CustomTooltip = ({
   label,
 }: TooltipProps<number, string>) => {
   if (active && payload && payload.length) {
+    let label_formatted = String(label);
+    if (label.split("-").length === 3) {
+      // M D Y label
+      const date = new Date(label);
+      label_formatted = formatDate(date, "M D Y");
+    } else if (label.split("-").length === 2) {
+      // M Y label
+      const date = new Date(label);
+      label_formatted = formatDate(date, "M Y");
+    }
     return (
       <div className="p-2 rounded-md shadow-md bg-white/60 dark:bg-default-100/80 backdrop-blur-md text-xs">
-        <p className="label">{label}</p>
-        <p className="intro">{payload[0] ? `${label}` : ""}</p>
+        <p className="label">{label_formatted}</p>
         <p className="intro">
           {payload[0] ? `${payload[0].value} Unique PAX` : ""}
         </p>

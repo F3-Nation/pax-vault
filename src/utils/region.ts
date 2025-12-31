@@ -4,6 +4,8 @@ import {
   RegionSummary,
   RegionKotterList,
   RegionChartData,
+  RegionChart_UniquePax,
+  RegionChart_WorkoutAOCount,
 } from "@/types/region";
 
 export function getSummary(data: RegionData[]): RegionSummary | null {
@@ -315,6 +317,20 @@ export function getChartData(
   start_date?: string,
   end_date?: string,
 ): RegionChartData | null {
+  const uniquePax = getComboChartData(data, start_date, end_date);
+  const workoutAOCount = getTreeChartData(data, start_date, end_date);
+
+  return {
+    uniquePax: uniquePax!,
+    workoutAOCount: workoutAOCount!,
+  };
+}
+
+function getComboChartData(
+  data: RegionData[],
+  start_date?: string,
+  end_date?: string,
+): RegionChart_UniquePax | null {
   if (!data || data.length === 0) return null;
 
   // Parse `YYYY-MM-DD` safely as UTC midnight to avoid timezone drift
@@ -361,7 +377,7 @@ export function getChartData(
   });
 
   const rangeDays = Math.max(0, dayDiff(rangeEnd, rangeStart));
-  const useDaily = rangeDays < 30;
+  const useDaily = rangeDays < 60;
   const useWeekly = !useDaily && rangeDays < 365;
 
   // --- Bucket helpers ---
@@ -500,9 +516,68 @@ export function getChartData(
   });
 
   return {
-    uniquePax: {
-      itteration_type: useDaily ? "day" : useWeekly ? "week" : "month",
-      data: withTrend,
-    },
+    itteration_type: useDaily ? "day" : useWeekly ? "week" : "month",
+    data: withTrend,
   };
+}
+
+function getTreeChartData(
+  data: RegionData[],
+  start_date?: string,
+  end_date?: string,
+): RegionChart_WorkoutAOCount[] | null {
+  if (!data || data.length === 0) return null;
+  const aoCountMap = new Map<string, number>();
+
+  // Parse `YYYY-MM-DD` safely as UTC midnight to avoid timezone drift
+  const parseDateUTC = (s: string) => new Date(`${s}T00:00:00Z`);
+
+  // Determine timeframe bounds (prefer explicit start/end; else min/max from data)
+  let minEvt = parseDateUTC(data[0].event_date);
+  let maxEvt = minEvt;
+
+  for (const evt of data) {
+    const d = parseDateUTC(evt.event_date);
+    if (d < minEvt) minEvt = d;
+    if (d > maxEvt) maxEvt = d;
+  }
+
+  const start = start_date
+    ? new Date(start_date).getTime() === new Date(0).getTime()
+      ? minEvt
+      : parseDateUTC(start_date)
+    : minEvt;
+  const end = end_date
+    ? new Date(end_date).getTime() ===
+      new Date(Date.UTC(2050, 11, 31)).getTime()
+      ? maxEvt
+      : parseDateUTC(end_date)
+    : maxEvt;
+
+  // Normalize if start/end reversed
+  const rangeStart = start <= end ? start : end;
+  const rangeEnd = start <= end ? end : start;
+
+  // Filter events to the requested timeframe (inclusive)
+  const inRange = data.filter((evt) => {
+    const d = parseDateUTC(evt.event_date);
+    return (
+      d.getTime() >= rangeStart.getTime() && d.getTime() <= rangeEnd.getTime()
+    );
+  });
+
+  for (const evt of inRange) {
+    const aoName = evt.ao_name || "Unknown AO";
+    aoCountMap.set(aoName, (aoCountMap.get(aoName) || 0) + 1);
+  }
+
+  const aoCounts: RegionChart_WorkoutAOCount[] = Array.from(
+    aoCountMap,
+    ([aoName, count]) => ({
+      aoName,
+      count,
+    }),
+  );
+
+  return aoCounts;
 }
