@@ -4,6 +4,7 @@ import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { RegionChartData } from "@/types/region";
 import { ComboBarLineChart } from "../charts/comboChart";
+// import { TreemapChart } from "../charts/treeChart";
 
 export function ChartsCard({
   chartData,
@@ -17,22 +18,28 @@ export function ChartsCard({
       </CardHeader>
       <Divider />
       <CardBody className="px-6">
-        <div className="flex flex-col lg:flex-row gap-6">
-          <ComboBarLineChart
-            title="Unique Pax Over Time"
-            data={
-              chartData?.uniquePax.data.map((item) => ({
-                iteration: item.iteration,
-                count: item.count,
-                average: item.average,
-              })) ?? []
-            }
-            bar_key="count"
-            line_key="average"
-            bar_color="var(--primary)"
-            line_color="var(--warning)"
-          />
-        </div>
+        <ComboBarLineChart
+          title="Unique Pax Over Time"
+          data={
+            chartData?.uniquePax.data.map((item) => ({
+              iteration: item.iteration,
+              count: item.count,
+              average: item.average,
+            })) ?? []
+          }
+          bar_key="count"
+          line_key="average"
+          bar_color="var(--primary)"
+          line_color="var(--warning)"
+        />
+        {/* <TreemapChart
+          data={
+            chartData?.workoutAOCount.map((item) => ({
+              name: item.aoName,
+              size: item.count,
+            })) ?? []
+          }
+        /> */}
       </CardBody>
     </Card>
   );

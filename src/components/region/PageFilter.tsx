@@ -5,6 +5,8 @@ import { Dropdown } from "@heroui/dropdown";
 import { DropdownTrigger } from "@heroui/dropdown";
 import { DropdownMenu } from "@heroui/dropdown";
 import { DropdownItem } from "@heroui/dropdown";
+import { DateRangePicker } from "@heroui/date-picker";
+import { formatDate } from "@/lib/utils";
 
 function toUTCDateString(date: Date) {
   return date.toISOString().split("T")[0];
@@ -27,7 +29,11 @@ export function Filter({
   onEventTypeChange: (type: "all" | "1st F" | "2nd F" | "3rd F") => void;
   onAOChange: (aoId: "all" | string) => void;
 }) {
-  const handleRangeChange = (option: string) => {
+  const handleRangeChange = (
+    option: string,
+    customStart?: string,
+    customEnd?: string,
+  ) => {
     const now = new Date();
     const todayUTC = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
@@ -60,7 +66,8 @@ export function Filter({
         end = new Date(Date.UTC(todayUTC.getUTCFullYear() - 1, 11, 31));
         break;
       default:
-        start = new Date(0);
+        start = customStart ? new Date(customStart) : new Date(0);
+        end = customEnd ? new Date(customEnd) : futureUTC;
     }
 
     onRangeChange(option, toUTCDateString(start), toUTCDateString(end));
@@ -127,16 +134,36 @@ export function Filter({
             handleRangeChange(value);
           }}
         >
-          {[
-            "All History",
-            "YTD",
-            "Current Month",
-            "Last 90 Days",
-            "Last 180 Days",
-            "Prior Year",
-          ].map((option) => (
-            <DropdownItem key={option}>{option}</DropdownItem>
-          ))}
+          <>
+            {[
+              "All History",
+              "YTD",
+              "Current Month",
+              "Last 90 Days",
+              "Last 180 Days",
+              "Prior Year",
+            ].map((option) => (
+              <DropdownItem key={option}>{option}</DropdownItem>
+            ))}
+            <DropdownItem
+              key="custom_date_range"
+              textValue="Custom Range"
+              isReadOnly
+            >
+              <DateRangePicker
+                label="Custom Date Range"
+                variant="underlined"
+                labelPlacement="outside"
+                onChange={(range) => {
+                  if (!range || !range.start || !range.end) return;
+                  const start = toUTCDateString(range.start.toDate("UTC"));
+                  const end = toUTCDateString(range.end.toDate("UTC"));
+                  const option = `${formatDate(start, "M D Y")} to ${formatDate(end, "M D Y")}`;
+                  handleRangeChange(option, start, end);
+                }}
+              />
+            </DropdownItem>
+          </>
         </DropdownMenu>
       </Dropdown>
     </div>
