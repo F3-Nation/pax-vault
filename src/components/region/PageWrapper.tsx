@@ -32,15 +32,32 @@ export function RegionalPageWrapper({
   const [aoFilter, setAOFilter] = useState<"all" | string>("all");
   const aos = useMemo(() => {
     const map = new Map<string, string>();
+    let hasUnassigned = false;
 
     region_data.forEach((event) => {
-      if (event.ao_org_id && !map.has(String(event.ao_org_id))) {
-        // If you have a region name field, replace `event.ao_org_id` with that instead.
-        map.set(String(event.ao_org_id), String(event.ao_name));
+      if (event.ao_org_id == null) {
+        hasUnassigned = true;
+        return;
+      }
+
+      const key = String(event.ao_org_id);
+      if (!map.has(key)) {
+        map.set(key, String(event.ao_name));
       }
     });
 
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    const results = Array.from(map.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([id, name]) => ({ id, name }));
+
+    if (hasUnassigned) {
+      results.push({
+        id: "unassigned",
+        name: "Unassigned AO",
+      });
+    }
+
+    return results;
   }, [region_data]);
 
   const filteredRegionData = useMemo(() => {
@@ -56,7 +73,11 @@ export function RegionalPageWrapper({
 
     // Filter by AO
     if (aoFilter !== "all") {
-      data = data.filter((d) => String(d.ao_org_id) === aoFilter);
+      if (aoFilter === "unassigned") {
+        data = data.filter((d) => d.ao_org_id == null);
+      } else {
+        data = data.filter((d) => String(d.ao_org_id) === aoFilter);
+      }
     }
 
     // Date range filters
@@ -85,7 +106,11 @@ export function RegionalPageWrapper({
 
     // Filter by AO
     if (aoFilter !== "all") {
-      data = data.filter((d) => String(d.ao_org_id) === aoFilter);
+      if (aoFilter === "unassigned") {
+        data = data.filter((d) => d.ao_org_id == null);
+      } else {
+        data = data.filter((d) => String(d.ao_org_id) === aoFilter);
+      }
     }
 
     // Date range filters

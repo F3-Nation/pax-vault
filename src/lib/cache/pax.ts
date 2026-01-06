@@ -52,6 +52,11 @@ export async function getPaxList(): Promise<PaxInfo[]> {
       FROM attendance_expanded ae2
       WHERE ae2.user_id = us.id
     )
+    AND us.email IS NOT NULL
+    AND REGEXP_CONTAINS(
+      us.email,
+      r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+    )
     ORDER BY
       us.id DESC;
   `;

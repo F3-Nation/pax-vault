@@ -159,9 +159,9 @@ export function getSummary(
 export function getAOBreakdown(data: PaxData): PaxAOBreakdown[] {
   const mainUserId = data.info.user_id;
 
-  // Aggregate by AO (and implicitly region), while tracking counts by event type
+  // Aggregate by AO and region, while tracking counts by event type
   const aoMap = new Map<
-    number,
+    string,
     {
       ao_org_id: number;
       ao_name: string | null;
@@ -173,27 +173,28 @@ export function getAOBreakdown(data: PaxData): PaxAOBreakdown[] {
   >();
 
   for (const event of data.events) {
-    const aoId = event.ao_org_id;
-    if (aoId == null) continue;
+    const aoId = event.ao_org_id ?? -1;
+    const regionId = event.region_org_id ?? -1;
+    const mapKey = `${aoId}:${regionId}`;
 
     // Only consider events the main user actually attended
     const attended = event.attendance.some((att) => att.user_id === mainUserId);
     if (!attended) continue;
 
-    let entry = aoMap.get(aoId);
+    let entry = aoMap.get(mapKey);
     if (!entry) {
       entry = {
         ao_org_id: aoId,
-        ao_name: event.ao_name ?? null,
-        region_org_id: event.region_org_id ?? null,
-        region_name: event.region_name ?? null,
+        ao_name: aoId === -1 ? "Unknown AO" : (event.ao_name ?? null),
+        region_org_id: regionId === -1 ? null : event.region_org_id,
+        region_name: regionId === -1 ? null : event.region_name,
         total_events: 0,
         total_q_count: 0,
       };
-      aoMap.set(aoId, entry);
+      aoMap.set(mapKey, entry);
     }
 
-    // Increment total events for this AO
+    // Increment total events for this AO-region combo
     entry.total_events += 1;
 
     // If the user Q'd this event at this AO, increment Q count
