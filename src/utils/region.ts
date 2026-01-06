@@ -336,9 +336,6 @@ function getComboChartData(
   // Parse `YYYY-MM-DD` safely as UTC midnight to avoid timezone drift
   const parseDateUTC = (s: string) => new Date(`${s}T00:00:00Z`);
 
-  console.log("first data event date: ", data[0].event_date);
-  console.log("last data event date: ", data[data.length - 1].event_date);
-
   const dayDiff = (a: Date, b: Date) =>
     Math.floor((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
 

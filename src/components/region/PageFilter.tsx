@@ -108,6 +108,7 @@ export function Filter({
         <DropdownMenu
           disallowEmptySelection
           selectionMode="single"
+          className="max-h-[50vh] overflow-auto"
           onAction={(key) => onAOChange(key as "all" | string)}
         >
           {[
