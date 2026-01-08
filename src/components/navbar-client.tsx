@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-// import { Navbar, NavbarBrand, NavbarContent, NavbarItem, NavbarMenu, NavbarMenuItem, NavbarMenuToggle } from "@heroui/navbar";
 import { Navbar, NavbarBrand, NavbarContent, NavbarItem } from "@heroui/navbar";
 import { Link } from "@heroui/link";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
@@ -120,15 +119,9 @@ export default function NavbarClient({
   return (
     <Navbar
       isBordered
-      // isMenuOpen={isMenuOpen}
-      // onMenuOpenChange={setIsMenuOpen}
-      className="bg-background/70 backgdrop-blur-md backgrop-saturate-150"
+      className="bg-background/70 backdrop-blur-md backdrop-saturate-150"
     >
       <NavbarContent>
-        {/* <NavbarMenuToggle
-          area-label={isMenuOpen ? "Close menu" : "Open menu"}
-          className="lg:hidden"
-        /> */}
         <NavbarBrand>
           <Link
             href="/"
@@ -136,7 +129,7 @@ export default function NavbarClient({
           >
             PAX VAULT
             <span className="px-2 py-[2px] text-[10px] rounded-md bg-warning-200 text-warning-800 dark:bg-warning-300/20 dark:text-warning-300 font-semibold tracking-wide">
-              ALPHA 0.1
+              ALPHA
             </span>
           </Link>
         </NavbarBrand>
@@ -151,7 +144,6 @@ export default function NavbarClient({
             defaultItems={regionData}
             inputValue={regionInput}
             isLoading={regionLoading}
-            // placeholder="F3 REGION NAME"
             itemHeight={40}
             selectedKey={String(regionKey)}
             onInputChange={handleRegionInputChange}
@@ -186,7 +178,6 @@ export default function NavbarClient({
             defaultItems={paxData.filter((p) => p && p.f3_name)}
             inputValue={paxInput}
             isLoading={paxLoading}
-            // placeholder="F3 PAX NAME"
             itemHeight={40}
             selectedKey={String(paxKey)}
             onInputChange={handlePaxInputChange}
@@ -229,7 +220,7 @@ export default function NavbarClient({
           <Button
             key="search-region-pax"
             className="w-40"
-            variant="faded"
+            variant="bordered"
             color="primary"
             size="sm"
             onPress={() => onOpen()}
@@ -237,7 +228,7 @@ export default function NavbarClient({
             FIND REGION OR PAX
           </Button>
         </NavbarItem>
-        <NavbarItem>{ThemeSwitcher({ size: "md" }, { type: "sm" })}</NavbarItem>
+        <NavbarItem>{ThemeSwitcher({ size: "sm" }, { type: "sm" })}</NavbarItem>
       </NavbarContent>
 
       <Drawer
@@ -264,7 +255,6 @@ export default function NavbarClient({
               defaultItems={regionData}
               inputValue={regionInput}
               isLoading={regionLoading}
-              // placeholder="F3 REGION NAME"
               itemHeight={40}
               selectedKey={String(regionKey)}
               onInputChange={handleRegionInputChange}
@@ -296,7 +286,6 @@ export default function NavbarClient({
               defaultItems={paxData.filter((p) => p && p.f3_name)}
               inputValue={paxInput}
               isLoading={paxLoading}
-              // placeholder="F3 PAX NAME"
               itemHeight={40}
               selectedKey={String(paxKey)}
               onInputChange={handlePaxInputChange}

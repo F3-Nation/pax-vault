@@ -36,8 +36,8 @@ export interface PaxEventData {
   first_f_ind: string; // Indicates if the event is a 1st F
   second_f_ind: string; // Indicates if the event is a 2nd F
   third_f_ind: string; // Indicates if the event is a 3rd F
-  // all_types: string[] | null; // List of all types/categories associated with the event
-  // all_tags: string[] | null; // List of all tags associated with the event
+  all_types: string[] | null; // List of all types/categories associated with the event
+  all_tags: string[] | null; // List of all tags associated with the event
   attendance: PaxAttendance[]; // List of attendance records for the event
 }
 

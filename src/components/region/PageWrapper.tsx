@@ -7,7 +7,7 @@ import {
   getKotterList,
   getChartData,
 } from "@/utils/region";
-import { Filter } from "./PageFilter";
+import { Filter } from "../pageFilter";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "./LeadersCard";
 import { EventsCard } from "./EventsCard";
@@ -19,17 +19,63 @@ import { useState, useMemo } from "react";
 export function RegionalPageWrapper({
   region_data,
   upcoming_events,
+  searchParams,
 }: {
   region_data: RegionData[];
   upcoming_events: RegionUpcomingEvents[];
+  searchParams: {
+    categories: string | string[] | undefined;
+    aoID: string | string[] | undefined;
+    range: string | undefined;
+    startDate: string | undefined;
+    endDate: string | undefined;
+    types: string | string[] | undefined;
+    tags: string | string[] | undefined;
+  };
 }) {
-  const [startDate, setStartDate] = useState<string | undefined>();
-  const [endDate, setEndDate] = useState<string | undefined>();
-  const [selectedRange, setSelectedRange] = useState<string>("All History");
-  const [eventTypeFilter, setEventTypeFilter] = useState<
-    "all" | "1st F" | "2nd F" | "3rd F"
-  >("all");
-  const [aoFilter, setAOFilter] = useState<"all" | string>("all");
+  const [startDate, setStartDate] = useState<string | undefined>(
+    searchParams.startDate,
+  );
+  const [endDate, setEndDate] = useState<string | undefined>(
+    searchParams.endDate,
+  );
+
+  const [selectedRange, setSelectedRange] = useState<string>(
+    searchParams.range ?? "All History",
+  );
+
+  const [categoryFilter, setCategoryFilter] = useState<string[]>(
+    searchParams.categories
+      ? Array.isArray(searchParams.categories)
+        ? searchParams.categories
+        : [searchParams.categories]
+      : [],
+  );
+
+  const [aoFilter, setAOFilter] = useState<string[]>(
+    searchParams.aoID
+      ? Array.isArray(searchParams.aoID)
+        ? searchParams.aoID
+        : [searchParams.aoID]
+      : [],
+  );
+
+  const [typesFilter, setTypesFilter] = useState<string[]>(
+    searchParams.types
+      ? Array.isArray(searchParams.types)
+        ? searchParams.types
+        : [searchParams.types]
+      : [],
+  );
+
+  const [tagsFilter, setTagsFilter] = useState<string[]>(
+    searchParams.tags
+      ? Array.isArray(searchParams.tags)
+        ? searchParams.tags
+        : [searchParams.tags]
+      : [],
+  );
+
   const aos = useMemo(() => {
     const map = new Map<string, string>();
     let hasUnassigned = false;
@@ -60,23 +106,42 @@ export function RegionalPageWrapper({
     return results;
   }, [region_data]);
 
+  const types = useMemo(() => {
+    const typeSet = new Set<string>();
+    region_data.forEach((event) => {
+      event.all_types?.forEach((type) => typeSet.add(type));
+    });
+    return Array.from(typeSet).sort();
+  }, [region_data]);
+
+  const tags = useMemo(() => {
+    const tagSet = new Set<string>();
+    region_data.forEach((event) => {
+      event.all_tags?.forEach((tag) => tagSet.add(tag));
+    });
+    return Array.from(tagSet).sort();
+  }, [region_data]);
+
   const filteredRegionData = useMemo(() => {
-    let data = region_data;
-    // Filter by event type (1st F, 2nd F, 3rd F) when not "all"
-    if (eventTypeFilter !== "all" && eventTypeFilter == "1st F") {
-      data = data.filter((d) => d.first_f_ind == "1");
-    } else if (eventTypeFilter !== "all" && eventTypeFilter == "2nd F") {
-      data = data.filter((d) => d.second_f_ind == "1");
-    } else if (eventTypeFilter !== "all" && eventTypeFilter == "3rd F") {
-      data = data.filter((d) => d.third_f_ind == "1");
+    let data = region_data; // Filter by one or more event types (OR logic)
+
+    // Category filter
+    if (categoryFilter.length > 0) {
+      data = data.filter((d) => {
+        return (
+          (categoryFilter.includes("1st F") && d.first_f_ind == "1") ||
+          (categoryFilter.includes("2nd F") && d.second_f_ind == "1") ||
+          (categoryFilter.includes("3rd F") && d.third_f_ind == "1")
+        );
+      });
     }
 
     // Filter by AO
-    if (aoFilter !== "all") {
-      if (aoFilter === "unassigned") {
+    if (aoFilter.length > 0) {
+      if (aoFilter.includes("unassigned")) {
         data = data.filter((d) => d.ao_org_id == null);
       } else {
-        data = data.filter((d) => String(d.ao_org_id) === aoFilter);
+        data = data.filter((d) => aoFilter.includes(String(d.ao_org_id)));
       }
     }
 
@@ -90,26 +155,53 @@ export function RegionalPageWrapper({
       data = data.filter((d) => new Date(d.event_date) <= end);
     }
 
+    // Type filters
+    if (typesFilter.length > 0) {
+      data = data.filter((d) => {
+        if (!d.all_types || d.all_types.length === 0) return false;
+        return typesFilter.some((type) => d.all_types!.includes(type));
+      });
+    }
+
+    // Tag filters
+    if (tagsFilter.length > 0) {
+      data = data.filter((d) => {
+        if (!d.all_tags || d.all_tags.length === 0) return false;
+        return tagsFilter.some((tag) => d.all_tags!.includes(tag));
+      });
+    }
+
     return data;
-  }, [region_data, eventTypeFilter, aoFilter, startDate, endDate]);
+  }, [
+    region_data,
+    categoryFilter,
+    aoFilter,
+    startDate,
+    endDate,
+    typesFilter,
+    tagsFilter,
+  ]);
 
   const filteredEvents = useMemo(() => {
     let data = upcoming_events;
-    // Filter by event type (1st F, 2nd F, 3rd F) when not "all"
-    if (eventTypeFilter !== "all" && eventTypeFilter == "1st F") {
-      data = data.filter((d) => d.event_category == "first_f");
-    } else if (eventTypeFilter !== "all" && eventTypeFilter == "2nd F") {
-      data = data.filter((d) => d.event_category == "second_f");
-    } else if (eventTypeFilter !== "all" && eventTypeFilter == "3rd F") {
-      data = data.filter((d) => d.event_category == "third_f");
+    // Filter by one or more event types (OR logic)
+    if (categoryFilter.length > 0) {
+      data = data.filter((d) => {
+        return (
+          (categoryFilter.includes("1st F") && d.event_category == "first_f") ||
+          (categoryFilter.includes("2nd F") &&
+            d.event_category == "second_f") ||
+          (categoryFilter.includes("3rd F") && d.event_category == "third_f")
+        );
+      });
     }
 
     // Filter by AO
-    if (aoFilter !== "all") {
-      if (aoFilter === "unassigned") {
+    if (aoFilter.length > 0) {
+      if (aoFilter.includes("unassigned")) {
         data = data.filter((d) => d.ao_org_id == null);
       } else {
-        data = data.filter((d) => String(d.ao_org_id) === aoFilter);
+        data = data.filter((d) => aoFilter.includes(String(d.ao_org_id)));
       }
     }
 
@@ -124,7 +216,7 @@ export function RegionalPageWrapper({
     }
 
     return data;
-  }, [upcoming_events, eventTypeFilter, aoFilter, startDate, endDate]);
+  }, [upcoming_events, categoryFilter, aoFilter, startDate, endDate]);
 
   const region_summary = getSummary(filteredRegionData);
   const region_leaders = getLeaderboards(filteredRegionData);
@@ -134,21 +226,33 @@ export function RegionalPageWrapper({
   const region_charts = getChartData(filteredRegionData, startDate, endDate);
   return (
     <>
-      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl px-4">
         <div className="flex flex-col gap-3 w-full">
           <div className="flex gap-2 w-full">
             <Filter
               selectedRange={selectedRange}
-              eventTypeFilter={eventTypeFilter}
+              startDate={startDate}
+              endDate={endDate}
+              categoryFilter={categoryFilter}
               aoFilter={aoFilter}
               aos={aos}
+              typesFilter={typesFilter}
+              types={types}
+              tagsFilter={tagsFilter}
+              tags={tags}
               onRangeChange={(range, start, end) => {
                 setSelectedRange(range);
                 setStartDate(start);
                 setEndDate(end);
               }}
-              onEventTypeChange={(type) => setEventTypeFilter(type)}
-              onAOChange={(aoId) => setAOFilter(aoId)}
+              onCategoryChange={(categories) =>
+                setCategoryFilter(categories === "all" ? [] : categories)
+              }
+              onAOChange={(aoId) => setAOFilter(aoId === "all" ? [] : aoId)}
+              onTypeChange={(type) =>
+                setTypesFilter(type === "all" ? [] : type)
+              }
+              onTagChange={(tag) => setTagsFilter(tag === "all" ? [] : tag)}
             />
           </div>
         </div>
@@ -176,7 +280,7 @@ export function RegionalPageWrapper({
         </div>
       ) : null}
       {/* <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4 pt-6"></div> */}
-      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4">
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl py-6 px-4">
         <EventsCard events={region_events} />
       </div>
     </>

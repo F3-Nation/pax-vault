@@ -18,20 +18,24 @@ export function ChartsCard({
       </CardHeader>
       <Divider />
       <CardBody className="px-6">
-        <ComboBarLineChart
-          title="Unique Pax Over Time"
-          data={
-            chartData?.uniquePax.data.map((item) => ({
+        {chartData?.uniquePax?.data && chartData.uniquePax.data.length > 0 ? (
+          <ComboBarLineChart
+            title="Unique Pax Over Time"
+            data={chartData.uniquePax.data.map((item) => ({
               iteration: item.iteration,
               count: item.count,
               average: item.average,
-            })) ?? []
-          }
-          bar_key="count"
-          line_key="average"
-          bar_color="var(--primary)"
-          line_color="var(--warning)"
-        />
+            }))}
+            bar_key="count"
+            line_key="average"
+            bar_color="var(--primary)"
+            line_color="var(--warning)"
+          />
+        ) : (
+          <div className="text-center py-6 text-foreground/70 italic">
+            No data available
+          </div>
+        )}
         {/* <TreemapChart
           data={
             chartData?.workoutAOCount.map((item) => ({
