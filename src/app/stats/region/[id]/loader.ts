@@ -21,6 +21,8 @@ async function getRegionalData(id: number): Promise<RegionData[] | null> {
       ei.first_f_ind,
       ei.second_f_ind,
       ei.third_f_ind,      
+      ei.all_types,
+      ei.all_tags,
       COALESCE(ae_json.attendance, []) AS attendance
     FROM
       event_instance_expanded AS ei
