@@ -1,6 +1,6 @@
-import { getCachedRegionList } from "@/lib/region";
+import { getCachedRegionList } from "@/lib/cache/region";
+import { getCachedPaxList } from "@/lib/cache/pax";
 import NavbarClient from "@/components/navbar-client";
-import { getCachedPaxList } from "@/lib/pax";
 
 export default async function NavbarComponent() {
   const regionData = await getCachedRegionList();

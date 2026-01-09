@@ -1,5 +1,6 @@
 import { PaxAOBreakdown, PaxData, PaxSummary, PaxInsights } from "@/types/pax";
 import { formatDate } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 export function getSummary(
   data: PaxData,
@@ -211,8 +212,11 @@ export function getAOBreakdown(data: PaxData): PaxAOBreakdown[] {
 }
 
 export function getPaxCharting(data: PaxData): PaxInsights {
-  // console.log("Pax Info:", data.info);
-  // console.log("Pax Data Events Count:", data.events[0]);
+  logger.debug("Pax Info:", data.info);
+  logger.debug("Pax Data Events:", {
+    count: data.events.length,
+    firstEvent: data.events[0] || null,
+  });
   const summaryMap: Record<
     string,
     {

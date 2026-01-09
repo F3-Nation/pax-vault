@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardHeader } from "@heroui/card";
+import { logger } from "@/lib/logger";
 
 export default function MapView({
   latLonKey,
@@ -13,11 +14,7 @@ export default function MapView({
 }) {
   const [lat, lon] = latLonKey.split(",");
 
-  console.log("MapView latLonKey:", latLonKey);
-  console.log("MapView zoom:", zoom);
-  console.log("MapView address:", address);
-  console.log("MapView lat:", lat);
-  console.log("MapView lon:", lon);
+  logger.debug("MapView props: ", { latLonKey, zoom, address, lat, lon });
 
   return (
     <Card className="bg-background/60 dark:bg-default-100/50 w-full">

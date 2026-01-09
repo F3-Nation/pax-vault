@@ -2,19 +2,37 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+### Local Development with Mock Data
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+For local development without requiring BigQuery or API configuration, you can use the mock data source:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. Set the environment variable:
+
+   ```bash
+   export DATA_SOURCE_TYPE=mock
+   ```
+
+2. Run the development server:
+
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   # or
+   pnpm dev
+   # or
+   bun dev
+   ```
+
+3. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+### Available Data Sources
+
+The application supports three data source types (configured via `DATA_SOURCE_TYPE`):
+
+- **`mock`** - In-project mock data (no configuration needed)
+- **`bigquery`** - Google BigQuery (requires BigQuery credentials)
+- **`api`** - REST API (requires `API_BASE_URL` and optional `API_KEY`)
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

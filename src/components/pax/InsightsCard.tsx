@@ -4,26 +4,29 @@ import { Card, CardHeader, CardBody } from "@heroui/card";
 import { PaxInsights } from "@/types/pax";
 import { Divider } from "@heroui/divider";
 import { CustomBarChart as InsightsBarChart } from "@/components/charts/barChart";
+import { logger } from "@/lib/logger";
 
 export function InsightsCard({ paxInsights }: { paxInsights: PaxInsights[] }) {
   const paxData = paxInsights?.[0]?.paxData ?? [];
 
-  const totalEvents = paxData.reduce((sum, entry) => {
+  const totalEvents = paxData.reduce((sum, entry, idx) => {
     const value = Number(entry.events ?? 0);
-    // console.log("totalEvents step", {
-    //   idx,
-    //   month: entry.month,
-    //   raw: (entry as any).events,
-    //   type: typeof (entry as any).events,
-    //   value,
-    //   sumBefore: sum,
-    //   sumAfter: sum + value,
-    // });
+    logger.debug("totalEvents step: ", {
+      idx,
+      month: entry.month,
+      raw: entry.events,
+      type: typeof entry.events,
+      value,
+      sumBefore: sum,
+      sumAfter: sum + value,
+    });
     return sum + value;
   }, 0);
 
-  // console.log("Pax Insights Data:", paxData);
-  // console.log("Total events final:", totalEvents, "type:", typeof totalEvents);
+  logger.debug("Pax Insights Data", paxData);
+  logger.debug(
+    `Total events final: ${totalEvents} type: ${typeof totalEvents}`
+  );
 
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">

@@ -1,25 +1,14 @@
-// src/lib/data/region.ts
+// src/lib/cache/region.ts
+import { getRegionList } from "@/lib/data";
 import { RegionDetails } from "@/types/region";
-import { queryBigQuery } from "../db";
+import { cache } from "react";
+import { logger } from "@/lib/logger";
 
-export async function getRegionList(): Promise<RegionDetails[]> {
-  const query = `
-    SELECT 
-        id, 
-        name, 
-        email, 
-        website,
-        logo_url as logo, 
-        is_active as active 
-      FROM 
-        orgs
-      WHERE 
-        org_type = 'region' 
-      ORDER BY 
-        id DESC;
-  `;
-
-  const results = await queryBigQuery<RegionDetails>(query);
-
-  return results;
-}
+export const getCachedRegionList = cache(async (): Promise<RegionDetails[]> => {
+  try {
+    return await getRegionList();
+  } catch (err) {
+    logger.error("Failed to load RegionList into cache.", err);
+    return [];
+  }
+});
