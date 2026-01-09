@@ -90,7 +90,7 @@ export default function App() {
 
             <div className="flex flex-col sm:flex-row gap-3 w-full sm:justify-center">
               <Link
-                href={`/stats/pax/${process.env.SAMPLE_PAX ?? ""}`}
+                href={`/stats/pax/${process.env.SAMPLE_PAX ?? "1"}`}
                 className="flex-1 sm:flex-none"
               >
                 <Button fullWidth variant="bordered" color="secondary">
@@ -99,7 +99,7 @@ export default function App() {
               </Link>
 
               <Link
-                href={`/stats/region/${process.env.SAMPLE_REGION ?? ""}`}
+                href={`/stats/region/${process.env.SAMPLE_REGION ?? "101"}`}
                 className="flex-1 sm:flex-none"
               >
                 <Button fullWidth variant="bordered" color="primary">
