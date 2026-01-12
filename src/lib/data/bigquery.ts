@@ -38,7 +38,8 @@ function normalizeRow(row: BigQueryRow): BigQueryRow {
   return plain;
 }
 
-async function query<T = BigQueryRow>(sql: string): Promise<T[]> {
+// Internal query function - exported for backward compatibility with db.ts
+export async function query<T = BigQueryRow>(sql: string): Promise<T[]> {
   const [rawRows] = await bigquery.query({
     query: sql,
     defaultDataset: { datasetId, projectId },
