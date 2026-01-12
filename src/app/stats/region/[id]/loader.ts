@@ -3,14 +3,14 @@ import { getRegionData, getUpcomingEvents } from "@/lib/data";
 import { logger } from "@/lib/logger";
 
 export async function loadRegionStats(id: number) {
-  let regionData: RegionData[] | null = null;
-  let upcomingEvents: RegionUpcomingEvents[] | null = null;
-  try {
-    regionData = await getRegionData(id);
-    upcomingEvents = await getUpcomingEvents(id);
-  } catch (err) {
+  // Fetch in parallel instead of sequentially for better performance
+  const [regionData, upcomingEvents] = await Promise.all([
+    getRegionData(id),
+    getUpcomingEvents(id),
+  ]).catch((err) => {
     logger.error("Error fetching RegionData.", err);
-  }
+    return [null, null];
+  });
 
   return {
     region_data: regionData as RegionData[] | null,

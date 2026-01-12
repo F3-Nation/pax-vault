@@ -218,12 +218,28 @@ export function RegionalPageWrapper({
     return data;
   }, [upcoming_events, categoryFilter, aoFilter, startDate, endDate]);
 
-  const region_summary = getSummary(filteredRegionData);
-  const region_leaders = getLeaderboards(filteredRegionData);
+  // Memoize expensive computations to avoid recalculating on every render
+  const region_summary = useMemo(() => {
+    return getSummary(filteredRegionData);
+  }, [filteredRegionData]);
+
+  const region_leaders = useMemo(() => {
+    return getLeaderboards(filteredRegionData);
+  }, [filteredRegionData]);
+
   const region_events = filteredRegionData;
-  const region_kotters = getKotterList(filteredRegionData);
-  const region_upcoming = filteredEvents.slice(0, 100); // Limit to 100 upcoming events
-  const region_charts = getChartData(filteredRegionData, startDate, endDate);
+
+  const region_kotters = useMemo(() => {
+    return getKotterList(filteredRegionData);
+  }, [filteredRegionData]);
+
+  const region_upcoming = useMemo(() => {
+    return filteredEvents.slice(0, 100); // Limit to 100 upcoming events
+  }, [filteredEvents]);
+
+  const region_charts = useMemo(() => {
+    return getChartData(filteredRegionData, startDate, endDate);
+  }, [filteredRegionData, startDate, endDate]);
   return (
     <>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl px-4">

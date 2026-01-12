@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Navbar, NavbarBrand, NavbarContent, NavbarItem } from "@heroui/navbar";
 import { Link } from "@heroui/link";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
@@ -116,6 +116,11 @@ export default function NavbarClient({
     }
   };
 
+  // Memoize filtered pax data to avoid filtering on every render
+  const filteredPaxData = useMemo(() => {
+    return paxData.filter((p) => p && p.f3_name);
+  }, [paxData]);
+
   return (
     <Navbar
       isBordered
@@ -175,7 +180,7 @@ export default function NavbarClient({
           <Autocomplete
             className="w-full"
             label="SEARCH FOR A PAX"
-            defaultItems={paxData.filter((p) => p && p.f3_name)}
+            defaultItems={filteredPaxData}
             inputValue={paxInput}
             isLoading={paxLoading}
             itemHeight={40}
@@ -283,7 +288,7 @@ export default function NavbarClient({
             <Autocomplete
               className="w-full"
               label="SEARCH FOR A PAX"
-              defaultItems={paxData.filter((p) => p && p.f3_name)}
+              defaultItems={filteredPaxData}
               inputValue={paxInput}
               isLoading={paxLoading}
               itemHeight={40}

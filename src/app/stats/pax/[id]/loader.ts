@@ -3,14 +3,15 @@ import { getPaxInfo, getPaxEvents } from "@/lib/data";
 import { logger } from "@/lib/logger";
 
 export async function loadPaxStats(id: number): Promise<PaxData> {
-  let paxInfo: PaxInfo | null = null;
-  let paxEvents: PaxEventData[] | null = null;
-  try {
-    paxInfo = await getPaxInfo(id);
-    paxEvents = await getPaxEvents(id);
-  } catch (err) {
+  // Fetch in parallel instead of sequentially for better performance
+  const [paxInfo, paxEvents] = await Promise.all([
+    getPaxInfo(id),
+    getPaxEvents(id),
+  ]).catch((err) => {
     logger.error("Error fetching PaxInfo.", err);
-  }
+    return [null, null];
+  });
+
   const paxData = {
     info: paxInfo!,
     events: paxEvents || [],

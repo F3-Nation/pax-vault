@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Button } from "@heroui/button";
 import { CopyIcon, CloseIcon, FilterIcon } from "@/components/icons"; // Assume this is the copy icon component
 import { DateRangePicker } from "@heroui/date-picker";
@@ -138,7 +138,8 @@ export function Filter({
     onRangeChange(option, toUTCDateString(start), toUTCDateString(end));
   };
 
-  const shareUrl = () => {
+  // Memoize shareUrl to avoid creating new URLSearchParams on every render
+  const shareUrl = useMemo(() => {
     const params = new URLSearchParams();
 
     if (selectedRange === "Custom" && startDate && endDate) {
@@ -170,7 +171,16 @@ export function Filter({
     }
 
     return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-  };
+  }, [
+    selectedRange,
+    startDate,
+    endDate,
+    categoryFilter,
+    aoFilter,
+    regionFilter,
+    typesFilter,
+    tagsFilter,
+  ]);
 
   return (
     <>
@@ -194,7 +204,7 @@ export function Filter({
                     aria-label="Copy share URL"
                     isIconOnly
                     onPress={async () => {
-                      await navigator.clipboard.writeText(shareUrl());
+                      await navigator.clipboard.writeText(shareUrl);
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1000);
                     }}

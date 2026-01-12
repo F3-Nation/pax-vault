@@ -160,16 +160,25 @@ export function PaxPageWrapper({
     tagsFilter,
   ]);
 
-  const pax_summary = getSummary(
-    { ...pax_data, events: filteredPaxData },
-    startDate,
-    endDate,
-  );
-  const pax_ao_breakdown = getAOBreakdown({
-    ...pax_data,
-    events: filteredPaxData,
-  });
-  const pax_charting = getPaxCharting({ ...pax_data, events: filteredPaxData });
+  // Memoize expensive computations to avoid recalculating on every render
+  const pax_summary = useMemo(() => {
+    return getSummary(
+      { ...pax_data, events: filteredPaxData },
+      startDate,
+      endDate,
+    );
+  }, [pax_data, filteredPaxData, startDate, endDate]);
+
+  const pax_ao_breakdown = useMemo(() => {
+    return getAOBreakdown({
+      ...pax_data,
+      events: filteredPaxData,
+    });
+  }, [pax_data, filteredPaxData]);
+
+  const pax_charting = useMemo(() => {
+    return getPaxCharting({ ...pax_data, events: filteredPaxData });
+  }, [pax_data, filteredPaxData]);
 
   return (
     <>

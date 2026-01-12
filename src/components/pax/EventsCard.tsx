@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Pagination } from "@heroui/pagination";
 import { Input } from "@heroui/input";
 
@@ -19,43 +19,52 @@ export function EventsCard({
   events: PaxEventData[];
   thisUserId?: number;
 }) {
-  events = events.toReversed(); // Show most recent events first
-
   const perPage = 10;
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredEvents = events.filter((ev) => {
-    const term = searchTerm.toLowerCase();
-    const name = ev.event_name?.toLowerCase() || "";
-    const ao = ev.ao_name?.toLowerCase() || "";
-    const region = ev.region_name?.toLowerCase() || "";
+  // Memoize reversed events to avoid creating new array on every render
+  const reversedEvents = useMemo(() => {
+    return events.toReversed(); // Show most recent events first
+  }, [events]);
 
-    const paxNames = ev.attendance
-      .map((a) => a.f3_name?.toLowerCase() || a.user_id.toString())
-      .join(" ");
+  // Memoize filtered events to avoid filtering on every render
+  const filteredEvents = useMemo(() => {
+    return reversedEvents.filter((ev) => {
+      const term = searchTerm.toLowerCase();
+      const name = ev.event_name?.toLowerCase() || "";
+      const ao = ev.ao_name?.toLowerCase() || "";
+      const region = ev.region_name?.toLowerCase() || "";
 
-    const qNames = ev.attendance
-      .filter((a) => a.q_ind)
-      .map((a) => a.f3_name?.toLowerCase() || a.user_id.toString())
-      .join(" ");
+      const paxNames = ev.attendance
+        .map((a) => a.f3_name?.toLowerCase() || a.user_id.toString())
+        .join(" ");
 
-    // Free text match
-    const matchesFree =
-      name.includes(term) ||
-      ao.includes(term) ||
-      region.includes(term) ||
-      paxNames.includes(term) ||
-      qNames.includes(term);
+      const qNames = ev.attendance
+        .filter((a) => a.q_ind)
+        .map((a) => a.f3_name?.toLowerCase() || a.user_id.toString())
+        .join(" ");
 
-    return matchesFree;
-  });
+      // Free text match
+      const matchesFree =
+        name.includes(term) ||
+        ao.includes(term) ||
+        region.includes(term) ||
+        paxNames.includes(term) ||
+        qNames.includes(term);
 
-  const totalPages = Math.ceil(filteredEvents.length / perPage);
-  const paginatedEvents = filteredEvents.slice(
-    (page - 1) * perPage,
-    page * perPage,
-  );
+      return matchesFree;
+    });
+  }, [reversedEvents, searchTerm]);
+
+  // Memoize pagination calculations
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredEvents.length / perPage);
+  }, [filteredEvents.length, perPage]);
+
+  const paginatedEvents = useMemo(() => {
+    return filteredEvents.slice((page - 1) * perPage, page * perPage);
+  }, [filteredEvents, page, perPage]);
 
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
@@ -85,11 +94,11 @@ export function EventsCard({
       <CardBody className="px-6">
         <div
           className={`grid grid-cols-1 gap-6 w-full max-w-6xl ${
-            events.length > 0 ? "mb-6 lg:grid-cols-2" : ""
+            reversedEvents.length > 0 ? "mb-6 lg:grid-cols-2" : ""
           }`}
         >
           {/* Event items will go here */}
-          {events.length === 0 ? (
+          {reversedEvents.length === 0 ? (
             <p className="italic text-center text-sm text-default">
               No events available
             </p>
@@ -99,8 +108,8 @@ export function EventsCard({
               .slice()
               .sort((a, b) =>
                 (a.f3_name ?? a.user_id.toString()).localeCompare(
-                  b.f3_name ?? b.user_id.toString(),
-                ),
+                  b.f3_name ?? b.user_id.toString()
+                )
               );
 
             const q_list = event.attendance
@@ -108,8 +117,8 @@ export function EventsCard({
               .slice()
               .sort((a, b) =>
                 (a.f3_name ?? a.user_id.toString()).localeCompare(
-                  b.f3_name ?? b.user_id.toString(),
-                ),
+                  b.f3_name ?? b.user_id.toString()
+                )
               );
             return (
               <div key={event.event_instance_id || index}>
@@ -227,7 +236,7 @@ export function EventsCard({
       <Divider />
       <CardFooter className="flex justify-center items-center font-semibold text-xl px-6">
         {/* Middle: Pagination */}
-        {events.length > 0 && (
+        {reversedEvents.length > 0 && (
           <Pagination
             page={page}
             total={totalPages}

@@ -7,7 +7,7 @@ import { formatNumber } from "@/lib/utils";
 import { Link } from "@heroui/link";
 import { ScrollShadow } from "@heroui/scroll-shadow";
 import { Tab, Tabs } from "@heroui/tabs";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 export function AOBreakdownCard({
   AOBreakdown,
@@ -16,19 +16,25 @@ export function AOBreakdownCard({
 }) {
   const [selected, setSelected] = useState<"asPax" | "asQ">("asPax");
 
-  // Sort data based on the selected view
-  const sortedData = [...AOBreakdown].sort((a, b) => {
-    if (selected === "asPax") {
-      return (b.total_events ?? 0) - (a.total_events ?? 0);
-    }
-    return (b.total_q_count ?? 0) - (a.total_q_count ?? 0);
-  });
+  // Memoize sorted data to avoid sorting on every render
+  const sortedData = useMemo(() => {
+    return [...AOBreakdown].sort((a, b) => {
+      if (selected === "asPax") {
+        return (b.total_events ?? 0) - (a.total_events ?? 0);
+      }
+      return (b.total_q_count ?? 0) - (a.total_q_count ?? 0);
+    });
+  }, [AOBreakdown, selected]);
 
-  const hasData =
-    sortedData.length > 0 &&
-    (selected === "asPax"
-      ? sortedData.some((ao) => (ao.total_events ?? 0) > 0)
-      : sortedData.some((ao) => (ao.total_q_count ?? 0) > 0));
+  // Memoize hasData calculation to avoid recalculating on every render
+  const hasData = useMemo(() => {
+    return (
+      sortedData.length > 0 &&
+      (selected === "asPax"
+        ? sortedData.some((ao) => (ao.total_events ?? 0) > 0)
+        : sortedData.some((ao) => (ao.total_q_count ?? 0) > 0))
+    );
+  }, [sortedData, selected]);
 
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">

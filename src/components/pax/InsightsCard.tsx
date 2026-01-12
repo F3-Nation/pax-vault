@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Card, CardHeader, CardBody } from "@heroui/card";
 import { PaxInsights } from "@/types/pax";
 import { Divider } from "@heroui/divider";
@@ -9,19 +10,31 @@ import { logger } from "@/lib/logger";
 export function InsightsCard({ paxInsights }: { paxInsights: PaxInsights[] }) {
   const paxData = paxInsights?.[0]?.paxData ?? [];
 
-  const totalEvents = paxData.reduce((sum, entry, idx) => {
-    const value = Number(entry.events ?? 0);
-    logger.debug("totalEvents step: ", {
-      idx,
-      month: entry.month,
-      raw: entry.events,
-      type: typeof entry.events,
-      value,
-      sumBefore: sum,
-      sumAfter: sum + value,
-    });
-    return sum + value;
-  }, 0);
+  // Memoize totalEvents calculation to avoid recalculating on every render
+  const totalEvents = useMemo(() => {
+    return paxData.reduce((sum, entry, idx) => {
+      const value = Number(entry.events ?? 0);
+      logger.debug("totalEvents step: ", {
+        idx,
+        month: entry.month,
+        raw: entry.events,
+        type: typeof entry.events,
+        value,
+        sumBefore: sum,
+        sumAfter: sum + value,
+      });
+      return sum + value;
+    }, 0);
+  }, [paxData]);
+
+  // Memoize chart data mapping to avoid creating new arrays on every render
+  const chartData = useMemo(() => {
+    return paxData.map((item) => ({
+      date: item.month,
+      events: item.events,
+      qs: item.qs,
+    }));
+  }, [paxData]);
 
   logger.debug("Pax Insights Data", paxData);
   logger.debug(
@@ -39,11 +52,7 @@ export function InsightsCard({ paxInsights }: { paxInsights: PaxInsights[] }) {
           <div className="flex flex-col lg:flex-row gap-6">
             <InsightsBarChart
               title="Monthly Post Volume"
-              data={paxData.map((item) => ({
-                date: item.month,
-                events: item.events,
-                qs: item.qs,
-              }))}
+              data={chartData}
               dataKey="events"
               valueLabel="Post"
               color="var(--primary)"
@@ -51,11 +60,7 @@ export function InsightsCard({ paxInsights }: { paxInsights: PaxInsights[] }) {
             />
             <InsightsBarChart
               title="Monthly Q Volume"
-              data={paxData.map((item) => ({
-                date: item.month,
-                events: item.events,
-                qs: item.qs,
-              }))}
+              data={chartData}
               dataKey="qs"
               valueLabel="Q"
               color="var(--secondary)"
