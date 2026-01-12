@@ -240,6 +240,19 @@ export function RegionalPageWrapper({
   const region_charts = useMemo(() => {
     return getChartData(filteredRegionData, startDate, endDate);
   }, [filteredRegionData, startDate, endDate]);
+
+  // Memoize date comparison to avoid hydration mismatch
+  const showUpcomingEvents = useMemo(() => {
+    if (!endDate) return true;
+    // Use UTC dates for consistent server/client comparison
+    const end = new Date(endDate + "T00:00:00Z");
+    const now = new Date();
+    const nowUTC = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+    return end >= nowUTC;
+  }, [endDate]);
+
   return (
     <>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl px-4">
@@ -289,7 +302,7 @@ export function RegionalPageWrapper({
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4 text-xs">
         <ChartsCard chartData={region_charts} />
       </div>
-      {!endDate || new Date(endDate) >= new Date() ? (
+      {showUpcomingEvents ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4 pt-6">
           <KotterCard kotters={region_kotters || []} />
           <UpcomingEventsCard events={region_upcoming || []} />

@@ -139,7 +139,13 @@ export function Filter({
   };
 
   // Memoize shareUrl to avoid creating new URLSearchParams on every render
+  // Only compute on client side to avoid SSR window access
   const shareUrl = useMemo(() => {
+    // Return empty string during SSR
+    if (typeof window === "undefined") {
+      return "";
+    }
+
     const params = new URLSearchParams();
 
     if (selectedRange === "Custom" && startDate && endDate) {

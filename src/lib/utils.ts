@@ -43,24 +43,31 @@ export function formatDate(
           ),
         );
 
-  // Always use UTC now
-  const now = new Date();
-  const utcNow = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-
-  // Compute start of week in UTC
-  const startOfWeek = new Date(utcNow);
-  startOfWeek.setUTCDate(utcNow.getUTCDate() - utcNow.getUTCDay());
-
   const optionsUTC = (opts: Intl.DateTimeFormatOptions) => ({
     ...opts,
     timeZone: "UTC",
   });
 
-  if (d >= startOfWeek && !format) {
-    return d.toLocaleDateString("en-US", optionsUTC({ weekday: "long" }));
-  } else {
+  // Only compute "now" if format is not provided (for weekday name logic)
+  // This reduces SSR/client mismatch risk since most calls provide a format
+  if (!format) {
+    // Always use UTC now for consistent server/client comparison
+    const now = new Date();
+    const utcNow = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+
+    // Compute start of week in UTC
+    const startOfWeek = new Date(utcNow);
+    startOfWeek.setUTCDate(utcNow.getUTCDate() - utcNow.getUTCDay());
+
+    if (d >= startOfWeek) {
+      return d.toLocaleDateString("en-US", optionsUTC({ weekday: "long" }));
+    }
+  }
+
+  // Format with weekday, month, day, year
+  {
     const weekday = d.toLocaleDateString(
       "en-US",
       optionsUTC({ weekday: "short" }),

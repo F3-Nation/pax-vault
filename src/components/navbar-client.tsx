@@ -216,7 +216,9 @@ export default function NavbarClient({
             )}
           </Autocomplete>
         </NavbarItem>
-        <NavbarItem>{ThemeSwitcher({ size: "lg" }, { type: "md" })}</NavbarItem>
+        <NavbarItem>
+          <ThemeSwitcher size="lg" type="md" />
+        </NavbarItem>
       </NavbarContent>
 
       {/* Mobile Search Buttons */}
@@ -233,7 +235,9 @@ export default function NavbarClient({
             FIND REGION OR PAX
           </Button>
         </NavbarItem>
-        <NavbarItem>{ThemeSwitcher({ size: "sm" }, { type: "sm" })}</NavbarItem>
+        <NavbarItem>
+          <ThemeSwitcher size="sm" type="sm" />
+        </NavbarItem>
       </NavbarContent>
 
       <Drawer

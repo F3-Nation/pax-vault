@@ -5,10 +5,13 @@ import { useEffect, useState } from "react";
 import { MoonIcon, SunIcon } from "@/components/icons";
 import { Button } from "@heroui/button";
 
-export function ThemeSwitcher(
-  { size = "sm" }: { size?: "sm" | "md" | "lg" },
-  { type = "lg" }: { type?: "sm" | "md" | "lg" },
-) {
+export function ThemeSwitcher({
+  size = "sm",
+  type = "lg",
+}: {
+  size?: "sm" | "md" | "lg";
+  type?: "sm" | "md" | "lg";
+}) {
   const [mounted, setMounted] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
 
@@ -16,11 +19,26 @@ export function ThemeSwitcher(
     setMounted(true);
   }, []);
 
-  if (!mounted) return null;
+  const iconSize = type === "sm" ? 5 : type === "md" ? 7 : 10;
+
+  // Return a placeholder with the same structure to prevent hydration mismatch
+  // Use MoonIcon as default placeholder to match structure
+  if (!mounted) {
+    return (
+      <Button
+        aria-label="Toggle Theme"
+        size={size}
+        variant="light"
+        isIconOnly
+        radius="full"
+        disabled
+      >
+        <MoonIcon className={`h-${iconSize} w-${iconSize}`} />
+      </Button>
+    );
+  }
 
   const isDark = resolvedTheme === "dark";
-
-  const iconSize = type === "sm" ? 5 : type === "md" ? 7 : 10;
 
   return (
     <Button
