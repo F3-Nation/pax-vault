@@ -48,9 +48,14 @@ export function Filter({
   regionFilter?: "all" | string[];
   regions?: { id: string; name: string }[];
   typesFilter: "all" | string[];
-  types: string[];
+  types: {
+    id: string;
+    name: string;
+    description: string;
+    event_category: string;
+  }[];
   tagsFilter: "all" | string[];
-  tags: string[];
+  tags: { id: string; name: string; description: string }[];
   onRangeChange: (range: string, start: string, end: string) => void;
   onCategoryChange: (category: "all" | string[]) => void;
   onAOChange?: (aoId: "all" | string[]) => void;
@@ -103,6 +108,12 @@ export function Filter({
     const todayUTC = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     );
+    // Normalize to week starting Monday
+    const dayOfWeek = todayUTC.getUTCDay(); // 0 = Sunday, 1 = Monday
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const mondayThisWeek = new Date(
+      todayUTC.getTime() + mondayOffset * 24 * 60 * 60 * 1000,
+    );
     const futureUTC = new Date(Date.UTC(2050, 11, 31));
 
     let start: Date;
@@ -115,9 +126,24 @@ export function Filter({
       case "YTD":
         start = new Date(Date.UTC(todayUTC.getUTCFullYear(), 0, 1));
         break;
-      case "Current Month":
+      case "This Week":
+        start = mondayThisWeek;
+        break;
+      case "Last Week":
+        start = new Date(mondayThisWeek.getTime() - 7 * 24 * 60 * 60 * 1000);
+        end = new Date(mondayThisWeek.getTime() - 1 * 24 * 60 * 60 * 1000);
+        break;
+      case "This Month":
         start = new Date(
           Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), 1),
+        );
+        break;
+      case "Last Month":
+        start = new Date(
+          Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth() - 1, 1),
+        );
+        end = new Date(
+          Date.UTC(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), 0),
         );
         break;
       case "Last 90 Days":
@@ -149,8 +175,8 @@ export function Filter({
       params.set("range", selectedRange);
     }
 
-    if (categoryFilter !== "all") {
-      categoryFilter.forEach((t) => params.append("category", t));
+    if (categoryFilter !== "all" && categoryFilter) {
+      categoryFilter.forEach((id) => params.append("categoryID", id));
     }
 
     if (aoFilter !== "all" && aoFilter) {
@@ -161,12 +187,12 @@ export function Filter({
       regionFilter.forEach((id) => params.append("regionID", id));
     }
 
-    if (typesFilter !== "all") {
-      typesFilter.forEach((t) => params.append("types", t));
+    if (typesFilter !== "all" && typesFilter) {
+      typesFilter.forEach((t) => params.append("typeID", t));
     }
 
-    if (tagsFilter !== "all") {
-      tagsFilter.forEach((t) => params.append("tags", t));
+    if (tagsFilter !== "all" && tagsFilter) {
+      tagsFilter.forEach((t) => params.append("tagID", t));
     }
 
     return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
@@ -240,10 +266,13 @@ export function Filter({
                       onValueChange={(value) => handleRangeChange(value)}
                     >
                       {[
-                        "YTD",
-                        "Current Month",
+                        "This Week",
+                        "Last Week",
+                        "This Month",
+                        "Last Month",
                         "Last 90 Days",
                         "Last 180 Days",
+                        "YTD",
                         "Prior Year",
                         "Custom",
                       ].map((option) => (
@@ -366,9 +395,16 @@ export function Filter({
                       value={categoryFilter === "all" ? [] : categoryFilter}
                       onValueChange={(value) => onCategoryChange(value)}
                     >
-                      {["1st F", "2nd F", "3rd F"].map((option) => (
-                        <Checkbox key={option} value={option}>
-                          {option}
+                      {[
+                        { category_id: "1", category_name: "1st F" },
+                        { category_id: "2", category_name: "2nd F" },
+                        { category_id: "3", category_name: "3rd F" },
+                      ].map((option) => (
+                        <Checkbox
+                          key={option.category_id}
+                          value={option.category_id}
+                        >
+                          {option.category_name}
                         </Checkbox>
                       ))}
                     </CheckboxGroup>
@@ -400,8 +436,8 @@ export function Filter({
                       >
                         {typesFilter !== "all" &&
                           types.map((option) => (
-                            <Checkbox key={option} value={option}>
-                              {option}
+                            <Checkbox key={option.id} value={option.id}>
+                              {option.name}
                             </Checkbox>
                           ))}
                       </CheckboxGroup>
@@ -425,6 +461,7 @@ export function Filter({
                     aria-expanded={tagsFilter !== "all" ? "true" : "false"}
                     title="Filter by Tag"
                     subtitle="Select one or more Tags"
+                    className="mb-4"
                   >
                     <div className="space-y-3">
                       <CheckboxGroup
@@ -433,8 +470,8 @@ export function Filter({
                       >
                         {tagsFilter !== "all" &&
                           tags.map((option) => (
-                            <Checkbox key={option} value={option}>
-                              {option}
+                            <Checkbox key={option.id} value={option.id}>
+                              {option.name}
                             </Checkbox>
                           ))}
                       </CheckboxGroup>

@@ -6,13 +6,13 @@ import { PaxPageWrapper } from "@/components/pax/PageWrapper";
 interface PageProps {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{
-    categories: string | string[] | undefined;
+    categoryID: string | string[] | undefined;
     regionID: string | string[] | undefined;
     range: string | undefined;
     startDate: string | undefined;
     endDate: string | undefined;
-    types: string | string[] | undefined;
-    tags: string | string[] | undefined;
+    typeID: string | string[] | undefined;
+    tagID: string | string[] | undefined;
   }>;
 }
 
@@ -22,13 +22,13 @@ export default async function PaxDetailPage({
 }: PageProps) {
   const { id } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;
-  const categories = searchParamsResolved?.categories; // e.g. "1st F", "2nd F", etc.
+  const categoryID = searchParamsResolved?.categoryID; // e.g. "1st F", "2nd F", etc.
   const regionID = searchParamsResolved?.regionID; // e.g. "12345"
   const range = searchParamsResolved?.range; // e.g. "Last 90 Days"
   const startDate = searchParamsResolved?.startDate; // e.g. "2023-01-01"
   const endDate = searchParamsResolved?.endDate; // e.g. "2023-12-31"
-  const types = searchParamsResolved?.types; // e.g. "type1", "type2", etc.
-  const tags = searchParamsResolved?.tags; // e.g. "tag1", "tag2", etc.
+  const typeID = searchParamsResolved?.typeID; // e.g. "type1", "type2", etc.
+  const tagID = searchParamsResolved?.tagID; // e.g. "tag1", "tag2", etc.
   const pax_data = await loadPaxStats(Number(id));
 
   if (!pax_data) {
@@ -61,13 +61,13 @@ export default async function PaxDetailPage({
       <PaxPageWrapper
         pax_data={pax_data}
         searchParams={{
-          categories,
+          categoryID,
           regionID,
           range,
           startDate,
           endDate,
-          types,
-          tags,
+          typeID,
+          tagID,
         }}
       />
     </main>

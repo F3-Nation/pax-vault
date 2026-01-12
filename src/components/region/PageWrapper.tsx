@@ -24,13 +24,13 @@ export function RegionalPageWrapper({
   region_data: RegionData[];
   upcoming_events: RegionUpcomingEvents[];
   searchParams: {
-    categories: string | string[] | undefined;
+    categoryID: string | string[] | undefined;
     aoID: string | string[] | undefined;
     range: string | undefined;
     startDate: string | undefined;
     endDate: string | undefined;
-    types: string | string[] | undefined;
-    tags: string | string[] | undefined;
+    typeID: string | string[] | undefined;
+    tagID: string | string[] | undefined;
   };
 }) {
   const [startDate, setStartDate] = useState<string | undefined>(
@@ -45,10 +45,10 @@ export function RegionalPageWrapper({
   );
 
   const [categoryFilter, setCategoryFilter] = useState<string[]>(
-    searchParams.categories
-      ? Array.isArray(searchParams.categories)
-        ? searchParams.categories
-        : [searchParams.categories]
+    searchParams.categoryID
+      ? Array.isArray(searchParams.categoryID)
+        ? searchParams.categoryID
+        : [searchParams.categoryID]
       : [],
   );
 
@@ -61,18 +61,18 @@ export function RegionalPageWrapper({
   );
 
   const [typesFilter, setTypesFilter] = useState<string[]>(
-    searchParams.types
-      ? Array.isArray(searchParams.types)
-        ? searchParams.types
-        : [searchParams.types]
+    searchParams.typeID
+      ? Array.isArray(searchParams.typeID)
+        ? searchParams.typeID
+        : [searchParams.typeID]
       : [],
   );
 
   const [tagsFilter, setTagsFilter] = useState<string[]>(
-    searchParams.tags
-      ? Array.isArray(searchParams.tags)
-        ? searchParams.tags
-        : [searchParams.tags]
+    searchParams.tagID
+      ? Array.isArray(searchParams.tagID)
+        ? searchParams.tagID
+        : [searchParams.tagID]
       : [],
   );
 
@@ -107,19 +107,52 @@ export function RegionalPageWrapper({
   }, [region_data]);
 
   const types = useMemo(() => {
-    const typeSet = new Set<string>();
+    const typeMap = new Map<
+      string,
+      { id: string; name: string; description: string; event_category: string }
+    >();
+
     region_data.forEach((event) => {
-      event.all_types?.forEach((type) => typeSet.add(type));
+      event.types?.forEach((type) => {
+        const id = type.id.toString();
+        if (!typeMap.has(id)) {
+          typeMap.set(id, {
+            id,
+            name: type.name,
+            description: type.description,
+            event_category: type.event_category,
+          });
+        }
+      });
     });
-    return Array.from(typeSet).sort();
+
+    return Array.from(typeMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
   }, [region_data]);
 
   const tags = useMemo(() => {
-    const tagSet = new Set<string>();
+    const tagMap = new Map<
+      string,
+      { id: string; name: string; description: string }
+    >();
+
     region_data.forEach((event) => {
-      event.all_tags?.forEach((tag) => tagSet.add(tag));
+      event.tags?.forEach((tag) => {
+        const id = tag.id.toString();
+        if (!tagMap.has(id)) {
+          tagMap.set(id, {
+            id,
+            name: tag.name,
+            description: tag.description,
+          });
+        }
+      });
     });
-    return Array.from(tagSet).sort();
+
+    return Array.from(tagMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
   }, [region_data]);
 
   const filteredRegionData = useMemo(() => {
@@ -129,9 +162,9 @@ export function RegionalPageWrapper({
     if (categoryFilter.length > 0) {
       data = data.filter((d) => {
         return (
-          (categoryFilter.includes("1st F") && d.first_f_ind == "1") ||
-          (categoryFilter.includes("2nd F") && d.second_f_ind == "1") ||
-          (categoryFilter.includes("3rd F") && d.third_f_ind == "1")
+          (categoryFilter.includes("1") && d.first_f_ind == "1") ||
+          (categoryFilter.includes("2") && d.second_f_ind == "1") ||
+          (categoryFilter.includes("3") && d.third_f_ind == "1")
         );
       });
     }
@@ -158,16 +191,20 @@ export function RegionalPageWrapper({
     // Type filters
     if (typesFilter.length > 0) {
       data = data.filter((d) => {
-        if (!d.all_types || d.all_types.length === 0) return false;
-        return typesFilter.some((type) => d.all_types!.includes(type));
+        if (!d.types || d.types.length === 0) return false;
+        return typesFilter.some((type) =>
+          d.types!.some((t) => t.id.toString() === type),
+        );
       });
     }
 
     // Tag filters
     if (tagsFilter.length > 0) {
       data = data.filter((d) => {
-        if (!d.all_tags || d.all_tags.length === 0) return false;
-        return tagsFilter.some((tag) => d.all_tags!.includes(tag));
+        if (!d.tags || d.tags.length === 0) return false;
+        return tagsFilter.some((tag) =>
+          d.tags!.some((t) => t.id.toString() === tag),
+        );
       });
     }
 
@@ -188,10 +225,9 @@ export function RegionalPageWrapper({
     if (categoryFilter.length > 0) {
       data = data.filter((d) => {
         return (
-          (categoryFilter.includes("1st F") && d.event_category == "first_f") ||
-          (categoryFilter.includes("2nd F") &&
-            d.event_category == "second_f") ||
-          (categoryFilter.includes("3rd F") && d.event_category == "third_f")
+          (categoryFilter.includes("1") && d.event_category == "first_f") ||
+          (categoryFilter.includes("2") && d.event_category == "second_f") ||
+          (categoryFilter.includes("3") && d.event_category == "third_f")
         );
       });
     }
@@ -245,8 +281,8 @@ export function RegionalPageWrapper({
                 setStartDate(start);
                 setEndDate(end);
               }}
-              onCategoryChange={(categories) =>
-                setCategoryFilter(categories === "all" ? [] : categories)
+              onCategoryChange={(categoryId) =>
+                setCategoryFilter(categoryId === "all" ? [] : categoryId)
               }
               onAOChange={(aoId) => setAOFilter(aoId === "all" ? [] : aoId)}
               onTypeChange={(type) =>
