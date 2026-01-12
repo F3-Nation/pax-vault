@@ -1,9 +1,12 @@
-import Link from "next/link";
+"use client";
+
+import { useRouter } from "next/navigation";
 import { Button } from "@heroui/button";
 import { Card, CardBody, CardHeader, CardFooter } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 
 export default function App() {
+  const router = useRouter();
   const environment =
     process.env.ENVIRONMENT === "production" ? "Production" : "Staging";
 
@@ -89,34 +92,29 @@ export default function App() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 w-full sm:justify-center">
-              <Link
-                href={`/stats/pax/${process.env.SAMPLE_PAX ?? "1"}`}
+              <Button
+                variant="bordered"
+                color="primary"
                 className="flex-1 sm:flex-none"
+                onPress={() =>
+                  router.push(
+                    `/stats/region/${process.env.SAMPLE_REGION ?? "101"}`
+                  )
+                }
               >
-                <Button fullWidth variant="bordered" color="secondary">
-                  View Sample PAX Stats
-                </Button>
-              </Link>
+                View Sample Region Dashboard
+              </Button>
 
-              <Link
-                href={`/stats/region/${process.env.SAMPLE_REGION ?? "101"}`}
+              <Button
+                variant="bordered"
+                color="secondary"
                 className="flex-1 sm:flex-none"
+                onPress={() =>
+                  router.push(`/stats/pax/${process.env.SAMPLE_PAX ?? "1"}`)
+                }
               >
-                <Button fullWidth variant="bordered" color="primary">
-                  View Sample Region Dashboard
-                </Button>
-              </Link>
-
-              {/* Uncomment when you are ready to surface AO sample stats */}
-              {/* <Link href={`/stats/ao/${process.env.SAMPLE_AO ?? ""}`} className="flex-1 sm:flex-none">
-                <Button
-                  fullWidth
-                  variant="bordered"
-                  color="secondary"
-                >
-                  View Sample AO Stats
-                </Button>
-              </Link> */}
+                View Sample PAX Stats
+              </Button>
             </div>
           </div>
         </CardBody>

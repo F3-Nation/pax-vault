@@ -19,41 +19,32 @@ export function ThemeSwitcher({
     setMounted(true);
   }, []);
 
-  const iconSize = type === "sm" ? 5 : type === "md" ? 7 : 10;
+  // Use fixed Tailwind classes instead of dynamic ones to avoid hydration issues
+  const iconClass =
+    type === "sm" ? "h-5 w-5" : type === "md" ? "h-7 w-7" : "h-10 w-10";
 
-  // Return a placeholder with the same structure to prevent hydration mismatch
-  // Use MoonIcon as default placeholder to match structure
-  if (!mounted) {
-    return (
-      <Button
-        aria-label="Toggle Theme"
-        size={size}
-        variant="light"
-        isIconOnly
-        radius="full"
-        disabled
-      >
-        <MoonIcon className={`h-${iconSize} w-${iconSize}`} />
-      </Button>
-    );
-  }
+  // Always render the same structure during SSR to prevent hydration mismatch
+  // After mount, we'll update to show the correct icon based on theme
+  const isDark = mounted && resolvedTheme === "dark";
+  const Icon = isDark ? SunIcon : MoonIcon;
 
-  const isDark = resolvedTheme === "dark";
+  // Handler that works both during SSR and after mount
+  const handleClick = () => {
+    if (mounted) {
+      setTheme(isDark ? "light" : "dark");
+    }
+  };
 
   return (
     <Button
-      onClick={() => setTheme(isDark ? "light" : "dark")}
+      onClick={handleClick}
       aria-label="Toggle Theme"
       size={size}
       variant="light"
       isIconOnly
       radius="full"
     >
-      {isDark ? (
-        <SunIcon className={`h-${iconSize} w-${iconSize}`} />
-      ) : (
-        <MoonIcon className={`h-${iconSize} w-${iconSize}`} />
-      )}
+      <Icon className={iconClass} />
     </Button>
   );
 }
