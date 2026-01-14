@@ -16,12 +16,16 @@ export function PaxPageWrapper({
   pax_data: PaxData;
   searchParams: {
     categoryID: string | string[] | undefined;
+    categoryMode: string | undefined;
     regionID: string | string[] | undefined;
+    regionMode: string | undefined;
     range: string | undefined;
     startDate: string | undefined;
     endDate: string | undefined;
     typeID: string | string[] | undefined;
+    typeMode: string | undefined;
     tagID: string | string[] | undefined;
+    tagMode: string | undefined;
   };
 }) {
   const [startDate, setStartDate] = useState<string | undefined>(
@@ -43,12 +47,20 @@ export function PaxPageWrapper({
       : [],
   );
 
+  const [categoryMode, setCategoryMode] = useState<"include" | "exclude">(
+    (searchParams.categoryMode as "exclude") ?? "include",
+  );
+
   const [regionFilter, setRegionFilter] = useState<string[]>(
     searchParams.regionID
       ? Array.isArray(searchParams.regionID)
         ? searchParams.regionID
         : [searchParams.regionID]
       : [],
+  );
+
+  const [regionMode, setRegionMode] = useState<"include" | "exclude">(
+    (searchParams.regionMode as "exclude") ?? "include",
   );
 
   const [typesFilter, setTypesFilter] = useState<string[]>(
@@ -59,12 +71,20 @@ export function PaxPageWrapper({
       : [],
   );
 
+  const [typeMode, setTypeMode] = useState<"include" | "exclude">(
+    (searchParams.typeMode as "exclude") ?? "include",
+  );
+
   const [tagsFilter, setTagsFilter] = useState<string[]>(
     searchParams.tagID
       ? Array.isArray(searchParams.tagID)
         ? searchParams.tagID
         : [searchParams.tagID]
       : [],
+  );
+
+  const [tagMode, setTagMode] = useState<"include" | "exclude">(
+    (searchParams.tagMode as "exclude") ?? "include",
   );
 
   const this_user_id = pax_data.info?.user_id;
@@ -136,6 +156,13 @@ export function PaxPageWrapper({
     // Category filter
     if (categoryFilter.length > 0) {
       data = data.filter((d) => {
+        if (categoryMode === "exclude") {
+          return !(
+            (categoryFilter.includes("1") && d.first_f_ind == "1") ||
+            (categoryFilter.includes("2") && d.second_f_ind == "1") ||
+            (categoryFilter.includes("3") && d.third_f_ind == "1")
+          );
+        }
         return (
           (categoryFilter.includes("1") && d.first_f_ind == "1") ||
           (categoryFilter.includes("2") && d.second_f_ind == "1") ||
@@ -146,12 +173,22 @@ export function PaxPageWrapper({
 
     // Filter by Region
     if (regionFilter.length > 0) {
-      if (regionFilter.includes("unassigned")) {
-        data = data.filter((d) => d.region_org_id == null);
+      if (regionMode === "exclude") {
+        if (regionFilter.includes("unassigned")) {
+          data = data.filter((d) => d.region_org_id != null);
+        } else {
+          data = data.filter(
+            (d) => !regionFilter.includes(String(d.region_org_id)),
+          );
+        }
       } else {
-        data = data.filter((d) =>
-          regionFilter.includes(String(d.region_org_id)),
-        );
+        if (regionFilter.includes("unassigned")) {
+          data = data.filter((d) => d.region_org_id == null);
+        } else {
+          data = data.filter((d) =>
+            regionFilter.includes(String(d.region_org_id)),
+          );
+        }
       }
     }
 
@@ -169,9 +206,15 @@ export function PaxPageWrapper({
     if (typesFilter.length > 0) {
       data = data.filter((d) => {
         if (!d.types || d.types.length === 0) return false;
-        return typesFilter.some((type) =>
-          d.types!.some((t) => t.id.toString() === type),
-        );
+        if (typeMode === "exclude") {
+          return !typesFilter.some((type) =>
+            d.types!.some((t) => t.id.toString() === type),
+          );
+        } else {
+          return typesFilter.some((type) =>
+            d.types!.some((t) => t.id.toString() === type),
+          );
+        }
       });
     }
 
@@ -179,9 +222,15 @@ export function PaxPageWrapper({
     if (tagsFilter.length > 0) {
       data = data.filter((d) => {
         if (!d.tags || d.tags.length === 0) return false;
-        return tagsFilter.some((tag) =>
-          d.tags!.some((t) => t.id.toString() === tag),
-        );
+        if (tagMode === "exclude") {
+          return !tagsFilter.some((tag) =>
+            d.tags!.some((t) => t.id.toString() === tag),
+          );
+        } else {
+          return tagsFilter.some((tag) =>
+            d.tags!.some((t) => t.id.toString() === tag),
+          );
+        }
       });
     }
 
@@ -189,11 +238,15 @@ export function PaxPageWrapper({
   }, [
     pax_data.events,
     categoryFilter,
+    categoryMode,
     regionFilter,
+    regionMode,
     startDate,
     endDate,
     typesFilter,
+    typeMode,
     tagsFilter,
+    tagMode,
   ]);
 
   const pax_summary = getSummary(
@@ -217,11 +270,15 @@ export function PaxPageWrapper({
               startDate={startDate}
               endDate={endDate}
               categoryFilter={categoryFilter}
+              categoryMode={categoryMode}
               regionFilter={regionFilter}
+              regionMode={regionMode}
               regions={regions}
               typesFilter={typesFilter}
+              typeMode={typeMode}
               types={types}
               tagsFilter={tagsFilter}
+              tagMode={tagMode}
               tags={tags}
               onRangeChange={(range, start, end) => {
                 setSelectedRange(range);
@@ -231,13 +288,19 @@ export function PaxPageWrapper({
               onCategoryChange={(categoryId) =>
                 setCategoryFilter(categoryId === "all" ? [] : categoryId)
               }
+              onCategoryModeChange={(categoryMode) =>
+                setCategoryMode(categoryMode)
+              }
               onRegionChange={(regionId) =>
                 setRegionFilter(regionId === "all" ? [] : regionId)
               }
+              onRegionModeChange={(regionMode) => setRegionMode(regionMode)}
               onTypeChange={(type) =>
                 setTypesFilter(type === "all" ? [] : type)
               }
+              onTypeModeChange={(typeMode) => setTypeMode(typeMode)}
               onTagChange={(tag) => setTagsFilter(tag === "all" ? [] : tag)}
+              onTagModeChange={(tagMode) => setTagMode(tagMode)}
             />
           </div>
         </div>

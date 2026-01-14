@@ -98,9 +98,19 @@ async function getPaxEvents(id: number): Promise<PaxEventData[] | null> {
           ae.id AS id,
           ae.user_id AS user_id,
           ae.f3_name AS f3_name,
+          ae.home_region_id AS home_region_id,
           ae.q_ind AS q_ind,
           ae.coq_ind AS coq_ind,
-          ae.avatar_url AS avatar_url
+          ae.avatar_url AS avatar_url,
+          IF(
+            ae.email IS NULL
+            OR NOT REGEXP_CONTAINS(
+              ae.email,
+              r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+            ),
+            TRUE,
+            FALSE
+          ) AS isBot
         )) AS attendance
       FROM
         attendance_expanded AS ae

@@ -4,18 +4,21 @@ import { RegionData, RegionAttendance } from "@/types/region";
 
 // Helper to create a mock attendance record
 function createAttendance(
+  regionId: number,
   userId: number,
   f3Name: string,
   qInd: boolean = false,
   avatarUrl: string | null = null,
 ): RegionAttendance {
   return {
+    home_region_id: regionId,
     id: userId * 100,
     user_id: userId,
     f3_name: f3Name,
     q_ind: qInd,
     coq_ind: false,
     avatar_url: avatarUrl,
+    isBot: false,
   };
 }
 
@@ -69,13 +72,13 @@ describe("getSummary", () => {
   it("counts total events", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
       createRegionEvent(2, "2024-06-02", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
       createRegionEvent(3, "2024-06-03", 200, "AO2", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
     ];
 
@@ -87,16 +90,16 @@ describe("getSummary", () => {
   it("counts unique AOs", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
       createRegionEvent(2, "2024-06-02", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
       createRegionEvent(3, "2024-06-03", 200, "AO2", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
       createRegionEvent(4, "2024-06-04", 300, "AO3", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
     ];
 
@@ -109,12 +112,12 @@ describe("getSummary", () => {
     const data = [
       // Within last 30 days (from June 15)
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(200, 2, "User2"),
       ]),
       // Outside 30 days
       createRegionEvent(2, "2024-05-01", 100, "AO1", [
-        createAttendance(3, "User3"), // Should not be counted as active
+        createAttendance(300, 3, "User3"), // Should not be counted as active
       ]),
     ];
 
@@ -126,12 +129,12 @@ describe("getSummary", () => {
   it("counts unique pax across all events", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(200, 2, "User2"),
       ]),
       createRegionEvent(2, "2024-06-02", 100, "AO1", [
-        createAttendance(1, "User1"), // Same user
-        createAttendance(3, "User3"), // New user
+        createAttendance(100, 1, "User1"), // Same user
+        createAttendance(300, 3, "User3"), // New user
       ]),
     ];
 
@@ -143,12 +146,12 @@ describe("getSummary", () => {
   it("counts unique Qs", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1", true), // Q
-        createAttendance(2, "User2", false),
+        createAttendance(100, 1, "User1", true), // Q
+        createAttendance(200, 2, "User2", false),
       ]),
       createRegionEvent(2, "2024-06-02", 100, "AO1", [
-        createAttendance(1, "User1", true), // Same Q
-        createAttendance(3, "User3", true), // New Q
+        createAttendance(100, 1, "User1", true), // Same Q
+        createAttendance(300, 3, "User3", true), // New Q
       ]),
     ];
 
@@ -164,7 +167,7 @@ describe("getSummary", () => {
         "2024-06-01",
         100,
         "AO1",
-        [createAttendance(1, "User1")],
+        [createAttendance(100, 1, "User1")],
         2,
       ),
       createRegionEvent(
@@ -172,7 +175,7 @@ describe("getSummary", () => {
         "2024-06-02",
         100,
         "AO1",
-        [createAttendance(1, "User1")],
+        [createAttendance(100, 1, "User1")],
         3,
       ),
     ];
@@ -185,12 +188,12 @@ describe("getSummary", () => {
   it("calculates average pax per event", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
-        createAttendance(3, "User3"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(200, 2, "User2"),
+        createAttendance(300, 3, "User3"),
       ]), // pax_count = 3
       createRegionEvent(2, "2024-06-02", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]), // pax_count = 1
     ];
 
@@ -202,8 +205,8 @@ describe("getSummary", () => {
   it("handles single event", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(200, 2, "User2"),
       ]),
     ];
 
@@ -224,11 +227,11 @@ describe("getLeaderboards", () => {
   it("counts posts per user", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(200, 2, "User2"),
       ]),
       createRegionEvent(2, "2024-06-02", 100, "AO1", [
-        createAttendance(1, "User1"), // User1 posts again
+        createAttendance(100, 1, "User1"), // User1 posts again
       ]),
     ];
 
@@ -244,12 +247,12 @@ describe("getLeaderboards", () => {
   it("counts Q appearances per user", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1", true), // Q
-        createAttendance(2, "User2", false),
+        createAttendance(100, 1, "User1", true), // Q
+        createAttendance(200, 2, "User2", false),
       ]),
       createRegionEvent(2, "2024-06-02", 100, "AO1", [
-        createAttendance(1, "User1", true), // Q again
-        createAttendance(2, "User2", true), // Now Q
+        createAttendance(100, 1, "User1", true), // Q again
+        createAttendance(200, 2, "User2", true), // Now Q
       ]),
     ];
 
@@ -265,16 +268,16 @@ describe("getLeaderboards", () => {
   it("sorts by posts descending", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
-        createAttendance(3, "User3"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(200, 2, "User2"),
+        createAttendance(300, 3, "User3"),
       ]),
       createRegionEvent(2, "2024-06-02", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(3, "User3"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(300, 3, "User3"),
       ]),
       createRegionEvent(3, "2024-06-03", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
     ];
 
@@ -292,7 +295,7 @@ describe("getLeaderboards", () => {
   it("includes f3_name in results", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "Dredd"),
+        createAttendance(100, 1, "Dredd"),
       ]),
     ];
 
@@ -304,7 +307,13 @@ describe("getLeaderboards", () => {
   it("includes avatar_url when present", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1", false, "https://example.com/avatar.jpg"),
+        createAttendance(
+          1,
+          1,
+          "User1",
+          false,
+          "https://example.com/avatar.jpg",
+        ),
       ]),
     ];
 
@@ -316,7 +325,7 @@ describe("getLeaderboards", () => {
   it("handles user without avatar_url", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1", false, null),
+        createAttendance(100, 1, "User1", false, null),
       ]),
     ];
 
@@ -328,19 +337,19 @@ describe("getLeaderboards", () => {
   it("handles many users across many events", () => {
     const data = [
       createRegionEvent(1, "2024-06-01", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
-        createAttendance(3, "User3"),
-        createAttendance(4, "User4"),
-        createAttendance(5, "User5"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(200, 2, "User2"),
+        createAttendance(300, 3, "User3"),
+        createAttendance(400, 4, "User4"),
+        createAttendance(500, 5, "User5"),
       ]),
       createRegionEvent(2, "2024-06-02", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
-        createAttendance(3, "User3"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(200, 2, "User2"),
+        createAttendance(300, 3, "User3"),
       ]),
       createRegionEvent(3, "2024-06-03", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
     ];
 
@@ -366,22 +375,22 @@ describe("getKotterList", () => {
   });
 
   it("returns null for empty data", () => {
-    expect(getKotterList([])).toBeNull();
+    expect(getKotterList("100", [])).toBeNull();
   });
 
   it("returns null for null-ish data", () => {
-    expect(getKotterList(null as unknown as RegionData[])).toBeNull();
+    expect(getKotterList("100", null as unknown as RegionData[])).toBeNull();
   });
 
   it("excludes users who posted within last 14 days (active)", () => {
     // User posted 10 days ago - should be excluded (too recent)
     const data = [
       createRegionEvent(1, "2024-06-05", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result).toEqual([]);
   });
@@ -390,11 +399,11 @@ describe("getKotterList", () => {
     // User posted 100 days ago - should be excluded (too old)
     const data = [
       createRegionEvent(1, "2024-03-07", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result).toEqual([]);
   });
@@ -403,11 +412,11 @@ describe("getKotterList", () => {
     // User posted 20 days ago - should be included
     const data = [
       createRegionEvent(1, "2024-05-26", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result!.length).toBe(1);
     expect(result![0].user_id).toBe(1);
@@ -419,19 +428,19 @@ describe("getKotterList", () => {
     const data = [
       // User1 posted 30 days ago
       createRegionEvent(1, "2024-05-16", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
       // User2 posted 20 days ago
       createRegionEvent(2, "2024-05-26", 100, "AO1", [
-        createAttendance(2, "User2"),
+        createAttendance(100, 2, "User2"),
       ]),
       // User3 posted 40 days ago
       createRegionEvent(3, "2024-05-06", 100, "AO1", [
-        createAttendance(3, "User3"),
+        createAttendance(100, 3, "User3"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result!.length).toBe(3);
     expect(result![0].user_id).toBe(2); // 20 days
@@ -444,17 +453,17 @@ describe("getKotterList", () => {
     // User has 3 posts, last posted 20 days ago, first post 30 days ago
     const data = [
       createRegionEvent(1, "2024-05-16", 100, "AO1", [
-        createAttendance(1, "NewPax"),
+        createAttendance(100, 1, "NewPax"),
       ]),
       createRegionEvent(2, "2024-05-20", 100, "AO1", [
-        createAttendance(1, "NewPax"),
+        createAttendance(100, 1, "NewPax"),
       ]),
       createRegionEvent(3, "2024-05-26", 100, "AO1", [
-        createAttendance(1, "NewPax"),
+        createAttendance(100, 1, "NewPax"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result!.length).toBe(1);
     expect(result![0].kotter_status).toBe("New PAX Drop");
@@ -472,18 +481,18 @@ describe("getKotterList", () => {
       date.setDate(date.getDate() + i * 10);
       events.push(
         createRegionEvent(i + 1, date.toISOString().slice(0, 10), 100, "AO1", [
-          createAttendance(1, "DriftUser"),
+          createAttendance(100, 1, "DriftUser"),
         ]),
       );
     }
     // Last event 25 days ago (within 21-45 window)
     events.push(
       createRegionEvent(11, "2024-05-21", 100, "AO1", [
-        createAttendance(1, "DriftUser"),
+        createAttendance(100, 1, "DriftUser"),
       ]),
     );
 
-    const result = getKotterList(events);
+    const result = getKotterList("100", events);
 
     expect(result!.length).toBe(1);
     expect(result![0].kotter_status).toBe("Soft Drift");
@@ -495,17 +504,17 @@ describe("getKotterList", () => {
     // last posted 50 days ago (outside Soft Drift 21-45 window anyway)
     const data = [
       createRegionEvent(1, "2024-02-01", 100, "AO1", [
-        createAttendance(1, "InactiveUser"),
+        createAttendance(100, 1, "InactiveUser"),
       ]),
       createRegionEvent(2, "2024-03-01", 100, "AO1", [
-        createAttendance(1, "InactiveUser"),
+        createAttendance(100, 1, "InactiveUser"),
       ]),
       createRegionEvent(3, "2024-04-26", 100, "AO1", [
-        createAttendance(1, "InactiveUser"),
+        createAttendance(100, 1, "InactiveUser"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result!.length).toBe(1);
     expect(result![0].kotter_status).toBe("Inactive");
@@ -514,14 +523,14 @@ describe("getKotterList", () => {
   it("tracks last event details correctly", () => {
     const data = [
       createRegionEvent(1, "2024-05-01", 100, "FirstAO", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
       createRegionEvent(2, "2024-05-26", 200, "LastAO", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result![0].last_event_date).toBe("2024-05-26");
     expect(result![0].last_event_ao_org_id).toBe(200);
@@ -531,17 +540,17 @@ describe("getKotterList", () => {
     // User1 and User2 attend together, User1 should have User2 as bestie
     const data = [
       createRegionEvent(1, "2024-05-26", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
-        createAttendance(3, "User3"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(100, 2, "User2"),
+        createAttendance(100, 3, "User3"),
       ]),
       createRegionEvent(2, "2024-05-27", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(100, 2, "User2"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     // User1 posted 20 and 19 days ago, last was 19 days ago
     const user1 = result!.find((u) => u.user_id === 1);
@@ -557,15 +566,15 @@ describe("getKotterList", () => {
     // Create scenario with multiple co-attendees
     const data = [
       createRegionEvent(1, "2024-05-26", 100, "AO1", [
-        createAttendance(1, "User1"),
-        createAttendance(2, "User2"),
-        createAttendance(3, "User3"),
-        createAttendance(4, "User4"),
-        createAttendance(5, "User5"),
+        createAttendance(100, 1, "User1"),
+        createAttendance(200, 2, "User2"),
+        createAttendance(300, 3, "User3"),
+        createAttendance(400, 4, "User4"),
+        createAttendance(500, 5, "User5"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     const user1 = result!.find((u) => u.user_id === 1);
     expect(user1!.bestie_list.length).toBeLessThanOrEqual(3);
@@ -574,11 +583,17 @@ describe("getKotterList", () => {
   it("includes avatar_url when present", () => {
     const data = [
       createRegionEvent(1, "2024-05-26", 100, "AO1", [
-        createAttendance(1, "User1", false, "https://example.com/avatar.jpg"),
+        createAttendance(
+          100,
+          1,
+          "User1",
+          false,
+          "https://example.com/avatar.jpg",
+        ),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result![0].avatar_url).toBe("https://example.com/avatar.jpg");
   });
@@ -586,11 +601,11 @@ describe("getKotterList", () => {
   it("handles user without avatar_url", () => {
     const data = [
       createRegionEvent(1, "2024-05-26", 100, "AO1", [
-        createAttendance(1, "User1", false, null),
+        createAttendance(100, 1, "User1", false, null),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result![0].avatar_url).toBeUndefined();
   });
@@ -598,14 +613,14 @@ describe("getKotterList", () => {
   it("tracks first_event_date correctly", () => {
     const data = [
       createRegionEvent(1, "2024-04-01", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
       createRegionEvent(2, "2024-05-26", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result![0].first_event_date).toBe("2024-04-01");
   });
@@ -613,17 +628,17 @@ describe("getKotterList", () => {
   it("counts total_events correctly", () => {
     const data = [
       createRegionEvent(1, "2024-05-01", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
       createRegionEvent(2, "2024-05-15", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
       createRegionEvent(3, "2024-05-26", 100, "AO1", [
-        createAttendance(1, "User1"),
+        createAttendance(100, 1, "User1"),
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result![0].total_events).toBe(3);
   });
@@ -636,14 +651,16 @@ describe("getKotterList", () => {
           id: 100,
           user_id: 1,
           f3_name: "",
+          home_region_id: 100,
           q_ind: false,
           coq_ind: false,
           avatar_url: null,
+          isBot: false,
         },
       ]),
     ];
 
-    const result = getKotterList(data);
+    const result = getKotterList("100", data);
 
     expect(result![0].f3_name).toBe("");
   });
