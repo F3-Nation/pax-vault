@@ -21,8 +21,25 @@ async function getRegionalData(id: number): Promise<RegionData[] | null> {
       ei.first_f_ind,
       ei.second_f_ind,
       ei.third_f_ind,      
-      ei.all_types,
-      ei.all_tags,
+      ARRAY(
+        SELECT AS STRUCT
+          ety.id,
+          ety.name,
+          ety.description,
+          ety.event_category
+        FROM UNNEST(ei.all_type_ids) AS type_id
+        JOIN event_types ety
+          ON ety.id = type_id
+      ) AS types,
+      ARRAY(
+        SELECT AS STRUCT
+          eta.id,
+          eta.name,
+          eta.description
+        FROM UNNEST(ei.all_tag_ids) AS tag_id
+        JOIN event_tags eta
+          ON eta.id = tag_id
+      ) AS tags,
       COALESCE(ae_json.attendance, []) AS attendance
     FROM
       event_instance_expanded AS ei
@@ -33,9 +50,19 @@ async function getRegionalData(id: number): Promise<RegionData[] | null> {
           ae.id        AS id,
           ae.user_id   AS user_id,
           ae.f3_name   AS f3_name,
+          ae.home_region_id AS home_region_id,
           ae.q_ind     AS q_ind,
           ae.coq_ind   AS coq_ind,
-          ae.avatar_url AS avatar_url
+          ae.avatar_url AS avatar_url,
+          IF(
+            ae.email IS NULL
+            OR NOT REGEXP_CONTAINS(
+              ae.email,
+              r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+            ),
+            TRUE,
+            FALSE
+          ) AS isBot
         )) AS attendance
       FROM
         attendance_expanded AS ae
@@ -44,7 +71,8 @@ async function getRegionalData(id: number): Promise<RegionData[] | null> {
     ) AS ae_json
       ON ei.id = ae_json.event_instance_id
     WHERE
-      ei.region_org_id = ${id}
+      ei.region_org_id = ${id} 
+      AND SAFE_CAST(ei.exclude_from_pax_vault AS BOOL) IS NOT TRUE
     ORDER BY
       ei.start_date
   `;

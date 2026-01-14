@@ -51,6 +51,7 @@ export function getLeaderboards(data: RegionData[]): RegionLeaders[] | null {
 
   for (const { attendance } of data) {
     for (const att of attendance) {
+      if (att.isBot) continue;
       const current = counts.get(att.user_id) ?? {
         user_id: att.user_id,
         f3_name: att.f3_name,
@@ -69,8 +70,13 @@ export function getLeaderboards(data: RegionData[]): RegionLeaders[] | null {
   return leaders.sort((a, b) => b.posts - a.posts);
 }
 
-export function getKotterList(data: RegionData[]): RegionKotterList[] | null {
+export function getKotterList(
+  id: string,
+  data: RegionData[],
+): RegionKotterList[] | null {
   if (!data || data.length === 0) return null;
+
+  const normalizedID = Number(id);
 
   // "Kotter" here = folks who haven't posted recently.
   const now = new Date();
@@ -122,7 +128,9 @@ export function getKotterList(data: RegionData[]): RegionKotterList[] | null {
     const evtDate = new Date(evt.event_date);
 
     // Bestie counting: for all attendees in this event, increment co-attendance
-    const attendees = evt.attendance;
+    const attendees = evt.attendance.filter(
+      (att) => !att.isBot && att.home_region_id === normalizedID,
+    );
     for (let i = 0; i < attendees.length; i++) {
       const a = attendees[i];
       for (let j = 0; j < attendees.length; j++) {
@@ -150,6 +158,8 @@ export function getKotterList(data: RegionData[]): RegionKotterList[] | null {
     }
 
     for (const att of evt.attendance) {
+      if (att.isBot) continue;
+      if (att.home_region_id !== normalizedID) continue;
       const current = byUser.get(att.user_id) ?? {
         user_id: att.user_id,
         f3_name: att.f3_name ?? "",

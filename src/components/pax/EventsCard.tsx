@@ -125,7 +125,7 @@ export function EventsCard({
                           </div>
                         </Link>
                         <div className="text-default-400">
-                          {formatDate(event.event_date, "M D Y")} @{" "}
+                          {formatDate(event.event_date)} @{" "}
                           <Link
                             href={
                               event.ao_org_id

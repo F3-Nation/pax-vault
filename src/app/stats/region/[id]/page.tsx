@@ -8,13 +8,17 @@ import Link from "next/link";
 interface PageProps {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{
-    categories: string | string[] | undefined;
+    categoryID: string | string[] | undefined;
+    categoryMode: string | undefined;
     aoID: string | string[] | undefined;
+    aoMode: string | undefined;
     range: string | undefined;
     startDate: string | undefined;
     endDate: string | undefined;
-    types: string | string[] | undefined;
-    tags: string | string[] | undefined;
+    typeID: string | string[] | undefined;
+    typeMode: string | undefined;
+    tagID: string | string[] | undefined;
+    tagMode: string | undefined;
   }>;
 }
 
@@ -24,13 +28,17 @@ export default async function RegionDetailPage({
 }: PageProps) {
   const { id } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;
-  const categories = searchParamsResolved?.categories; // e.g. "1st F", "2nd F", etc.
+  const categoryID = searchParamsResolved?.categoryID; // e.g. "1st F", "2nd F", etc.
+  const categoryMode = searchParamsResolved?.categoryMode; // e.g. "exclude" etc.
   const aoID = searchParamsResolved?.aoID; // e.g. "12345"
+  const aoMode = searchParamsResolved?.aoMode; // e.g. "exclude" etc.
   const range = searchParamsResolved?.range; // e.g. "Last 90 Days"
   const startDate = searchParamsResolved?.startDate; // e.g. "2023-01-01"
   const endDate = searchParamsResolved?.endDate; // e.g. "2023-12-31"
-  const types = searchParamsResolved?.types; // e.g. "type1", "type2", etc.
-  const tags = searchParamsResolved?.tags; // e.g. "tag1", "tag2", etc.
+  const typeID = searchParamsResolved?.typeID; // e.g. "type1", "type2", etc.
+  const typeMode = searchParamsResolved?.typeMode; // e.g. "exclude" etc.
+  const tagID = searchParamsResolved?.tagID; // e.g. "tag1", "tag2", etc.
+  const tagMode = searchParamsResolved?.tagMode; // e.g. "exclude" etc.
   const { region_data, upcoming_events } = await loadRegionStats(Number(id));
   const region_ready = region_data && region_data.length > 0;
 
@@ -116,16 +124,21 @@ export default async function RegionDetailPage({
           />
         </div>
         <RegionalPageWrapper
+          region_id={id}
           region_data={region_data}
           upcoming_events={upcoming_events ?? []}
           searchParams={{
-            categories,
+            categoryID,
+            categoryMode,
             aoID,
+            aoMode,
             range,
             startDate,
             endDate,
-            types,
-            tags,
+            typeID,
+            typeMode,
+            tagID,
+            tagMode,
           }}
         />
       </main>

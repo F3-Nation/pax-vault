@@ -78,7 +78,7 @@ export function KotterCard({ kotters }: { kotters: RegionKotterList[] }) {
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
+                <div className="flex flex-col items-end gap-1 text-right">
                   <div
                     className={`text-xs ${
                       kotter.kotter_status === "New PAX Drop"

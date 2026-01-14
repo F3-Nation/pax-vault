@@ -58,26 +58,26 @@ export function formatDate(
     timeZone: "UTC",
   });
 
-  if (d >= startOfWeek && !format) {
-    return d.toLocaleDateString("en-US", optionsUTC({ weekday: "long" }));
-  } else {
-    const weekday = d.toLocaleDateString(
-      "en-US",
-      optionsUTC({ weekday: "short" }),
-    );
-    const month = d.toLocaleDateString("en-US", optionsUTC({ month: "short" }));
-    const day = d.getUTCDate();
-    const year = d.toLocaleDateString("en-US", optionsUTC({ year: "numeric" }));
+  // if (d >= startOfWeek && !format) {
+  //   return d.toLocaleDateString("en-US", optionsUTC({ weekday: "long" }));
+  // } else {
+  const weekday = d.toLocaleDateString(
+    "en-US",
+    optionsUTC({ weekday: "short" }),
+  );
+  const month = d.toLocaleDateString("en-US", optionsUTC({ month: "short" }));
+  const day = d.getUTCDate();
+  const year = d.toLocaleDateString("en-US", optionsUTC({ year: "numeric" }));
 
-    switch (format) {
-      case "M D Y":
-        return `${month} ${day} ${year}`;
-      case "M Y":
-        return `${month} ${year}`;
-      default:
-        return `${weekday}, ${month} ${day} ${year}`;
-    }
+  switch (format) {
+    case "M D Y":
+      return `${month} ${day} ${year}`;
+    case "M Y":
+      return `${month} ${year}`;
+    default:
+      return `${weekday}, ${month} ${day} ${year}`;
   }
+  //}
 }
 
 export function cleanEventName(name: string): string {

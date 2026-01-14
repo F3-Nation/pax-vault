@@ -28,8 +28,15 @@ export interface RegionData {
   first_f_ind: string; // Indicates if the event is a 1st F
   second_f_ind: string; // Indicates if the event is a 2nd F
   third_f_ind: string; // Indicates if the event is a 3rd F
-  all_types: string[] | null; // List of all types/categories associated with the event
-  all_tags: string[] | null; // List of all tags associated with the event
+  types:
+    | {
+        id: number;
+        name: string;
+        description: string;
+        event_category: string;
+      }[]
+    | null; // List of all types/categories associated with the event
+  tags: { id: number; name: string; description: string }[] | null; // List of all tags associated with the event
   attendance: RegionAttendance[]; // List of attendance records for the event
 }
 
@@ -37,9 +44,11 @@ export interface RegionAttendance {
   id: number; // Unique identifier for the attendance record
   user_id: number; // Unique identifier for the user
   f3_name: string; // F3 name (nickname) of the user
+  home_region_id: number; // Unique identifier for the user's home region
   q_ind: boolean; // Indicates if the user was a Q (leader) for the event
   coq_ind: boolean; // Indicates if the user was a co-Q (co-leader) for the event
   avatar_url: string | null; // Optional URL to the user's avatar image
+  isBot: boolean; // Indicates if the user is a bot
 }
 
 export interface RegionDetails {
