@@ -1,108 +1,145 @@
-"use client";
+import { PageHeader } from "@/components/pageHeader";
+import { loadAOStats } from "./loader";
 
-import { Card, CardHeader, CardBody } from "@heroui/card";
-import { Chip } from "@heroui/chip";
-import { Progress } from "@heroui/progress";
-import { Skeleton } from "@heroui/skeleton";
+import { AOPageWrapper } from "@/components/ao/PageWrapper";
+import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
+import Link from "next/link";
 
-export default function PlaceholderPage() {
-  return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-default-50 px-4">
-      <div className="w-full max-w-4xl space-y-6">
-        <Card className="shadow-lg">
-          <CardHeader>
-            <div className="w-full flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="text-3xl font-bold">PAX Vault — AO Stats</div>
-                <div className="flex items-center gap-2">
-                  <span
-                    aria-hidden
-                    className="inline-block h-2.5 w-2.5 rounded-full bg-warning animate-pulse"
-                  />
-                  <Chip color="warning" variant="flat">
-                    Under Construction
-                  </Chip>
-                </div>
+interface PageProps {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{
+    categoryID: string | string[] | undefined;
+    categoryMode: string | undefined;
+    aoID: string | string[] | undefined;
+    aoMode: string | undefined;
+    range: string | undefined;
+    startDate: string | undefined;
+    endDate: string | undefined;
+    typeID: string | string[] | undefined;
+    typeMode: string | undefined;
+    tagID: string | string[] | undefined;
+    tagMode: string | undefined;
+  }>;
+}
+
+export default async function AODetailPage({
+  params,
+  searchParams,
+}: PageProps) {
+  const { id } = await params;
+  const searchParamsResolved = searchParams ? await searchParams : undefined;
+  const categoryID = searchParamsResolved?.categoryID; // e.g. "1st F", "2nd F", etc.
+  const categoryMode = searchParamsResolved?.categoryMode; // e.g. "exclude" etc.
+  const aoID = searchParamsResolved?.aoID; // e.g. "12345"
+  const aoMode = searchParamsResolved?.aoMode; // e.g. "exclude" etc.
+  const range = searchParamsResolved?.range; // e.g. "Last 90 Days"
+  const startDate = searchParamsResolved?.startDate; // e.g. "2023-01-01"
+  const endDate = searchParamsResolved?.endDate; // e.g. "2023-12-31"
+  const typeID = searchParamsResolved?.typeID; // e.g. "type1", "type2", etc.
+  const typeMode = searchParamsResolved?.typeMode; // e.g. "exclude" etc.
+  const tagID = searchParamsResolved?.tagID; // e.g. "tag1", "tag2", etc.
+  const tagMode = searchParamsResolved?.tagMode; // e.g. "exclude" etc.
+  const { ao_data, upcoming_events } = await loadAOStats(Number(id));
+  const ao_ready = ao_data && ao_data.length > 0;
+
+  if (!ao_ready) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4 pt-10 pb-10 bg-gradient-to-b from-background to-default-50">
+        <Card
+          className="w-full max-w-3xl bg-background/80 dark:bg-default-100/60"
+          shadow="lg"
+        >
+          <CardHeader className="flex flex-col gap-3">
+            <h1 className="text-2xl font-bold tracking-tight text-center">
+              AO Data Not Available
+            </h1>
+            <p className="text-sm text-foreground/70 text-center max-w-xl mx-auto">
+              This AO exists, but no data is currently available to display.
+            </p>
+          </CardHeader>
+
+          <CardBody className="space-y-4 text-sm text-foreground/80">
+            <p>
+              This usually means the AO has not migrated to{" "}
+              <strong>F3 Nation Data</strong> yet, or the migration process is
+              currently in progress. Until that data is connected, PAX Vault has
+              nothing to index or display.
+            </p>
+
+            <p>
+              If your AO has not migrated yet, moving to F3 Nation Data unlocks:
+            </p>
+
+            <ul className="list-disc list-inside space-y-1 text-foreground/70">
+              <li>Reliable, centralized workout and attendance data</li>
+              <li>Accurate PAX, AO, and region-level stats</li>
+              <li>Direct compatibility with tools like PAX Vault</li>
+              <li>Less manual work for Site Qs and Data Qs</li>
+            </ul>
+
+            <p>
+              To get started, follow the official migration instructions here:
+            </p>
+
+            <div className="flex justify-center pt-2">
+              <Link
+                href="https://docs.google.com/document/d/1e7tmuY3irKDt9oy1URQVcxPwxyet1ZY_bVZhGvhESEw/edit?usp=drivesdk"
+                target="_blank"
+                className="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              >
+                View F3 Nation Data Migration Guide
+              </Link>
+            </div>
+
+            <div className="rounded-md border-2 border-danger bg-danger/15 p-4 text-danger-foreground shadow-sm">
+              <div className="flex items-center gap-2 font-semibold">
+                ⚠️ PAXminer Shutdown Notice
               </div>
-              <Progress
-                aria-label="Build progress"
-                value={35}
-                showValueLabel
-                className="max-w-md"
-              />
+              <p className="mt-1">
+                PAXminer will be shut down on <strong>March 31st</strong>. AOs
+                that have not migrated to F3 Nation Data by then will lose
+                access to automated data feeds.
+              </p>
             </div>
-          </CardHeader>
-          <CardBody className="space-y-4">
-            <p className="text-gray-700">
-              This page is live and functioning. You are currently viewing a
-              scaffolded AO Stats view.
-            </p>
-            <p className="text-gray-600">
-              This page will serve as the central view for an individual AO,
-              surfacing workout volume, attendance patterns, Q leadership, and
-              participation trends.
-            </p>
-            <p className="text-gray-600">
-              Upcoming iterations will introduce real AO-level metrics,
-              interactive filtering by date and event type, and deeper insights
-              tied directly to this AO.
-            </p>
           </CardBody>
+
+          <CardFooter className="text-[11px] text-foreground/50 text-center">
+            Once your AO&apos;s data is connected, refresh this page to view the
+            full dashboard.
+          </CardFooter>
         </Card>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="shadow-md">
-            <CardHeader className="text-xl font-semibold">
-              AO Participation
-            </CardHeader>
-            <CardBody>
-              <p className="text-gray-600">
-                This section will highlight attendance over time, returning vs
-                new PAX, and participation density for this AO.
-              </p>
-            </CardBody>
-          </Card>
-
-          <Card className="shadow-md">
-            <CardHeader className="text-xl font-semibold">
-              AO Trends & Leadership
-            </CardHeader>
-            <CardBody>
-              <p className="text-gray-600">
-                This section will spotlight Q frequency, leadership rotation,
-                and trend signals such as growth, consistency, and seasonality
-                at this AO.
-              </p>
-            </CardBody>
-          </Card>
+      </main>
+    );
+  } else {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-start pt-10 pb-10">
+        <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
+          {/* Page Header */}
+          <PageHeader
+            image={ao_data[0].region_logo_url ?? undefined}
+            name={ao_data[0].ao_name}
+            link={`/stats/region/${ao_data[0].region_org_id}`}
+            linkName={ao_data[0].region_name}
+          />
         </div>
-
-        <Card className="shadow-md">
-          <CardHeader className="text-xl font-semibold">
-            Coming Soon: AO Metrics
-          </CardHeader>
-          <CardBody className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[...Array(3)].map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl border border-default-200 bg-background p-4 space-y-3"
-                >
-                  <Skeleton className="h-4 w-2/3 rounded-lg" />
-                  <Skeleton className="h-8 w-1/2 rounded-lg" />
-                  <Skeleton className="h-3 w-full rounded-lg" />
-                  <Skeleton className="h-3 w-5/6 rounded-lg" />
-                </div>
-              ))}
-            </div>
-
-            <div className="rounded-xl border border-default-200 bg-background p-4 space-y-3">
-              <Skeleton className="h-4 w-1/3 rounded-lg" />
-              <Skeleton className="h-40 w-full rounded-lg" />
-            </div>
-          </CardBody>
-        </Card>
-      </div>
-    </main>
-  );
+        <AOPageWrapper
+          ao_data={ao_data}
+          upcoming_events={upcoming_events ?? []}
+          searchParams={{
+            categoryID,
+            categoryMode,
+            aoID,
+            aoMode,
+            range,
+            startDate,
+            endDate,
+            typeID,
+            typeMode,
+            tagID,
+            tagMode,
+          }}
+        />
+      </main>
+    );
+  }
 }

@@ -201,3 +201,38 @@ export interface PaxInsights {
   eventsChange: number; // Percentage change in events compared to the previous period
   qsChange: number; // Percentage change in Qs compared to the previous period
 }
+
+/* ========================================================== */
+/*                  AO-SPECIFIC TYPES BELOW                    */
+/* =========================================================== */
+
+// USED ONLY FOR AO SUMMARY STATS
+export interface AOSummary {
+  event_count: number; // Total number of events held in the AO
+  first_event_date: string | null; // Date of the first event held in the AO
+  active_pax: number; // Number of active participants (pax) in the AO
+  unique_pax: number; // Number of unique participants (pax) who have attended events in the AO
+  unique_qs: number; // Number of unique Qs (leaders) who have led events in the AO
+  fng_count: number; // Total number of first-time participants (FNGs) in the AO
+  pax_count_average: number; // Average number of participants (pax) per event in the AO
+}
+
+// USED ONLY FOR AO CHART DATA
+export interface AOChartData {
+  uniquePax: AOChart_UniquePax;
+  workoutAOCount: AOChart_WorkoutAOCount[];
+}
+
+export interface AOChart_UniquePax {
+  itteration_type: "month" | "week" | "day" | ""; // Type of iteration (month, week, day, or none)
+  data: {
+    iteration: string; // e.g., month or week identifier
+    count: number; // Number of unique pax in that month/week
+    average: number; // Average pax count for that month/week
+  }[];
+}
+
+export interface AOChart_WorkoutAOCount {
+  aoName: string; // Name of the AO
+  count: number; // Number of workouts held at the AO
+}

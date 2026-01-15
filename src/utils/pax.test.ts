@@ -6,7 +6,7 @@ import { PaxData, EventData, EventAttendance } from "../lib/types";
 function createAttendance(
   userId: number,
   f3Name: string,
-  qInd: boolean = false
+  qInd: boolean = false,
 ): EventAttendance {
   return {
     id: userId * 100,
@@ -26,7 +26,7 @@ function createEvent(
   eventDate: string,
   aoOrgId: number,
   aoName: string,
-  attendance: EventAttendance[]
+  attendance: EventAttendance[],
 ): EventData {
   return {
     event_instance_id: eventId,
@@ -56,7 +56,7 @@ function createEvent(
 function createPaxData(
   userId: number,
   f3Name: string,
-  events: EventData[]
+  events: EventData[],
 ): PaxData {
   return {
     info: {

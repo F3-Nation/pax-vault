@@ -12,12 +12,12 @@ import { formatNumber } from "@/lib/utils";
 
 export function LeadersCard({
   leaders,
+  height,
   title,
-  size,
 }: {
   leaders: Leaders[];
+  height: number;
   title?: string;
-  size?: string;
 }) {
   const [mode, setMode] = useState<"posts" | "qs">("posts");
   const sortedLeaders = [...leaders].sort((a, b) => {
@@ -53,7 +53,7 @@ export function LeadersCard({
       </CardHeader>
       <Divider />
       <CardBody className="px-6">
-        <ScrollShadow className={`h-[${size ?? 260}px]`}>
+        <ScrollShadow className={`h-[${height}px]`}>
           <div className="space-y-1 text-sm">
             {visibleLeaders.map((leader) => (
               <div

@@ -1,29 +1,21 @@
 "use client";
 
 import { EventData, EventUpcoming } from "@/lib/types";
-import {
-  getSummary,
-  getLeaderboards,
-  getKotterList,
-  getChartData,
-} from "@/utils/region";
+import { getSummary, getLeaderboards, getChartData } from "@/utils/ao";
 import { Filter } from "../pageFilter";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "../leaders";
 import { EventsCard } from "../events";
-import { KotterCard } from "./KotterCard";
 import { ChartsCard } from "./ChartsCard";
 import { UpcomingEventsCard } from "../upcomingEvents";
 import { useState, useMemo } from "react";
 
-export function RegionalPageWrapper({
-  region_id,
-  region_data,
+export function AOPageWrapper({
+  ao_data,
   upcoming_events,
   searchParams,
 }: {
-  region_id: string;
-  region_data: EventData[];
+  ao_data: EventData[];
   upcoming_events: EventUpcoming[];
   searchParams: {
     categoryID: string | string[] | undefined;
@@ -102,7 +94,7 @@ export function RegionalPageWrapper({
     const map = new Map<string, string>();
     let hasUnassigned = false;
 
-    region_data.forEach((event) => {
+    ao_data.forEach((event) => {
       if (event.ao_org_id == null) {
         hasUnassigned = true;
         return;
@@ -126,7 +118,7 @@ export function RegionalPageWrapper({
     }
 
     return results;
-  }, [region_data]);
+  }, [ao_data]);
 
   const types = useMemo(() => {
     const typeMap = new Map<
@@ -134,7 +126,7 @@ export function RegionalPageWrapper({
       { id: string; name: string; description: string; event_category: string }
     >();
 
-    region_data.forEach((event) => {
+    ao_data.forEach((event) => {
       event.types?.forEach((type) => {
         const id = type.id.toString();
         if (!typeMap.has(id)) {
@@ -151,7 +143,7 @@ export function RegionalPageWrapper({
     return Array.from(typeMap.values()).sort((a, b) =>
       a.name.localeCompare(b.name),
     );
-  }, [region_data]);
+  }, [ao_data]);
 
   const tags = useMemo(() => {
     const tagMap = new Map<
@@ -159,7 +151,7 @@ export function RegionalPageWrapper({
       { id: string; name: string; description: string }
     >();
 
-    region_data.forEach((event) => {
+    ao_data.forEach((event) => {
       event.tags?.forEach((tag) => {
         const id = tag.id.toString();
         if (!tagMap.has(id)) {
@@ -175,10 +167,10 @@ export function RegionalPageWrapper({
     return Array.from(tagMap.values()).sort((a, b) =>
       a.name.localeCompare(b.name),
     );
-  }, [region_data]);
+  }, [ao_data]);
 
-  const filteredRegionData = useMemo(() => {
-    let data = region_data; // Filter by one or more event types (OR logic)
+  const filteredAOData = useMemo(() => {
+    let data = ao_data; // Filter by one or more event types (OR logic)
 
     // Category filter
     if (categoryFilter.length > 0) {
@@ -260,7 +252,7 @@ export function RegionalPageWrapper({
 
     return data;
   }, [
-    region_data,
+    ao_data,
     categoryFilter,
     categoryMode,
     aoFilter,
@@ -332,12 +324,11 @@ export function RegionalPageWrapper({
     endDate,
   ]);
 
-  const region_summary = getSummary(filteredRegionData);
-  const region_leaders = getLeaderboards(filteredRegionData);
-  const region_events = filteredRegionData;
-  const region_kotters = getKotterList(region_id, filteredRegionData);
-  const region_upcoming = filteredEvents.slice(0, 100); // Limit to 100 upcoming events
-  const region_charts = getChartData(filteredRegionData, startDate, endDate);
+  const ao_summary = getSummary(filteredAOData);
+  const ao_leaders = getLeaderboards(filteredAOData);
+  const ao_events = filteredAOData;
+  const ao_upcoming = filteredEvents.slice(0, 100); // Limit to 100 upcoming events
+  const ao_charts = getChartData(filteredAOData, startDate, endDate);
   return (
     <>
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl px-4">
@@ -382,32 +373,37 @@ export function RegionalPageWrapper({
         </div>
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4">
-        <SummaryCard summary={region_summary!} />
+        <SummaryCard
+          summary={ao_summary!}
+          title={ao_data.length > 0 ? ao_data[0].ao_name : "AO"}
+        />
         <LeadersCard
           leaders={
-            region_leaders
-              ? Array.isArray(region_leaders)
-                ? region_leaders
-                : [region_leaders]
+            ao_leaders
+              ? Array.isArray(ao_leaders)
+                ? ao_leaders
+                : [ao_leaders]
               : []
           }
-          title="Region"
+          title={ao_data.length > 0 ? ao_data[0].ao_name : "AO Leaders"}
           height={260}
         />
       </div>
       {/* <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4"></div> */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4 text-xs">
-        <ChartsCard chartData={region_charts} />
+        <ChartsCard
+          chartData={ao_charts}
+          title={ao_data.length > 0 ? ao_data[0].ao_name : "AO"}
+        />
       </div>
       {!endDate || new Date(endDate) >= new Date() ? (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4 pt-6">
-          <KotterCard kotters={region_kotters || []} />
-          <UpcomingEventsCard events={region_upcoming || []} />
+        <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4 text-xs">
+          <UpcomingEventsCard events={ao_upcoming || []} />
         </div>
       ) : null}
       {/* <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl px-4 pt-6"></div> */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl py-6 px-4">
-        <EventsCard events={region_events} />
+        <EventsCard events={ao_events} />
       </div>
     </>
   );
