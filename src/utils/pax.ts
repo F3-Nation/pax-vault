@@ -1,4 +1,4 @@
-import { PaxAOBreakdown, PaxData, PaxSummary, PaxInsights } from "@/types/pax";
+import { PaxAOBreakdown, PaxData, PaxSummary, PaxInsights } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
 export function getSummary(

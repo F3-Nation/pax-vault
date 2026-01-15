@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardHeader, CardBody } from "@heroui/card";
-import { PaxInsights } from "@/types/pax";
+import { PaxInsights } from "@/lib/types";
 import { Divider } from "@heroui/divider";
 import { CustomBarChart as InsightsBarChart } from "@/components/charts/barChart";
 

@@ -1,14 +1,14 @@
 import {
-  RegionData,
-  RegionLeaders,
+  EventData,
+  Leaders,
   RegionSummary,
   RegionKotterList,
   RegionChartData,
   RegionChart_UniquePax,
   RegionChart_WorkoutAOCount,
-} from "@/types/region";
+} from "@/lib/types";
 
-export function getSummary(data: RegionData[]): RegionSummary | null {
+export function getSummary(data: EventData[]): RegionSummary | null {
   if (data.length === 0) {
     return null;
   }
@@ -46,8 +46,8 @@ export function getSummary(data: RegionData[]): RegionSummary | null {
   };
 }
 
-export function getLeaderboards(data: RegionData[]): RegionLeaders[] | null {
-  const counts = new Map<number, RegionLeaders>();
+export function getLeaderboards(data: EventData[]): Leaders[] | null {
+  const counts = new Map<number, Leaders>();
 
   for (const { attendance } of data) {
     for (const att of attendance) {
@@ -72,7 +72,7 @@ export function getLeaderboards(data: RegionData[]): RegionLeaders[] | null {
 
 export function getKotterList(
   id: string,
-  data: RegionData[],
+  data: EventData[],
 ): RegionKotterList[] | null {
   if (!data || data.length === 0) return null;
 
@@ -99,7 +99,7 @@ export function getKotterList(
     ao_org_id?: number;
   };
 
-  const asEventMeta = (e: RegionData): EventMeta => e as unknown as EventMeta;
+  const asEventMeta = (e: EventData): EventMeta => e as unknown as EventMeta;
 
   type Acc = {
     user_id: number;
@@ -323,7 +323,7 @@ export function getKotterList(
 }
 
 export function getChartData(
-  data: RegionData[],
+  data: EventData[],
   start_date?: string,
   end_date?: string,
 ): RegionChartData | null {
@@ -337,7 +337,7 @@ export function getChartData(
 }
 
 function getComboChartData(
-  data: RegionData[],
+  data: EventData[],
   start_date?: string,
   end_date?: string,
 ): RegionChart_UniquePax | null {
@@ -529,7 +529,7 @@ function getComboChartData(
 }
 
 function getTreeChartData(
-  data: RegionData[],
+  data: EventData[],
   start_date?: string,
   end_date?: string,
 ): RegionChart_WorkoutAOCount[] | null {

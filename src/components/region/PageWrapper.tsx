@@ -1,6 +1,6 @@
 "use client";
 
-import { RegionData, RegionUpcomingEvents } from "@/types/region";
+import { EventData, EventUpcoming } from "@/lib/types";
 import {
   getSummary,
   getLeaderboards,
@@ -9,11 +9,11 @@ import {
 } from "@/utils/region";
 import { Filter } from "../pageFilter";
 import { SummaryCard } from "./SummaryCard";
-import { LeadersCard } from "./LeadersCard";
-import { EventsCard } from "./EventsCard";
+import { LeadersCard } from "../leaders";
+import { EventsCard } from "../events";
 import { KotterCard } from "./KotterCard";
 import { ChartsCard } from "./ChartsCard";
-import { UpcomingEventsCard } from "./UpcomingEventsCard";
+import { UpcomingEventsCard } from "../upcomingEvents";
 import { useState, useMemo } from "react";
 
 export function RegionalPageWrapper({
@@ -23,8 +23,8 @@ export function RegionalPageWrapper({
   searchParams,
 }: {
   region_id: string;
-  region_data: RegionData[];
-  upcoming_events: RegionUpcomingEvents[];
+  region_data: EventData[];
+  upcoming_events: EventUpcoming[];
   searchParams: {
     categoryID: string | string[] | undefined;
     categoryMode: string | undefined;
@@ -40,14 +40,14 @@ export function RegionalPageWrapper({
   };
 }) {
   const [startDate, setStartDate] = useState<string | undefined>(
-    searchParams.startDate,
+    searchParams.startDate
   );
   const [endDate, setEndDate] = useState<string | undefined>(
-    searchParams.endDate,
+    searchParams.endDate
   );
 
   const [selectedRange, setSelectedRange] = useState<string>(
-    searchParams.range ?? "All History",
+    searchParams.range ?? "All History"
   );
 
   const [categoryFilter, setCategoryFilter] = useState<string[]>(
@@ -55,11 +55,11 @@ export function RegionalPageWrapper({
       ? Array.isArray(searchParams.categoryID)
         ? searchParams.categoryID
         : [searchParams.categoryID]
-      : [],
+      : []
   );
 
   const [categoryMode, setCategoryMode] = useState<"include" | "exclude">(
-    (searchParams.categoryMode as "exclude") ?? "include",
+    (searchParams.categoryMode as "exclude") ?? "include"
   );
 
   const [aoFilter, setAOFilter] = useState<string[]>(
@@ -67,11 +67,11 @@ export function RegionalPageWrapper({
       ? Array.isArray(searchParams.aoID)
         ? searchParams.aoID
         : [searchParams.aoID]
-      : [],
+      : []
   );
 
   const [aoMode, setAOMode] = useState<"include" | "exclude">(
-    (searchParams.aoMode as "exclude") ?? "include",
+    (searchParams.aoMode as "exclude") ?? "include"
   );
 
   const [typesFilter, setTypesFilter] = useState<string[]>(
@@ -79,11 +79,11 @@ export function RegionalPageWrapper({
       ? Array.isArray(searchParams.typeID)
         ? searchParams.typeID
         : [searchParams.typeID]
-      : [],
+      : []
   );
 
   const [typeMode, setTypeMode] = useState<"include" | "exclude">(
-    (searchParams.typeMode as "exclude") ?? "include",
+    (searchParams.typeMode as "exclude") ?? "include"
   );
 
   const [tagsFilter, setTagsFilter] = useState<string[]>(
@@ -91,11 +91,11 @@ export function RegionalPageWrapper({
       ? Array.isArray(searchParams.tagID)
         ? searchParams.tagID
         : [searchParams.tagID]
-      : [],
+      : []
   );
 
   const [tagMode, setTagMode] = useState<"include" | "exclude">(
-    (searchParams.tagMode as "exclude") ?? "include",
+    (searchParams.tagMode as "exclude") ?? "include"
   );
 
   const aos = useMemo(() => {
@@ -149,7 +149,7 @@ export function RegionalPageWrapper({
     });
 
     return Array.from(typeMap.values()).sort((a, b) =>
-      a.name.localeCompare(b.name),
+      a.name.localeCompare(b.name)
     );
   }, [region_data]);
 
@@ -173,7 +173,7 @@ export function RegionalPageWrapper({
     });
 
     return Array.from(tagMap.values()).sort((a, b) =>
-      a.name.localeCompare(b.name),
+      a.name.localeCompare(b.name)
     );
   }, [region_data]);
 
@@ -232,11 +232,11 @@ export function RegionalPageWrapper({
         if (!d.types || d.types.length === 0) return false;
         if (typeMode === "exclude") {
           return !typesFilter.some((type) =>
-            d.types!.some((t) => t.id.toString() === type),
+            d.types!.some((t) => t.id.toString() === type)
           );
         } else {
           return typesFilter.some((type) =>
-            d.types!.some((t) => t.id.toString() === type),
+            d.types!.some((t) => t.id.toString() === type)
           );
         }
       });
@@ -248,11 +248,11 @@ export function RegionalPageWrapper({
         if (!d.tags || d.tags.length === 0) return false;
         if (tagMode === "exclude") {
           return !tagsFilter.some((tag) =>
-            d.tags!.some((t) => t.id.toString() === tag),
+            d.tags!.some((t) => t.id.toString() === tag)
           );
         } else {
           return tagsFilter.some((tag) =>
-            d.tags!.some((t) => t.id.toString() === tag),
+            d.tags!.some((t) => t.id.toString() === tag)
           );
         }
       });
@@ -391,6 +391,8 @@ export function RegionalPageWrapper({
                 : [region_leaders]
               : []
           }
+          title="Region"
+          size="260"
         />
       </div>
       {/* <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pt-6 px-4"></div> */}

@@ -5,7 +5,7 @@ import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { ScrollShadow } from "@heroui/scroll-shadow";
 import { Link } from "@heroui/link";
-import { RegionKotterList } from "@/types/region";
+import { RegionKotterList } from "@/lib/types";
 import { formatDate, formatNumber } from "@/lib/utils";
 
 export function KotterCard({ kotters }: { kotters: RegionKotterList[] }) {

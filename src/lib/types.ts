@@ -1,4 +1,9 @@
-export interface RegionLeaders {
+/* =========================================================== */
+/*                  TYPES USED ACROSS APP                      */
+/* =========================================================== */
+
+/* USED FOR LEADERBOARDS */
+export interface Leaders {
   user_id: number; // Unique identifier for the user
   f3_name: string; // F3 name (nickname) of the user
   posts: number; // Total number of posts (events attended) by the user at the AO
@@ -6,16 +11,13 @@ export interface RegionLeaders {
   avatar_url?: string; // Optional URL to the user's avatar image
 }
 
-export interface RegionData {
+/* USED FOR ALL EVENT DATA */
+export interface EventData {
   event_instance_id: number; // Unique identifier for the event instance
   event_date: string; // Date of the workout event
   event_name: string; // Name of the workout event
   pax_count: number; // Number of participants (pax) who attended the event
   fng_count: number; // Number of first-time participants (FNGs) at the event
-  // location_id: number | null; // Unique identifier for the location of the event
-  // location_name: string | null; // Name of the location of the event
-  // location_latitude: number | null; // Latitude of the event location, can be null
-  // location_longitude: number | null; // Longitude of the event location, can be null
   ao_org_id: number; // Unique identifier for the AO organization
   ao_name: string; // Name of the AO organization
   region_org_id: number; // Unique identifier for the region organization
@@ -37,10 +39,11 @@ export interface RegionData {
       }[]
     | null; // List of all types/categories associated with the event
   tags: { id: number; name: string; description: string }[] | null; // List of all tags associated with the event
-  attendance: RegionAttendance[]; // List of attendance records for the event
+  attendance: EventAttendance[]; // List of attendance records for the event
 }
 
-export interface RegionAttendance {
+/* USED FOR EVENT ATTENDANCE RECORDS */
+export interface EventAttendance {
   id: number; // Unique identifier for the attendance record
   user_id: number; // Unique identifier for the user
   f3_name: string; // F3 name (nickname) of the user
@@ -51,6 +54,30 @@ export interface RegionAttendance {
   isBot: boolean; // Indicates if the user is a bot
 }
 
+/* USED FOR UPCOMING EVENTS */
+export interface EventUpcoming {
+  start_date: string; // Start date of the upcoming event
+  start_time: string; // Start time of the upcoming event
+  ao_name: string; // Name of the AO (Area of Operation) hosting the event
+  ao_org_id: number; // Unique identifier for the AO organization
+  location_name: string; // Name of the location where the event will be held
+  event_name: string; // Name of the upcoming event
+  event_type: string; // Types/categories associated with the event
+  event_category: string; // Category of the event
+  q_list: [
+    {
+      user_id: number; // Unique identifier for the Q (leader)
+      f3_name: string; // F3 name (nickname) of the Q
+      avatar_url?: string; // Optional URL to the Q's avatar image
+    },
+  ]; // List of Qs (leaders) for the upcoming event
+}
+
+/* =========================================================== */
+/*                REGION-SPECIFIC TYPES BELOW                  */
+/* =========================================================== */
+
+// USED ONLY FOR REGION LISTING AND SELECTION
 export interface RegionDetails {
   id: number; // Unique identifier for the region
   name: string; // Name of the region
@@ -59,6 +86,7 @@ export interface RegionDetails {
   area_name: string; // Name of the area
 }
 
+// USED ONLY FOR REGION SUMMARY STATS
 export interface RegionSummary {
   event_count: number; // Total number of events held in the region
   ao_count: number; // Total number of AOs (Areas of Operation) in the region
@@ -69,6 +97,7 @@ export interface RegionSummary {
   pax_count_average: number; // Average number of participants (pax) per event in the region
 }
 
+// USED ONLY FOR REGION KOTTER LISTING
 export interface RegionKotterList {
   user_id: number; // Unique identifier for the user
   f3_name: string; // F3 name (nickname) of the user
@@ -91,24 +120,7 @@ export interface RegionKotterList {
   ]; // List of besties (frequent workout partners) for the user
 }
 
-export interface RegionUpcomingEvents {
-  start_date: string; // Start date of the upcoming event
-  start_time: string; // Start time of the upcoming event
-  ao_name: string; // Name of the AO (Area of Operation) hosting the event
-  ao_org_id: number; // Unique identifier for the AO organization
-  location_name: string; // Name of the location where the event will be held
-  event_name: string; // Name of the upcoming event
-  event_type: string; // Types/categories associated with the event
-  event_category: string; // Category of the event
-  q_list: [
-    {
-      user_id: number; // Unique identifier for the Q (leader)
-      f3_name: string; // F3 name (nickname) of the Q
-      avatar_url?: string; // Optional URL to the Q's avatar image
-    },
-  ]; // List of Qs (leaders) for the upcoming event
-}
-
+// USED ONLY FOR REGION CHART DATA
 export interface RegionChartData {
   uniquePax: RegionChart_UniquePax;
   workoutAOCount: RegionChart_WorkoutAOCount[];
@@ -126,4 +138,66 @@ export interface RegionChart_UniquePax {
 export interface RegionChart_WorkoutAOCount {
   aoName: string; // Name of the AO
   count: number; // Number of workouts held at the AO
+}
+
+/* =========================================================== */
+/*                 PAX TYPES USED ACROSS APP                   */
+/* =========================================================== */
+
+export interface PaxData {
+  info: PaxInfo; // Information about the pax
+  events: EventData[]; // List of event data associated with the pax
+}
+
+export interface PaxInfo {
+  user_id: number; // Unique identifier for the user
+  f3_name: string; // F3 name (nickname) of the user
+  region: string | null; // Unique identifier for the user's home region
+  region_id: number | null; // Unique identifier for the user's home region
+  region_default: string | null; // Default region name associated with the user
+  region_default_id: number | null; // Default region ID associated with the user
+  avatar_url: string | null; // URL to the user's avatar image, can be null
+  status: string; // Status of the user (e.g., active, inactive)
+}
+
+export interface PaxSummary {
+  event_count: number; // Total number of events held in the region
+  q_count: number; // Total number of Qs (leaders) across all events
+  first_event_date: string | null; // Date of the first event in the region
+  first_event_ao_id: number | null; // ID of the first event in the region
+  first_event_ao_name: string | null; // Name of the AO (Area of Operation) for the first event
+  last_event_date: string | null; // Date of the last event in the region
+  last_event_ao_id: number | null; // ID of the last event in the region
+  last_event_ao_name: string | null; // Name of the AO (Area of Operation) for the last event
+  bestie_user_id: number | null; // User ID of the bestie (most attended by the main user)
+  bestie_count: number; // Number of events attended by the bestie
+  bestie_f3_name: string | null; // F3 name of the bestie
+  unique_users_met: number; // Number of unique users met by the main user
+  first_q_date: string | null; // Date of the first event where the main user was a Q
+  first_q_ao_id: number | null; // ID of the AO for the first Q event
+  first_q_ao_name: string | null; // Name of the AO for the first Q event
+  last_q_date: string | null; // Date of the last event where the main user was a Q
+  last_q_ao_id: number | null; // ID of the AO for the last Q event
+  last_q_ao_name: string | null; // Name of the AO for the last Q event
+  unique_pax_when_q: number; // Number of unique pax who attended events when the main user was a Q
+  effective_percentage: number | null; // Percentage of events where the main user was an effective Q
+}
+
+export interface PaxAOBreakdown {
+  ao_org_id: number; // Unique identifier for the AO organization
+  ao_name: string; // Name of the AO organization
+  region_org_id: number; // Unique identifier for the region organization
+  region_name: string; // Name of the region organization
+  total_events: number; // Number of events held by the AO
+  total_q_count: number; // Number of Qs (leaders) held by the AO
+}
+
+export interface PaxInsights {
+  paxData: {
+    month: string; // Month in 'YYYY-MM' format
+    events: number; // Number of events in that month
+    qs: number; // Number of Qs (leaders) in that month
+  }[];
+  eventsChange: number; // Percentage change in events compared to the previous period
+  qsChange: number; // Percentage change in Qs compared to the previous period
 }

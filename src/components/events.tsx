@@ -6,13 +6,19 @@ import { Input } from "@heroui/input";
 
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { RegionData } from "@/types/region";
+import { EventData } from "@/lib/types";
 import { formatDate, cleanEventName, formatNumber } from "@/lib/utils";
 import { Link } from "@heroui/link";
 import { Chip } from "@heroui/chip";
 import { Avatar } from "@heroui/avatar";
 
-export function EventsCard({ events }: { events: RegionData[] }) {
+export function EventsCard({
+  events,
+  thisUserId,
+}: {
+  events: EventData[];
+  thisUserId?: number;
+}) {
   events = events.toReversed(); // Show most recent events first
 
   const perPage = 10;
@@ -108,7 +114,7 @@ export function EventsCard({ events }: { events: RegionData[] }) {
             return (
               <div key={event.event_instance_id || index}>
                 <Card
-                  className={`bg-background/60 dark:bg-default-100/50 border border-default-200 dark:border-default-300`}
+                  className={`bg-background/60 dark:bg-default-100/50 border ${q_list.some((q) => q.user_id === thisUserId) ? "border-secondary" : "border-default-200 dark:border-default-300"}`}
                 >
                   <CardBody className="text-sm">
                     <div className="flex justify-between gap-4">

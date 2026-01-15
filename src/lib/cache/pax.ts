@@ -1,5 +1,5 @@
 // src/lib/data/pax.ts
-import { PaxInfo } from "@/types/pax";
+import { PaxInfo } from "@/lib/types";
 import { queryBigQuery } from "../db";
 
 export async function getPaxList(): Promise<PaxInfo[]> {

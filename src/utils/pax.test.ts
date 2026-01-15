@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { getSummary, getAOBreakdown, getPaxCharting } from "./pax";
-import { PaxData, PaxEventData, PaxAttendance } from "@/types/pax";
+import { PaxData, EventData, EventAttendance } from "../lib/types";
 
 // Helper to create a mock attendance record
 function createAttendance(
   userId: number,
   f3Name: string,
-  qInd: boolean = false,
-): PaxAttendance {
+  qInd: boolean = false
+): EventAttendance {
   return {
     id: userId * 100,
     user_id: userId,
@@ -15,6 +15,8 @@ function createAttendance(
     q_ind: qInd,
     coq_ind: false,
     avatar_url: null,
+    home_region_id: 100,
+    isBot: false,
   };
 }
 
@@ -24,8 +26,8 @@ function createEvent(
   eventDate: string,
   aoOrgId: number,
   aoName: string,
-  attendance: PaxAttendance[],
-): PaxEventData {
+  attendance: EventAttendance[]
+): EventData {
   return {
     event_instance_id: eventId,
     event_date: eventDate,
@@ -34,11 +36,18 @@ function createEvent(
     fng_count: 0,
     ao_org_id: aoOrgId,
     ao_name: aoName,
-    region_org_id: 1,
+    region_org_id: 100,
     region_name: "Test Region",
+    region_logo_url: null,
+    area_org_id: 1000,
+    area_name: "Test Area",
+    sector_org_id: 100000,
+    sector_name: "Test Sector",
     first_f_ind: "Y",
     second_f_ind: "N",
     third_f_ind: "N",
+    types: [],
+    tags: [],
     attendance,
   };
 }
@@ -47,16 +56,16 @@ function createEvent(
 function createPaxData(
   userId: number,
   f3Name: string,
-  events: PaxEventData[],
+  events: EventData[]
 ): PaxData {
   return {
     info: {
       user_id: userId,
       f3_name: f3Name,
       region: "Test Region",
-      region_id: 1,
+      region_id: 100,
       region_default: "Test Region",
-      region_default_id: 1,
+      region_default_id: 100,
       avatar_url: null,
       status: "active",
     },
@@ -307,7 +316,7 @@ describe("getAOBreakdown", () => {
 
     const breakdown = getAOBreakdown(data);
 
-    expect(breakdown[0].region_org_id).toBe(1);
+    expect(breakdown[0].region_org_id).toBe(100);
     expect(breakdown[0].region_name).toBe("Test Region");
   });
 });

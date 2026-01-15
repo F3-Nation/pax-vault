@@ -1,5 +1,5 @@
 // src/lib/data/region.ts
-import { RegionDetails } from "@/types/region";
+import { RegionDetails } from "@/lib/types";
 import { queryBigQuery } from "../db";
 
 export async function getRegionList(): Promise<RegionDetails[]> {

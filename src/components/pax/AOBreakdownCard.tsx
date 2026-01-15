@@ -2,7 +2,7 @@
 
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { PaxAOBreakdown } from "@/types/pax";
+import { PaxAOBreakdown } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
 import { Link } from "@heroui/link";
 import { ScrollShadow } from "@heroui/scroll-shadow";

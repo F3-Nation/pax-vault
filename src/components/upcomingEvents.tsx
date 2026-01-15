@@ -2,18 +2,14 @@
 
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { RegionUpcomingEvents } from "@/types/region";
+import { EventUpcoming } from "@/lib/types";
 import { ScrollShadow } from "@heroui/scroll-shadow";
 import { formatDate, formatTime } from "@/lib/utils";
 import { Chip } from "@heroui/chip";
 import { Avatar } from "@heroui/avatar";
 import { Link } from "@heroui/link";
 
-export function UpcomingEventsCard({
-  events,
-}: {
-  events: RegionUpcomingEvents[];
-}) {
+export function UpcomingEventsCard({ events }: { events: EventUpcoming[] }) {
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="flex justify-between items-center px-6">

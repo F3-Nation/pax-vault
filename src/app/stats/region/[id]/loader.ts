@@ -1,7 +1,7 @@
-import { RegionData, RegionUpcomingEvents } from "@/types/region";
+import { EventData, EventUpcoming } from "@/lib/types";
 import { queryBigQuery } from "@/lib/db";
 
-async function getRegionalData(id: number): Promise<RegionData[] | null> {
+async function getRegionalData(id: number): Promise<EventData[] | null> {
   const query = `
     SELECT
       ei.id AS event_instance_id,
@@ -77,14 +77,12 @@ async function getRegionalData(id: number): Promise<RegionData[] | null> {
       ei.start_date
   `;
 
-  const results = await queryBigQuery<RegionData>(query);
+  const results = await queryBigQuery<EventData>(query);
 
   return results || null;
 }
 
-async function getUpcomingEvents(
-  id: number,
-): Promise<RegionUpcomingEvents[] | null> {
+async function getUpcomingEvents(id: number): Promise<EventUpcoming[] | null> {
   const query = `
   -- Upcoming Events with Q List (BigQuery Standard SQL)
 SELECT
@@ -150,14 +148,14 @@ ORDER BY
   ei.start_time;
   `;
 
-  const results = await queryBigQuery<RegionUpcomingEvents>(query);
+  const results = await queryBigQuery<EventUpcoming>(query);
 
   return results || null;
 }
 
 export async function loadRegionStats(id: number) {
-  let regionData: RegionData[] | null = null;
-  let upcomingEvents: RegionUpcomingEvents[] | null = null;
+  let regionData: EventData[] | null = null;
+  let upcomingEvents: EventUpcoming[] | null = null;
   try {
     regionData = await getRegionalData(id);
     upcomingEvents = await getUpcomingEvents(id);
@@ -166,7 +164,7 @@ export async function loadRegionStats(id: number) {
   }
 
   return {
-    region_data: regionData as RegionData[] | null,
-    upcoming_events: upcomingEvents as RegionUpcomingEvents[] | null,
+    region_data: regionData as EventData[] | null,
+    upcoming_events: upcomingEvents as EventUpcoming[] | null,
   };
 }

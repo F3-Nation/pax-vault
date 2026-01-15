@@ -1,4 +1,4 @@
-// src/app/stats/pax/[id]/loading.tsx
+// src/app/stats/region/[id]/loading.tsx
 
 function SkeletonCard({ height = "h-40" }: { height?: string }) {
   return (

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { getSummary, getLeaderboards, getKotterList } from "./region";
-import { RegionData, RegionAttendance } from "@/types/region";
+
+import { EventData, EventAttendance } from "../lib/types";
 
 // Helper to create a mock attendance record
 function createAttendance(
@@ -9,7 +10,7 @@ function createAttendance(
   f3Name: string,
   qInd: boolean = false,
   avatarUrl: string | null = null,
-): RegionAttendance {
+): EventAttendance {
   return {
     home_region_id: regionId,
     id: userId * 100,
@@ -28,19 +29,15 @@ function createRegionEvent(
   eventDate: string,
   aoOrgId: number,
   aoName: string,
-  attendance: RegionAttendance[],
+  attendance: EventAttendance[],
   fngCount: number = 0,
-): RegionData {
+): EventData {
   return {
     event_instance_id: eventId,
     event_date: eventDate,
     event_name: `Event ${eventId}`,
     pax_count: attendance.length,
     fng_count: fngCount,
-    location_id: 1,
-    location_name: "Test Location",
-    location_latitude: 35.0,
-    location_longitude: -80.0,
     ao_org_id: aoOrgId,
     ao_name: aoName,
     region_org_id: 1,
@@ -48,8 +45,13 @@ function createRegionEvent(
     region_logo_url: null,
     sector_org_id: 1,
     sector_name: "Test Sector",
-    all_types: null,
-    all_tags: null,
+    area_org_id: 1,
+    area_name: "Test Area",
+    first_f_ind: "1",
+    second_f_ind: "0",
+    third_f_ind: "0",
+    tags: null,
+    types: null,
     attendance,
   };
 }
@@ -379,7 +381,7 @@ describe("getKotterList", () => {
   });
 
   it("returns null for null-ish data", () => {
-    expect(getKotterList("100", null as unknown as RegionData[])).toBeNull();
+    expect(getKotterList("100", null as unknown as EventData[])).toBeNull();
   });
 
   it("excludes users who posted within last 14 days (active)", () => {
@@ -473,7 +475,7 @@ describe("getKotterList", () => {
     // Soft Drift: 7-99 total posts, days since last 21-45
     // User has 10 posts, last posted 25 days ago
     vi.setSystemTime(new Date("2024-06-15"));
-    const events: RegionData[] = [];
+    const events: EventData[] = [];
 
     // Create 10 events spread over time, last one 25 days ago
     for (let i = 0; i < 10; i++) {

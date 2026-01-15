@@ -1,4 +1,4 @@
-import { PaxData, PaxInfo, PaxEventData } from "@/types/pax";
+import { PaxData, PaxInfo, EventData } from "@/lib/types";
 import { queryBigQuery } from "@/lib/db";
 
 async function getPaxInfo(id: number): Promise<PaxInfo | null> {
@@ -54,7 +54,7 @@ async function getPaxInfo(id: number): Promise<PaxInfo | null> {
   return results[0] || null;
 }
 
-async function getPaxEvents(id: number): Promise<PaxEventData[] | null> {
+async function getPaxEvents(id: number): Promise<EventData[] | null> {
   const query = `
     SELECT
       ei.id AS event_instance_id,
@@ -66,9 +66,14 @@ async function getPaxEvents(id: number): Promise<PaxEventData[] | null> {
       ei.ao_name,
       ei.region_org_id,
       ei.region_name,
+      ei.region_logo_url,
+      ei.area_org_id,
+      ei.area_name,
+      ei.sector_org_id,
+      ei.sector_name,
       ei.first_f_ind,
       ei.second_f_ind,
-      ei.third_f_ind,
+      ei.third_f_ind,  
       ARRAY(
         SELECT AS STRUCT
           ety.id,
@@ -130,14 +135,14 @@ async function getPaxEvents(id: number): Promise<PaxEventData[] | null> {
       ei.start_date
   `;
 
-  const results = await queryBigQuery<PaxEventData>(query);
+  const results = await queryBigQuery<EventData>(query);
 
   return results || null;
 }
 
 export async function loadPaxStats(id: number): Promise<PaxData> {
   let paxInfo: PaxInfo | null = null;
-  let paxEvents: PaxEventData[] | null = null;
+  let paxEvents: EventData[] | null = null;
   try {
     paxInfo = await getPaxInfo(id);
     paxEvents = await getPaxEvents(id);

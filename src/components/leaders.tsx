@@ -7,10 +7,18 @@ import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { ScrollShadow } from "@heroui/scroll-shadow";
 import { Link } from "@heroui/link";
-import { RegionLeaders } from "@/types/region";
+import { Leaders } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
 
-export function LeadersCard({ leaders }: { leaders: RegionLeaders[] }) {
+export function LeadersCard({
+  leaders,
+  title,
+  size,
+}: {
+  leaders: Leaders[];
+  title?: string;
+  size?: string;
+}) {
   const [mode, setMode] = useState<"posts" | "qs">("posts");
   const sortedLeaders = [...leaders].sort((a, b) => {
     if (mode === "posts") return b.posts - a.posts;
@@ -25,9 +33,11 @@ export function LeadersCard({ leaders }: { leaders: RegionLeaders[] }) {
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="flex justify-between items-center px-6">
         <div className="flex items-center justify-between w-full">
-          <div className="font-semibold text-xl">Region Leaderboards</div>
+          <div className="font-semibold text-xl">
+            {title ? `${title} Leaderboard` : "Leaderboard"}
+          </div>
           <Tabs
-            aria-label="Select Region Leaders View"
+            aria-label={`Select ${title ? `${title} Leaders View` : ""}Leaders View`}
             selectedKey={mode}
             onSelectionChange={(key) => setMode(key as "posts" | "qs")}
             size="sm"
@@ -43,7 +53,7 @@ export function LeadersCard({ leaders }: { leaders: RegionLeaders[] }) {
       </CardHeader>
       <Divider />
       <CardBody className="px-6">
-        <ScrollShadow className="h-[260px]">
+        <ScrollShadow className={`h-[${size ?? 260}px]`}>
           <div className="space-y-1 text-sm">
             {visibleLeaders.map((leader) => (
               <div

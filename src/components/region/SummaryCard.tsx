@@ -2,7 +2,7 @@
 
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { RegionSummary } from "@/types/region";
+import { RegionSummary } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
 
 export function SummaryCard({ summary }: { summary: RegionSummary }) {

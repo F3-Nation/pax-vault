@@ -16,8 +16,7 @@ import {
 import { useDisclosure } from "@heroui/use-disclosure";
 import { Divider } from "@heroui/divider";
 import { ThemeSwitcher } from "@/lib/theme-switcher";
-import { PaxInfo } from "@/types/pax";
-import { RegionDetails } from "@/types/region";
+import { RegionDetails, PaxInfo } from "@/lib/types";
 
 export default function NavbarClient({
   regionData,

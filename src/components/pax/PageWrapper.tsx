@@ -1,12 +1,12 @@
 "use client";
 
-import { PaxData } from "@/types/pax";
+import { PaxData } from "@/lib/types";
 import { getSummary, getAOBreakdown, getPaxCharting } from "@/utils/pax";
 import { Filter } from "../pageFilter";
 import { useState, useMemo } from "react";
 import { SummaryCard } from "./SummaryCard";
 import { AOBreakdownCard } from "./AOBreakdownCard";
-import { EventsCard } from "./EventsCard";
+import { EventsCard } from "../events";
 import { InsightsCard } from "./InsightsCard";
 
 export function PaxPageWrapper({

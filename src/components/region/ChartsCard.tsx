@@ -2,7 +2,7 @@
 
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { RegionChartData } from "@/types/region";
+import { RegionChartData } from "@/lib/types";
 import { ComboBarLineChart } from "../charts/comboChart";
 // import { TreemapChart } from "../charts/treeChart";
 
