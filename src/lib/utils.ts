@@ -1,4 +1,21 @@
-export function getBaseUrl() {
+/**
+ * Shared utility helpers.
+ *
+ * This module contains small, side-effect-free helpers used across the app
+ * for formatting, URL resolution, and string/date normalization.
+ *
+ * All functions are intentionally stateless and deterministic.
+ */
+
+/**
+ * Resolve the base URL for server and client contexts.
+ *
+ * Priority:
+ * 1. NEXT_PUBLIC_SITE_URL (always wins)
+ * 2. http://localhost:3000 in local development (server-side only)
+ * 3. Throw in production when misconfigured
+ */
+export function getBaseUrl(): string {
   const isServer = typeof window === "undefined";
 
   if (process.env.NEXT_PUBLIC_SITE_URL) {
@@ -12,12 +29,17 @@ export function getBaseUrl() {
   throw new Error("NEXT_PUBLIC_SITE_URL must be defined in production");
 }
 
+/**
+ * Format a number with fixed decimals and thousand separators.
+ *
+ * Returns `"N/A"` for null or non-numeric input.
+ */
 export function formatNumber(
   num: number | null,
   decimals: number = 0,
   thousandSeparator: string = ",",
 ): string {
-  if (num === null || isNaN(num)) {
+  if (num === null || !Number.isFinite(num)) {
     return "N/A";
   }
   const formatted = Number(num).toFixed(decimals);
@@ -27,6 +49,11 @@ export function formatNumber(
   return parts.join(".");
 }
 
+/**
+ * Format a date using UTC-only semantics to avoid timezone drift.
+ *
+ * Accepts a Date or ISO date string (YYYY-MM-DD).
+ */
 export function formatDate(
   date: string | Date,
   format?: "M D Y" | "M Y",
@@ -58,9 +85,6 @@ export function formatDate(
     timeZone: "UTC",
   });
 
-  // if (d >= startOfWeek && !format) {
-  //   return d.toLocaleDateString("en-US", optionsUTC({ weekday: "long" }));
-  // } else {
   const weekday = d.toLocaleDateString(
     "en-US",
     optionsUTC({ weekday: "short" }),
@@ -77,13 +101,18 @@ export function formatDate(
     default:
       return `${weekday}, ${month} ${day} ${year}`;
   }
-  //}
 }
 
+/**
+ * Remove common prefixes from event names for display.
+ */
 export function cleanEventName(name: string): string {
   return name.replace(/^Backblast!\s*/i, "").trim();
 }
 
+/**
+ * Generate a human-readable description of month-over-month change.
+ */
 export function formatChangeDescription(
   change: number | null,
   label: string,
@@ -98,6 +127,9 @@ export function formatChangeDescription(
   }
 }
 
+/**
+ * Convert a string to title case.
+ */
 export function toTitleCase(str: string): string {
   return str
     .toLowerCase()
@@ -106,8 +138,11 @@ export function toTitleCase(str: string): string {
     .join(" ");
 }
 
+/**
+ * Format a 24-hour time string (HHMM) to 12-hour format with am/pm.
+ */
 export function formatTime(time: string): string {
-  if (!time || time.length !== 4) return time;
+  if (!time || !/^\d{4}$/.test(time)) return time;
   const hours = parseInt(time.substring(0, 2), 10);
   const minutes = time.substring(2);
   const suffix = hours >= 12 ? "pm" : "am";
@@ -115,6 +150,11 @@ export function formatTime(time: string): string {
   return `${hour12}:${minutes}${suffix}`;
 }
 
+/**
+ * Generate a base64-encoded fallback F3 logo SVG.
+ *
+ * Used when no avatar/logo image is available.
+ */
 export function fallbackF3Logo(color: string = "#fff"): string {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 41.73 41.73">

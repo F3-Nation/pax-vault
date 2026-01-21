@@ -1,14 +1,32 @@
+/**
+ * Application landing page.
+ *
+ * Responsibilities:
+ * - Communicate what PAX Vault is and who it is for.
+ * - Surface environment context (Production vs Staging).
+ * - Provide quick entry points into sample PAX and Region data.
+ */
 import Link from "next/link";
 import { Button } from "@heroui/button";
 import { Card, CardBody, CardHeader, CardFooter } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 
+/**
+ * Resolve a human-readable environment label from runtime configuration.
+ */
+function getEnvironmentLabel(): "Production" | "Staging" {
+  return process.env.ENVIRONMENT === "production" ? "Production" : "Staging";
+}
+
 export default function App() {
-  const environment =
-    process.env.ENVIRONMENT === "production" ? "Production" : "Staging";
+  const environmentLabel = getEnvironmentLabel();
+
+  const samplePaxId = process.env.SAMPLE_PAX ?? "";
+  const sampleRegionId = process.env.SAMPLE_REGION ?? "";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-default-50 px-4">
+      {/* Main marketing card */}
       <Card
         className="w-full max-w-3xl bg-background/80 dark:bg-default-100/60"
         shadow="lg"
@@ -18,10 +36,10 @@ export default function App() {
             <h1 className="text-3xl font-bold tracking-tight">PAX Vault</h1>
             <Chip
               size="sm"
-              color={environment === "Production" ? "success" : "warning"}
+              color={environmentLabel === "Production" ? "success" : "warning"}
               variant="flat"
             >
-              {environment} Environment
+              {environmentLabel} Environment
             </Chip>
           </div>
           <p className="text-sm text-foreground/70 max-w-xl">
@@ -33,6 +51,7 @@ export default function App() {
         </CardHeader>
 
         <CardBody className="space-y-6">
+          {/* Feature highlights */}
           <div className="grid gap-4 md:grid-cols-3">
             <Card
               className="bg-default-50/80 dark:bg-default-100/80"
@@ -83,6 +102,7 @@ export default function App() {
             </Card>
           </div>
 
+          {/* Sample data entry points */}
           <div className="flex flex-col items-center gap-3 pt-2">
             <p className="text-xs text-foreground/60 text-center">
               Jump into some sample data to see how PAX Vault works.
@@ -90,7 +110,7 @@ export default function App() {
 
             <div className="flex flex-col sm:flex-row gap-3 w-full sm:justify-center">
               <Link
-                href={`/stats/pax/${process.env.SAMPLE_PAX ?? ""}`}
+                href={`/stats/pax/${samplePaxId}`}
                 className="flex-1 sm:flex-none"
               >
                 <Button fullWidth variant="bordered" color="secondary">
@@ -99,28 +119,18 @@ export default function App() {
               </Link>
 
               <Link
-                href={`/stats/region/${process.env.SAMPLE_REGION ?? ""}`}
+                href={`/stats/region/${sampleRegionId}`}
                 className="flex-1 sm:flex-none"
               >
                 <Button fullWidth variant="bordered" color="primary">
                   View Sample Region Dashboard
                 </Button>
               </Link>
-
-              {/* Uncomment when you are ready to surface AO sample stats */}
-              {/* <Link href={`/stats/ao/${process.env.SAMPLE_AO ?? ""}`} className="flex-1 sm:flex-none">
-                <Button
-                  fullWidth
-                  variant="bordered"
-                  color="secondary"
-                >
-                  View Sample AO Stats
-                </Button>
-              </Link> */}
             </div>
           </div>
         </CardBody>
 
+        {/* Footer copy */}
         <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-default-100/60">
           <p className="text-[11px] text-foreground/50">
             Built for F3 regions that want real visibility into their PAX and
