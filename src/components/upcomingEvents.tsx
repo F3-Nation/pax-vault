@@ -1,5 +1,20 @@
 "use client";
 
+/**
+ * UpcomingEventsCard
+ *
+ * Displays a scrollable list of upcoming events for a region.
+ *
+ * Features:
+ * - Toggle to show only events with an open Q spot
+ * - Visual distinction between open vs assigned Qs
+ * - Links to AO and PAX detail pages
+ *
+ * This component is client-side and purely presentational.
+ */
+
+import { useState } from "react";
+
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { EventUpcoming } from "@/lib/types";
@@ -8,20 +23,59 @@ import { formatDate, formatTime } from "@/lib/utils";
 import { Chip } from "@heroui/chip";
 import { Avatar } from "@heroui/avatar";
 import { Link } from "@heroui/link";
+import { Button } from "@heroui/button";
 
-export function UpcomingEventsCard({ events }: { events: EventUpcoming[] }) {
+function hasOpenQ(event: EventUpcoming) {
+  return !event.q_list || event.q_list.length < 1;
+}
+
+type UpcomingEventsCardProps = {
+  events: EventUpcoming[];
+};
+
+export function UpcomingEventsCard({ events }: UpcomingEventsCardProps) {
+  // Toggle to filter events with open Q spots only
+  const [showOpenOnly, setShowOpenOnly] = useState(false);
+
+  // Apply open-Q filter when enabled
+  const filteredEvents = showOpenOnly
+    ? events.filter((e) => hasOpenQ(e))
+    : events;
+
+  // Count of events that currently have no assigned Q
+  const openCount = events.filter((e) => hasOpenQ(e)).length;
+
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="flex justify-between items-center px-6">
-        <div className="flex items-center justify-between w-full">
+        <div className="flex items-center justify-between w-full gap-3">
           <div className="font-semibold text-xl">Upcoming Events</div>
+
+          <Button
+            size="md"
+            variant="bordered"
+            color="default"
+            isDisabled={openCount === 0}
+            onPress={() => setShowOpenOnly((v) => !v)}
+          >
+            <span className={showOpenOnly ? "text-default-500" : "text-danger"}>
+              {showOpenOnly ? "Show all" : "Show open only"}
+            </span>
+          </Button>
         </div>
       </CardHeader>
       <Divider />
       <CardBody className="px-6">
+        {/* Scroll container to cap card height while keeping header visible */}
         <ScrollShadow className="h-[500px]">
           <div className="space-y-1 text-sm">
-            {events.map((event, idx) => (
+            {/* Empty state when filtering open-Q events */}
+            {showOpenOnly && filteredEvents.length === 0 ? (
+              <div className="italic text-default-500 text-sm">
+                No upcoming events have an open Q spot.
+              </div>
+            ) : null}
+            {filteredEvents.map((event, idx) => (
               <div
                 key={`${event.start_date}-${event.ao_org_id}-${idx}`}
                 className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10"
@@ -50,7 +104,7 @@ export function UpcomingEventsCard({ events }: { events: EventUpcoming[] }) {
                     )}
                   </div>
                   <div className="text-default-500 text-sm">
-                    {formatDate(event.start_date, "M D Y")}
+                    {formatDate(event.start_date)}
                     {" @ "}
                     {formatTime(event.start_time)} •{" "}
                     <div className="inline text-default-500 text-sm italic">

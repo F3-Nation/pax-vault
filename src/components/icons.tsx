@@ -1,5 +1,17 @@
-import * as React from "react";
+/**
+ * App icon set.
+ *
+ * These are lightweight React components that render inline SVGs.
+ *
+ * Conventions:
+ * - All icons accept standard `React.SVGProps<SVGSVGElement>`.
+ * - `fill="currentColor"` (or `stroke="currentColor"`) enables theme-aware coloring.
+ * - Consumers should provide sizing via `className` (e.g., `h-4 w-4`) or `height`/`width` props.
+ */
 
+import type * as React from "react";
+
+/** Icon: map overview / regions. */
 export function MapIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -13,6 +25,7 @@ export function MapIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Icon: location pin / AO marker. */
 export function MapPinIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -26,6 +39,7 @@ export function MapPinIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Icon: user / PAX. */
 export function UserIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -39,6 +53,7 @@ export function UserIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Icon: dark mode. */
 export const MoonIcon = (props: React.SVGProps<SVGSVGElement>) => {
   return (
     <svg
@@ -59,6 +74,7 @@ export const MoonIcon = (props: React.SVGProps<SVGSVGElement>) => {
   );
 };
 
+/** Icon: light mode. */
 export const SunIcon = (props: React.SVGProps<SVGSVGElement>) => {
   return (
     <svg
@@ -79,6 +95,7 @@ export const SunIcon = (props: React.SVGProps<SVGSVGElement>) => {
   );
 };
 
+/** Icon: email/contact. */
 export const EmailIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -92,6 +109,7 @@ export const EmailIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Icon: website/link. */
 export const WebsiteIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -105,6 +123,7 @@ export const WebsiteIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Icon: Twitter/X. */
 export const TwitterIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -118,6 +137,7 @@ export const TwitterIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Icon: Instagram. */
 export const InstagramIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -131,6 +151,7 @@ export const InstagramIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Icon: Facebook. */
 export const FacebookIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -144,6 +165,7 @@ export const FacebookIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Icon: F3 logo mark. */
 export const F3LogoIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -174,6 +196,7 @@ export const F3LogoIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Icon: copy to clipboard. */
 export const CopyIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -187,6 +210,7 @@ export const CopyIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Icon: close/dismiss. */
 export const CloseIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -205,6 +229,7 @@ export const CloseIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Icon: filter/funnel. */
 export const FilterIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"

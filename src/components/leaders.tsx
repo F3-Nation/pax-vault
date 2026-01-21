@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * LeadersCard
+ *
+ * Displays a leaderboard of region leaders, sortable by Posts or Qs.
+ *
+ * This component is purely presentational:
+ * - Sorting and filtering are handled client-side.
+ * - Data is assumed to be validated upstream.
+ */
+
 import { useState } from "react";
 import { Tabs, Tab } from "@heroui/tabs";
 import { Avatar } from "@heroui/avatar";
@@ -10,21 +20,32 @@ import { Link } from "@heroui/link";
 import { Leaders } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
 
-export function LeadersCard({
-  leaders,
-  height,
-  title,
-}: {
+type LeadersCardProps = {
   leaders: Leaders[];
   height: number;
   title?: string;
-}) {
+};
+
+/**
+ * Render the numeric value for a leaderboard row based on the active mode.
+ */
+function renderLeaderValue(leader: Leaders, mode: "posts" | "qs") {
+  return mode === "posts"
+    ? `${formatNumber(leader.posts)} Posts`
+    : `${formatNumber(leader.qs)} Qs`;
+}
+
+export function LeadersCard({ leaders, height, title }: LeadersCardProps) {
+  // Current leaderboard mode (posts vs Qs)
   const [mode, setMode] = useState<"posts" | "qs">("posts");
+
+  // Leaders sorted by the active metric
   const sortedLeaders = [...leaders].sort((a, b) => {
     if (mode === "posts") return b.posts - a.posts;
     return b.qs - a.qs;
   });
 
+  // Hide zero-Q leaders when viewing Qs
   const visibleLeaders =
     mode === "qs"
       ? sortedLeaders.filter((leader) => leader.qs > 0)
@@ -53,8 +74,8 @@ export function LeadersCard({
       </CardHeader>
       <Divider />
       <CardBody className="px-6">
-        <ScrollShadow className={`h-[${height}px]`}>
-          <div className="space-y-1 text-sm">
+        <ScrollShadow style={{ height }} className="w-full">
+          <div className="space-y-1 text-sm overflow-y-auto">
             {visibleLeaders.map((leader) => (
               <div
                 key={leader.user_id}
@@ -75,9 +96,7 @@ export function LeadersCard({
                     {leader.f3_name ?? leader.user_id.toString()}
                   </Link>
                 </div>
-                {mode === "posts"
-                  ? `${formatNumber(leader.posts)} Posts`
-                  : `${formatNumber(leader.qs)} Qs`}
+                {renderLeaderValue(leader, mode)}
               </div>
             ))}
           </div>

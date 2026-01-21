@@ -1,35 +1,196 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * EventsCard
+ *
+ * Displays a searchable, paginated list of events for a region.
+ * Supports lazy-loading all events, client-side filtering, and
+ * an event-details modal.
+ *
+ * This component is client-side and intentionally stateful.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+/**
+ * Lightweight skeleton placeholder for event cards.
+ *
+ * Used when loading the full event history to provide a more visual loading state.
+ */
+function EventCardSkeleton() {
+  return (
+    <Card className="bg-background/60 dark:bg-default-100/50 border border-default-200 dark:border-default-300">
+      <CardBody className="text-sm">
+        <div className="animate-pulse">
+          <div className="flex justify-between gap-4">
+            <div className="flex-1">
+              <div className="h-5 w-3/4 rounded-md bg-default-200 dark:bg-default-300" />
+              <div className="mt-2 h-4 w-2/3 rounded-md bg-default-100 dark:bg-default-200" />
+            </div>
+            <div className="h-8 w-24 rounded-md bg-default-100 dark:bg-default-200" />
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <div className="h-7 w-28 rounded-full bg-default-100 dark:bg-default-200" />
+            <div className="h-7 w-24 rounded-full bg-default-100 dark:bg-default-200" />
+            <div className="h-7 w-32 rounded-full bg-default-100 dark:bg-default-200" />
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <div className="h-7 w-20 rounded-full bg-default-100 dark:bg-default-200" />
+            <div className="h-7 w-24 rounded-full bg-default-100 dark:bg-default-200" />
+            <div className="h-7 w-28 rounded-full bg-default-100 dark:bg-default-200" />
+            <div className="h-7 w-16 rounded-full bg-default-100 dark:bg-default-200" />
+          </div>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
 import { Pagination } from "@heroui/pagination";
 import { Input } from "@heroui/input";
 
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { EventData } from "@/lib/types";
-import { formatDate, cleanEventName, formatNumber } from "@/lib/utils";
+import { EventData, EventDetails } from "@/lib/types";
+import { formatDate, cleanEventName } from "@/lib/utils";
 import { Link } from "@heroui/link";
 import { Chip } from "@heroui/chip";
 import { Avatar } from "@heroui/avatar";
+import { Modal, ModalContent, ModalHeader, ModalBody } from "@heroui/modal";
+import { useDisclosure } from "@heroui/use-disclosure";
+import { Button } from "@heroui/button";
+import { Image } from "@heroui/image";
+
+type EventsCardProps = {
+  events: EventData[];
+  thisPaxId?: number;
+  thisRegionId?: number;
+  thisAOId?: number;
+  filtersQuery?: string;
+};
 
 export function EventsCard({
   events,
-  thisUserId,
-}: {
-  events: EventData[];
-  thisUserId?: number;
-}) {
-  events = events.toReversed(); // Show most recent events first
+  thisPaxId,
+  thisRegionId,
+  thisAOId,
+  filtersQuery,
+}: EventsCardProps) {
+  // Local copy of events (allows client-side filtering and reload-all behavior)
+  const [eventsData, setEventsData] = useState<EventData[]>(() => events ?? []);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [hasLoadedAll, setHasLoadedAll] = useState(false);
 
+  useEffect(() => {
+    setEventsData(events ?? []);
+    setHasLoadedAll(false);
+  }, [events]);
+
+  // Pagination and search state
   const perPage = 10;
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredEvents = events.filter((ev) => {
+  // Event details modal state
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const [selectedEvent, setSelectedEvent] = useState<EventData | null>(null);
+  const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
+  useEffect(() => {
+    if (!selectedEvent || !isOpen) return;
+
+    let cancelled = false;
+
+    async function fetchDetails() {
+      try {
+        setIsLoadingDetails(true);
+        setEventDetails(null);
+
+        const res = await fetch(
+          `/api/events/${selectedEvent?.event_instance_id}`,
+        );
+        if (!res.ok) {
+          throw new Error(`Failed to load event details (${res.status})`);
+        }
+
+        const data = await res.json();
+        if (!cancelled) setEventDetails(data);
+      } catch (err) {
+        console.error("Error loading event details:", err);
+      } finally {
+        if (!cancelled) setIsLoadingDetails(false);
+      }
+    }
+
+    fetchDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEvent, isOpen]);
+
+  /**
+   * Load the full event history for the region, respecting current filters.
+   */
+  async function loadAllEvents() {
+    if (isLoadingAll) return;
+
+    try {
+      setIsLoadingAll(true);
+
+      const qs = filtersQuery ? filtersQuery.trim() : "";
+      const urlType = thisRegionId
+        ? `region/${thisRegionId}`
+        : thisAOId
+          ? `ao/${thisAOId}`
+          : thisPaxId
+            ? `pax/${thisPaxId}`
+            : "";
+      const url = qs
+        ? `/api/${urlType}/events?${qs}`
+        : `/api/${urlType}/events`;
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error("Failed to load all events:", res.statusText);
+        return;
+      }
+
+      const data: EventData[] = await res.json();
+      setEventsData(data ?? []);
+      setPage(1);
+      setHasLoadedAll(true);
+    } catch (err) {
+      console.error("Error loading all events:", err);
+    } finally {
+      setIsLoadingAll(false);
+    }
+  }
+
+  const sortAttendance = (list: (typeof events)[number]["attendance"]) =>
+    list
+      .slice()
+      .sort((a, b) =>
+        (a.f3_name ?? a.user_id.toString()).localeCompare(
+          b.f3_name ?? b.user_id.toString(),
+        ),
+      );
+
+  const getQList = (event: EventData) =>
+    sortAttendance(event.attendance.filter((att) => att.q_ind));
+
+  const getPaxList = (event: EventData) => sortAttendance(event.attendance);
+
+  // Client-side search across event, AO, region, PAX, and Q names
+  const filteredEvents = eventsData.filter((ev) => {
     const term = searchTerm.toLowerCase();
     const name = ev.event_name?.toLowerCase() || "";
     const ao = ev.ao_name?.toLowerCase() || "";
     const region = ev.region_name?.toLowerCase() || "";
+    const tags = ev.tags?.map((tag) => tag.name.toLowerCase()).join(" ") || "";
+    const types =
+      ev.types?.map((type) => type.name.toLowerCase()).join(" ") || "";
 
     const paxNames = ev.attendance
       .map((a) => a.f3_name?.toLowerCase() || a.user_id.toString())
@@ -40,131 +201,525 @@ export function EventsCard({
       .map((a) => a.f3_name?.toLowerCase() || a.user_id.toString())
       .join(" ");
 
-    // Free text match
-    const matchesFree =
+    return (
       name.includes(term) ||
       ao.includes(term) ||
       region.includes(term) ||
       paxNames.includes(term) ||
-      qNames.includes(term);
-
-    return matchesFree;
+      qNames.includes(term) ||
+      tags.includes(term) ||
+      types.includes(term)
+    );
   });
 
+  // Pagination derived from filtered results
   const totalPages = Math.ceil(filteredEvents.length / perPage);
   const paginatedEvents = filteredEvents.slice(
     (page - 1) * perPage,
     page * perPage,
   );
 
+  const skeletonCards = useMemo(
+    () => Array.from({ length: 6 }, (_, i) => i),
+    [],
+  );
+  const hasEventImages = (eventDetails?.meta?.files?.length ?? 0) > 0;
+
   return (
-    <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
-      <CardHeader className="flex justify-between items-center font-semibold text-xl px-6">
-        <div className="flex items-center justify-between w-full">
-          {/* Left: Title */}
-          <div className="flex items-center justify-start">Recent Events</div>
+    <>
+      <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
+        <CardHeader className="flex justify-between items-center font-semibold text-xl px-6">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center justify-start">Recent Events</div>
 
-          {/* Right: Search Input */}
-          <div className="flex items-center justify-end">
-            <Input
-              aria-label="Search events"
-              placeholder="Search events..."
-              variant="flat"
-              size="sm"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPage(1);
-              }}
-              className="max-w-xs"
-            />
-          </div>
-        </div>
-      </CardHeader>
-      <Divider />
-      <CardBody className="px-6">
-        <div
-          className={`grid grid-cols-1 gap-6 w-full max-w-6xl ${
-            events.length > 0 ? "mb-6 lg:grid-cols-2" : ""
-          }`}
-        >
-          {/* Event items will go here */}
-          {events.length === 0 ? (
-            <p className="italic text-center text-sm text-default">
-              No events available
-            </p>
-          ) : null}
-          {paginatedEvents.map((event, index) => {
-            const pax_list = event.attendance
-              .slice()
-              .sort((a, b) =>
-                (a.f3_name ?? a.user_id.toString()).localeCompare(
-                  b.f3_name ?? b.user_id.toString(),
-                ),
-              );
-
-            const q_list = event.attendance
-              .filter((att) => att.q_ind)
-              .slice()
-              .sort((a, b) =>
-                (a.f3_name ?? a.user_id.toString()).localeCompare(
-                  b.f3_name ?? b.user_id.toString(),
-                ),
-              );
-            return (
-              <div key={event.event_instance_id || index}>
-                <Card
-                  className={`bg-background/60 dark:bg-default-100/50 border ${q_list.some((q) => q.user_id === thisUserId) ? "border-secondary" : "border-default-200 dark:border-default-300"}`}
+            <div className="flex items-center justify-end gap-2">
+              {!hasLoadedAll && (
+                <Button
+                  onPress={loadAllEvents}
+                  isDisabled={isLoadingAll}
+                  variant="ghost"
+                  color="default"
+                  size="md"
                 >
-                  <CardBody className="text-sm">
-                    <div className="flex justify-between gap-4">
-                      <div className="pb-4 justify-start">
-                        <Link href={`/stats/event/${event.event_instance_id}`}>
-                          <div className="font-semibold text-primary text-lg">
-                            {cleanEventName(event.event_name)}
+                  <span className="text-default-500">
+                    {isLoadingAll ? "Loading…" : "Load all"}
+                  </span>
+                </Button>
+              )}
+              <Input
+                aria-label="Search events"
+                placeholder="Search events..."
+                variant="flat"
+                size="md"
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPage(1);
+                }}
+                className="max-w-xs"
+              />
+            </div>
+          </div>
+        </CardHeader>
+
+        <Divider />
+
+        <CardBody className="px-6">
+          <div
+            className={`grid grid-cols-1 gap-6 w-full max-w-6xl ${
+              eventsData.length > 0 || isLoadingAll ? "mb-6 lg:grid-cols-2" : ""
+            }`}
+          >
+            {isLoadingAll &&
+              skeletonCards.map((i) => (
+                <div key={`event-skeleton-${i}`}>
+                  <EventCardSkeleton />
+                </div>
+              ))}
+
+            {!isLoadingAll && eventsData.length === 0 ? (
+              <p className="italic text-center text-sm text-default">
+                No events available
+              </p>
+            ) : null}
+
+            {!isLoadingAll &&
+              paginatedEvents.map((event, index) => {
+                const pax_list = getPaxList(event);
+                const q_list = getQList(event);
+
+                return (
+                  <div key={event.event_instance_id || index}>
+                    <Card
+                      className={`bg-background/60 dark:bg-default-100/50 border ${
+                        q_list.some((q) => q.user_id === thisPaxId)
+                          ? "border-secondary"
+                          : "border-default-200 dark:border-default-300"
+                      }`}
+                    >
+                      <CardBody className="text-sm">
+                        <div className="flex justify-between gap-4">
+                          <div className="pb-4 justify-start">
+                            <Link
+                              href={`/stats/event/${event.event_instance_id}`}
+                            >
+                              <div className="font-semibold text-primary text-lg">
+                                {cleanEventName(event.event_name)}
+                              </div>
+                            </Link>
+                            <div className="text-default-400">
+                              {formatDate(event.event_date)} @{" "}
+                              <Link
+                                href={
+                                  event.ao_org_id
+                                    ? `/stats/ao/${event.ao_org_id}`
+                                    : `/stats/region/${event.region_org_id}`
+                                }
+                              >
+                                <span className="text-default-400 text-sm italic">
+                                  {event.ao_name ??
+                                    event.region_name ??
+                                    "Unknown AO"}
+                                </span>
+                              </Link>
+                            </div>
+                            <div className="gap-2t">
+                              <span className="text-warning text-sm">
+                                {event.tags?.map((tag) => tag.name).join(" • ")}
+                              </span>
+                              {(event.tags?.length ?? 0) > 0 &&
+                                (event.types?.length ?? 0) > 0 && (
+                                  <span className="text-default-400 italic text-sm">
+                                    {" "}
+                                    •{" "}
+                                  </span>
+                                )}
+                              <span className="text-default-400 italic text-sm">
+                                {event.types
+                                  ?.map((type) => type.name)
+                                  .join(" • ")}
+                              </span>
+                            </div>
                           </div>
-                        </Link>
-                        <div className="text-default-400">
-                          {formatDate(event.event_date)} @{" "}
-                          <Link
-                            href={
-                              event.ao_org_id
-                                ? `/stats/ao/${event.ao_org_id}`
-                                : `/stats/region/${event.region_org_id}`
-                            }
-                          >
-                            <span className="text-default-400 text-sm italic">
-                              {event.ao_name ?? event.region_name}
-                            </span>
-                          </Link>
+                          <div className="gap-2 justify-end text-right">
+                            <Button
+                              onPress={() => {
+                                setSelectedEvent(event);
+                                onOpen();
+                              }}
+                              variant="ghost"
+                              color="default"
+                              size="sm"
+                            >
+                              View Details
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between gap-2 pb-2">
+                          <div className="flex flex-wrap gap-1">
+                            {q_list.length === 0 ? (
+                              <Chip
+                                key={`q-unknown-${event.event_instance_id}`}
+                                avatar={<Avatar showFallback src={undefined} />}
+                                variant="bordered"
+                                color="secondary"
+                                size="sm"
+                              >
+                                Unknown Q
+                              </Chip>
+                            ) : (
+                              q_list.map((q, i) => (
+                                <Link
+                                  key={`q-${event.event_instance_id}-${i}`}
+                                  href={`/stats/pax/${q.user_id}`}
+                                  className="text-default-100"
+                                >
+                                  <Chip
+                                    avatar={
+                                      <Avatar
+                                        showFallback
+                                        src={q.avatar_url || undefined}
+                                      />
+                                    }
+                                    variant="bordered"
+                                    color="secondary"
+                                    size="sm"
+                                  >
+                                    {q.f3_name}
+                                  </Chip>
+                                </Link>
+                              ))
+                            )}
+                          </div>
+                          <div className="text-sm justify-end" />
+                        </div>
+
+                        <div className="flex justify-between pb-2">
+                          <div className="flex flex-wrap gap-1">
+                            {pax_list.length === 0 ? (
+                              <span className="italic text-default-500">
+                                No attendees
+                              </span>
+                            ) : (
+                              pax_list.map((pax, i) => (
+                                <Link
+                                  key={`pax-${event.event_instance_id}-${i}`}
+                                  href={`/stats/pax/${pax.user_id}`}
+                                  className="text-default-100"
+                                >
+                                  <Chip
+                                    avatar={
+                                      <Avatar
+                                        showFallback
+                                        src={pax.avatar_url || undefined}
+                                      />
+                                    }
+                                    variant="bordered"
+                                    color="default"
+                                    size="sm"
+                                  >
+                                    {pax.f3_name ?? pax.user_id.toString()}
+                                  </Chip>
+                                </Link>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </CardBody>
+                    </Card>
+                  </div>
+                );
+              })}
+          </div>
+        </CardBody>
+
+        <Divider />
+
+        <CardFooter className="flex justify-center items-center font-semibold text-xl px-6">
+          {!isLoadingAll && eventsData.length > 0 && (
+            <Pagination
+              page={page}
+              total={totalPages}
+              onChange={setPage}
+              showShadow
+              showControls
+              color="default"
+              variant="bordered"
+            />
+          )}
+        </CardFooter>
+      </Card>
+
+      <Modal
+        isOpen={isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedEvent(null);
+            setEventDetails(null);
+            setIsLoadingDetails(false);
+          }
+          onOpenChange();
+        }}
+        backdrop="blur"
+        size="3xl"
+        scrollBehavior="inside"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            {selectedEvent ? (
+              <div className="flex flex-col gap-2">
+                <div className="text-xl font-semibold text-foreground">
+                  {cleanEventName(selectedEvent.event_name)}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 text-sm text-default-500">
+                  <span>{formatDate(selectedEvent.event_date)}</span>
+                  <span className="text-default-400">•</span>
+                  <Link
+                    href={
+                      selectedEvent.ao_org_id
+                        ? `/stats/ao/${selectedEvent.ao_org_id}`
+                        : `/stats/region/${selectedEvent.region_org_id}`
+                    }
+                    className="text-default-500 hover:text-default-700"
+                  >
+                    {selectedEvent.ao_name ??
+                      selectedEvent.region_name ??
+                      "Unknown AO"}
+                  </Link>
+                  {selectedEvent.region_name && (
+                    <>
+                      <span className="text-default-400">•</span>
+                      <Link
+                        href={`/stats/region/${selectedEvent.region_org_id}`}
+                        className="text-default-500 hover:text-default-700"
+                      >
+                        {selectedEvent.region_name}
+                      </Link>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {(selectedEvent.types?.length ?? 0) > 0 &&
+                    selectedEvent.types?.map((t, i) => (
+                      <Chip
+                        key={`modal-type-${selectedEvent.event_instance_id}-${i}`}
+                        size="sm"
+                        variant="flat"
+                        color="default"
+                      >
+                        {t.name}
+                      </Chip>
+                    ))}
+
+                  {(selectedEvent.tags?.length ?? 0) > 0 &&
+                    selectedEvent.tags?.map((t, i) => (
+                      <Chip
+                        key={`modal-tag-${selectedEvent.event_instance_id}-${i}`}
+                        size="sm"
+                        variant="flat"
+                        color="warning"
+                      >
+                        {t.name}
+                      </Chip>
+                    ))}
+                </div>
+              </div>
+            ) : (
+              "Event Details"
+            )}
+          </ModalHeader>
+          <ModalBody>
+            {isLoadingDetails && (
+              <div className="space-y-4">
+                <div className="text-sm italic text-default-400">
+                  Loading event details…
+                </div>
+                <div className="animate-pulse space-y-3">
+                  <div className="h-4 w-1/2 rounded bg-default-200 dark:bg-default-300" />
+                  <div className="h-4 w-5/6 rounded bg-default-100 dark:bg-default-200" />
+                  <div className="h-4 w-2/3 rounded bg-default-100 dark:bg-default-200" />
+                </div>
+              </div>
+            )}
+
+            {!isLoadingDetails && selectedEvent && (
+              <div className="space-y-6">
+                {/* Quick facts */}
+                {hasEventImages ? (
+                  <section className="flex flex-col md:flex-row gap-4 items-stretch">
+                    {/* Left: Q(s) + PAX (flexes to fill remaining width) */}
+                    <div className="flex-1 min-w-0 rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-4">
+                      <div className="space-y-5">
+                        {/* Qs */}
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
+                            Q
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {getQList(selectedEvent).length === 0 ? (
+                              <Chip
+                                key={`modal-q-unknown-${selectedEvent.event_instance_id}`}
+                                avatar={<Avatar showFallback src={undefined} />}
+                                variant="bordered"
+                                color="secondary"
+                                size="sm"
+                              >
+                                Unknown Q
+                              </Chip>
+                            ) : (
+                              getQList(selectedEvent).map((q, i) => (
+                                <Link
+                                  key={`modal-q-${selectedEvent.event_instance_id}-${i}`}
+                                  href={`/stats/pax/${q.user_id}`}
+                                  className="text-default-100"
+                                >
+                                  <Chip
+                                    avatar={
+                                      <Avatar
+                                        showFallback
+                                        src={q.avatar_url || undefined}
+                                      />
+                                    }
+                                    variant="bordered"
+                                    color="secondary"
+                                    size="sm"
+                                  >
+                                    {q.f3_name ?? q.user_id.toString()}
+                                  </Chip>
+                                </Link>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Attendance */}
+                        <div>
+                          <div className="flex items-baseline justify-between">
+                            <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
+                              PAX
+                            </div>
+                            <div className="text-xs text-default-500">
+                              {getPaxList(selectedEvent).length} attendee(s)
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {getPaxList(selectedEvent).length === 0 ? (
+                              <span className="italic text-default-500">
+                                No attendees
+                              </span>
+                            ) : (
+                              getPaxList(selectedEvent).map((pax, i) => (
+                                <Link
+                                  key={`modal-pax-${selectedEvent.event_instance_id}-${i}`}
+                                  href={`/stats/pax/${pax.user_id}`}
+                                  className="text-default-100"
+                                >
+                                  <Chip
+                                    avatar={
+                                      <Avatar
+                                        showFallback
+                                        src={pax.avatar_url || undefined}
+                                      />
+                                    }
+                                    variant="bordered"
+                                    color="default"
+                                    size="sm"
+                                  >
+                                    {pax.f3_name ?? pax.user_id.toString()}
+                                  </Chip>
+                                </Link>
+                              ))
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 justify-end">
-                        <Chip>{formatNumber(event.pax_count)}</Chip>
+                    </div>
+
+                    {/* Right: Image (stretches to match left panel height on md+) */}
+                    <div className="w-full md:w-[360px] lg:w-[420px] shrink-0 rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-3">
+                      <div className="h-full flex flex-col gap-3">
+                        <div className="flex items-baseline justify-between">
+                          <div className="text-xs uppercase tracking-wide text-default-500">
+                            Image
+                          </div>
+                          <div className="text-xs text-default-500">
+                            {(eventDetails?.meta?.files?.length ?? 0) > 1
+                              ? `${eventDetails?.meta?.files?.length ?? 0} files`
+                              : `${eventDetails?.meta?.files?.length ?? 0} file`}
+                          </div>
+                        </div>
+
+                        {/* Hero image fills available height */}
+                        <div className="flex-1 min-h-[220px]">
+                          <a
+                            href={(eventDetails?.meta?.files ?? [])[0]}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block h-full"
+                          >
+                            <Image
+                              src={(eventDetails?.meta?.files ?? [])[0]}
+                              alt="Event image"
+                              className="h-full w-full object-cover rounded-md border border-default-200 dark:border-default-300"
+                            />
+                          </a>
+                        </div>
+
+                        {/* Optional thumbnails when multiple images exist */}
+                        {(eventDetails?.meta?.files?.length ?? 0) > 1 && (
+                          <div className="flex flex-wrap gap-2">
+                            {(eventDetails?.meta?.files ?? [])
+                              .slice(1, 5)
+                              .map((file, index) => (
+                                <a
+                                  key={file}
+                                  href={file}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block"
+                                >
+                                  <Image
+                                    src={file}
+                                    alt={`Event thumbnail ${index + 2}`}
+                                    className="h-16 w-20 object-cover rounded-md border border-default-200 dark:border-default-300"
+                                  />
+                                </a>
+                              ))}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="flex justify-between gap-2 pb-2">
-                      <div className="flex flex-wrap gap-1">
-                        {q_list.length === 0 ? (
-                          <Chip
-                            key={`q-unknown-${event.event_instance_id}`}
-                            avatar={<Avatar showFallback src={undefined} />}
-                            variant="bordered"
-                            color="secondary"
-                            size="sm"
-                          >
-                            Unknown Q
-                          </Chip>
-                        ) : (
-                          q_list.map((q, i) => {
-                            return (
+                  </section>
+                ) : (
+                  <section className="rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Qs */}
+                      <div>
+                        <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
+                          Q
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {getQList(selectedEvent).length === 0 ? (
+                            <Chip
+                              key={`modal-q-unknown-${selectedEvent.event_instance_id}`}
+                              avatar={<Avatar showFallback src={undefined} />}
+                              variant="bordered"
+                              color="secondary"
+                              size="sm"
+                            >
+                              Unknown Q
+                            </Chip>
+                          ) : (
+                            getQList(selectedEvent).map((q, i) => (
                               <Link
-                                key={`q-${event.event_instance_id}-${i}`}
+                                key={`modal-q-${selectedEvent.event_instance_id}-${i}`}
                                 href={`/stats/pax/${q.user_id}`}
                                 className="text-default-100"
                               >
                                 <Chip
-                                  key={`q-${event.event_instance_id}-${i}`}
                                   avatar={
                                     <Avatar
                                       showFallback
@@ -175,30 +730,37 @@ export function EventsCard({
                                   color="secondary"
                                   size="sm"
                                 >
-                                  {q.f3_name}
+                                  {q.f3_name ?? q.user_id.toString()}
                                 </Chip>
                               </Link>
-                            );
-                          })
-                        )}
+                            ))
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex justify-between pb-2">
-                      <div className="flex flex-wrap gap-1">
-                        {pax_list.length === 0 ? (
-                          <span className="italic text-default-500">
-                            No attendees
-                          </span>
-                        ) : (
-                          pax_list.map((pax, i) => {
-                            return (
+
+                      {/* Attendance */}
+                      <div>
+                        <div className="flex items-baseline justify-between">
+                          <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
+                            PAX
+                          </div>
+                          <div className="text-xs text-default-500">
+                            {getPaxList(selectedEvent).length} attendee(s)
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {getPaxList(selectedEvent).length === 0 ? (
+                            <span className="italic text-default-500">
+                              No attendees
+                            </span>
+                          ) : (
+                            getPaxList(selectedEvent).map((pax, i) => (
                               <Link
-                                key={`pax-${event.event_instance_id}-${i}`}
+                                key={`modal-pax-${selectedEvent.event_instance_id}-${i}`}
                                 href={`/stats/pax/${pax.user_id}`}
                                 className="text-default-100"
                               >
                                 <Chip
-                                  key={`pax-${event.event_instance_id}-${i}`}
                                   avatar={
                                     <Avatar
                                       showFallback
@@ -206,39 +768,56 @@ export function EventsCard({
                                     />
                                   }
                                   variant="bordered"
-                                  color={"default"}
+                                  color="default"
                                   size="sm"
                                 >
                                   {pax.f3_name ?? pax.user_id.toString()}
                                 </Chip>
                               </Link>
-                            );
-                          })
-                        )}
+                            ))
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </CardBody>
-                </Card>
+                  </section>
+                )}
+
+                {/* Preblast */}
+                <section>
+                  <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
+                    Preblast
+                  </div>
+                  <div className="rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-4 text-sm whitespace-pre-wrap">
+                    {eventDetails?.preblast ? (
+                      eventDetails.preblast
+                    ) : (
+                      <span className="italic text-default-500">
+                        No preblast provided.
+                      </span>
+                    )}
+                  </div>
+                </section>
+
+                {/* Backblast */}
+                <section>
+                  <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
+                    Backblast
+                  </div>
+                  <div className="rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-4 text-sm whitespace-pre-wrap">
+                    {eventDetails?.backblast ? (
+                      eventDetails.backblast
+                    ) : (
+                      <span className="italic text-default-500">
+                        No backblast provided.
+                      </span>
+                    )}
+                  </div>
+                </section>
               </div>
-            );
-          })}
-        </div>
-      </CardBody>
-      <Divider />
-      <CardFooter className="flex justify-center items-center font-semibold text-xl px-6">
-        {/* Middle: Pagination */}
-        {events.length > 0 && (
-          <Pagination
-            page={page}
-            total={totalPages}
-            onChange={setPage}
-            showShadow
-            showControls
-            color="default"
-            variant="bordered"
-          />
-        )}
-      </CardFooter>
-    </Card>
+            )}
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+    </>
   );
 }

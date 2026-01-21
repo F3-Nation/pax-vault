@@ -2,13 +2,12 @@
 /*                  TYPES USED ACROSS APP                      */
 /* =========================================================== */
 
-/* USED FOR LEADERBOARDS */
-export interface Leaders {
-  user_id: number; // Unique identifier for the user
-  f3_name: string; // F3 name (nickname) of the user
-  posts: number; // Total number of posts (events attended) by the user at the AO
-  qs: number; // Total number of Q appearances by the user at the AO
-  avatar_url?: string; // Optional URL to the user's avatar image
+/* PAGE FILTERS */
+export interface PageFilters {
+  aos?: { ao_org_id: number; ao_name: string }[];
+  regions?: { region_org_id: number; region_name: string }[];
+  types?: { type_id: number; type_name: string }[];
+  tags?: { tag_id: number; tag_name: string }[];
 }
 
 /* USED FOR ALL EVENT DATA */
@@ -73,20 +72,55 @@ export interface EventUpcoming {
   ]; // List of Qs (leaders) for the upcoming event
 }
 
+/* USED FOR EVENT DETAILS */
+export interface EventDetails {
+  id: number; // Unique identifier for the event instance
+  description: string; // Description of the event
+  preblast: string | null; // Preblast information for the event, can be null
+  preblast_rich: string | null; // Rich preblast information for the event, can be null
+  backblast: string | null; // Backblast information for the event, can be null
+  backblast_rich: string | null; // Rich backblast information for the event, can be null
+  meta: {
+    file_ids: string[] | null;
+    files: string[] | null;
+    [key: string]: string | string[] | number | boolean | null | undefined;
+  } | null; // Metadata associated with the event, can be null
+}
+
+/* USED FOR LEADERBOARDS */
+export interface Leaders {
+  user_id: number; // Unique identifier for the user
+  f3_name: string; // F3 name (nickname) of the user
+  posts: number; // Total number of posts (events attended) by the user at the AO
+  qs: number; // Total number of Q appearances by the user at the AO
+  avatar_url?: string; // Optional URL to the user's avatar image
+}
+
 /* =========================================================== */
 /*                REGION-SPECIFIC TYPES BELOW                  */
 /* =========================================================== */
 
-// USED ONLY FOR REGION LISTING AND SELECTION
-export interface RegionDetails {
-  id: number; // Unique identifier for the region
-  name: string; // Name of the region
-  logo: string | null; // Logo URL of the region, can be null
-  area_id: number; // Unique identifier for the area
-  area_name: string; // Name of the area
+// REGION DATA MODEL
+export interface RegionData {
+  info: RegionInfo | null; // Basic information about the region}
+  summary: RegionSummary | null; // Summary statistics for the region
+  leaders: Leaders[] | null; // Leaderboard data for the region
+  events: EventData[] | null; // List of events held in the region
+  upcoming: EventUpcoming[] | null; // List of upcoming events in the region
+  kotter: RegionKotterList[] | null; // List of Kotter events in the region
+  filters: PageFilters | null; // Filters available for the region
 }
 
-// USED ONLY FOR REGION SUMMARY STATS
+/* USED ONLY FOR REGION INFO */
+export interface RegionInfo {
+  region_id: number; // Unique identifier for the region
+  region_name: string; // Name of the region
+  sector_name: string; // Name of the sector
+  logo_url: string | null; // URL to the region's logo, can be null
+  is_active: boolean; // Indicates if the region is active
+}
+
+/* USED ONLY FOR REGION SUMMARY STATS */
 export interface RegionSummary {
   event_count: number; // Total number of events held in the region
   ao_count: number; // Total number of AOs (Areas of Operation) in the region
@@ -97,14 +131,14 @@ export interface RegionSummary {
   pax_count_average: number; // Average number of participants (pax) per event in the region
 }
 
-// USED ONLY FOR REGION KOTTER LISTING
+/* USED ONLY FOR REGION KOTTER LISTING */
 export interface RegionKotterList {
   user_id: number; // Unique identifier for the user
   f3_name: string; // F3 name (nickname) of the user
   avatar_url?: string; // Optional URL to the user's avatar image
   kotter_status: string; // Kotter status of the user (e.g., "Active", "Inactive")
-  days_since_last_event: number; // Number of days since the user's last event attendance
   total_events: number; // Total number of events attended by the user
+  days_since_last_event: number; // Number of days since the user's last event attendance
   first_event_date: string; // Date of the user's first event attendance
   last_event_date: string; // Date of the user's last event attendance
   last_event_name: string; // Name of the event for the user's last event attendance
@@ -120,46 +154,30 @@ export interface RegionKotterList {
   ]; // List of besties (frequent workout partners) for the user
 }
 
-// USED ONLY FOR REGION CHART DATA
-export interface RegionChartData {
-  uniquePax: RegionChart_UniquePax;
-  workoutAOCount: RegionChart_WorkoutAOCount[];
-}
-
-export interface RegionChart_UniquePax {
-  itteration_type: "month" | "week" | "day" | ""; // Type of iteration (month, week, day, or none)
-  data: {
-    iteration: string; // e.g., month or week identifier
-    count: number; // Number of unique pax in that month/week
-    average: number; // Average pax count for that month/week
-  }[];
-}
-
-export interface RegionChart_WorkoutAOCount {
-  aoName: string; // Name of the AO
-  count: number; // Number of workouts held at the AO
-}
-
 /* =========================================================== */
 /*                 PAX TYPES USED ACROSS APP                   */
 /* =========================================================== */
 
+// PAX DATA MODEL
 export interface PaxData {
-  info: PaxInfo; // Information about the pax
-  events: EventData[]; // List of event data associated with the pax
+  info: PAXInfo | null; // Information about the pax
+  summary: PaxSummary | null; // Summary statistics for the pax
+  ao_breakdown: PaxAOBreakdown[] | null; // Breakdown of events and Qs by AO
+  events: EventData[] | null; // List of event data associated with the pax
+  filters: PageFilters | null; // Filter options available for the pax
 }
 
-export interface PaxInfo {
+/* USED FOR PAX INFO */
+export interface PAXInfo {
   user_id: number; // Unique identifier for the user
   f3_name: string; // F3 name (nickname) of the user
-  region: string | null; // Unique identifier for the user's home region
-  region_id: number | null; // Unique identifier for the user's home region
-  region_default: string | null; // Default region name associated with the user
-  region_default_id: number | null; // Default region ID associated with the user
+  home_region_id: number; // Unique identifier for the user's home region
+  home_region_name: string; // Name of the user's home region
   avatar_url: string | null; // URL to the user's avatar image, can be null
   status: string; // Status of the user (e.g., active, inactive)
 }
 
+/* USED FOR PAX SUMMARY */
 export interface PaxSummary {
   event_count: number; // Total number of events held in the region
   q_count: number; // Total number of Qs (leaders) across all events
@@ -183,6 +201,7 @@ export interface PaxSummary {
   effective_percentage: number | null; // Percentage of events where the main user was an effective Q
 }
 
+/* USED FOR PAX AO BREAKDOWN */
 export interface PaxAOBreakdown {
   ao_org_id: number; // Unique identifier for the AO organization
   ao_name: string; // Name of the AO organization
@@ -192,21 +211,31 @@ export interface PaxAOBreakdown {
   total_q_count: number; // Number of Qs (leaders) held by the AO
 }
 
-export interface PaxInsights {
-  paxData: {
-    month: string; // Month in 'YYYY-MM' format
-    events: number; // Number of events in that month
-    qs: number; // Number of Qs (leaders) in that month
-  }[];
-  eventsChange: number; // Percentage change in events compared to the previous period
-  qsChange: number; // Percentage change in Qs compared to the previous period
-}
-
 /* ========================================================== */
 /*                  AO-SPECIFIC TYPES BELOW                    */
 /* =========================================================== */
 
-// USED ONLY FOR AO SUMMARY STATS
+// AO DATA MODEL
+export interface AOData {
+  info: AOInfo | null; // Basic information about the AO}
+  summary: AOSummary | null; // Summary statistics for the AO
+  leaders: Leaders[] | null; // Leaderboard data for the AO
+  events: EventData[] | null; // List of events held in the AO
+  upcoming: EventUpcoming[] | null; // List of upcoming events in the AO
+  filters: PageFilters | null; // Filters available for the AO
+}
+
+/* USED ONLY FOR AO INFO */
+export interface AOInfo {
+  ao_id: number; // Unique identifier for the AO
+  ao_name: string; // Name of the AO
+  region_id: number; // Unique identifier for the region the AO belongs to
+  region_name: string; // Name of the region the AO belongs to
+  logo_url: string | null; // URL to the AO's logo, can be null
+  is_active: boolean; // Indicates if the AO is active
+}
+
+/* USED ONLY FOR AO SUMMARY STATS */
 export interface AOSummary {
   event_count: number; // Total number of events held in the AO
   first_event_date: string | null; // Date of the first event held in the AO
@@ -217,22 +246,33 @@ export interface AOSummary {
   pax_count_average: number; // Average number of participants (pax) per event in the AO
 }
 
-// USED ONLY FOR AO CHART DATA
-export interface AOChartData {
-  uniquePax: AOChart_UniquePax;
-  workoutAOCount: AOChart_WorkoutAOCount[];
-}
+// // USED ONLY FOR AO SUMMARY STATS
+// export interface AOSummary {
+//   event_count: number; // Total number of events held in the AO
+//   first_event_date: string | null; // Date of the first event held in the AO
+//   active_pax: number; // Number of active participants (pax) in the AO
+//   unique_pax: number; // Number of unique participants (pax) who have attended events in the AO
+//   unique_qs: number; // Number of unique Qs (leaders) who have led events in the AO
+//   fng_count: number; // Total number of first-time participants (FNGs) in the AO
+//   pax_count_average: number; // Average number of participants (pax) per event in the AO
+// }
 
-export interface AOChart_UniquePax {
-  itteration_type: "month" | "week" | "day" | ""; // Type of iteration (month, week, day, or none)
-  data: {
-    iteration: string; // e.g., month or week identifier
-    count: number; // Number of unique pax in that month/week
-    average: number; // Average pax count for that month/week
-  }[];
-}
+// // USED ONLY FOR AO CHART DATA
+// export interface AOChartData {
+//   uniquePax: AOChart_UniquePax;
+//   workoutAOCount: AOChart_WorkoutAOCount[];
+// }
 
-export interface AOChart_WorkoutAOCount {
-  aoName: string; // Name of the AO
-  count: number; // Number of workouts held at the AO
-}
+// export interface AOChart_UniquePax {
+//   itteration_type: "month" | "week" | "day" | ""; // Type of iteration (month, week, day, or none)
+//   data: {
+//     iteration: string; // e.g., month or week identifier
+//     count: number; // Number of unique pax in that month/week
+//     average: number; // Average pax count for that month/week
+//   }[];
+// }
+
+// export interface AOChart_WorkoutAOCount {
+//   aoName: string; // Name of the AO
+//   count: number; // Number of workouts held at the AO
+// }
