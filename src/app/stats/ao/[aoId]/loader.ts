@@ -14,7 +14,6 @@ import {
   AOSummary,
   EventUpcoming,
   Leaders,
-  PageFilters,
 } from "@/lib/types";
 import { headers } from "next/headers";
 
@@ -70,15 +69,13 @@ export async function loadAOData(
   try {
     const baseUrl = await getBaseUrl();
 
-    const [info, summary, leaders, events, upcoming, pageFilters] =
-      await Promise.all([
-        getAOInfo(baseUrl, aoId),
-        getAOSummary(baseUrl, aoId, filters),
-        getAOLeaders(baseUrl, aoId, filters),
-        getAOEvents(baseUrl, aoId, filters, 100),
-        getAOUpcomingEvents(baseUrl, aoId),
-        getAOFilters(baseUrl, aoId),
-      ]);
+    const [info, summary, leaders, events, upcoming] = await Promise.all([
+      getAOInfo(baseUrl, aoId),
+      getAOSummary(baseUrl, aoId, filters),
+      getAOLeaders(baseUrl, aoId, filters),
+      getAOEvents(baseUrl, aoId, filters, 100),
+      getAOUpcomingEvents(baseUrl, aoId),
+    ]);
 
     return {
       info,
@@ -86,7 +83,6 @@ export async function loadAOData(
       leaders,
       events,
       upcoming,
-      filters: pageFilters,
     };
   } catch (err) {
     console.error("Error fetching AO data:", err);
@@ -195,19 +191,6 @@ async function getAOUpcomingEvents(
   id: number,
 ): Promise<EventUpcoming[] | null> {
   const url = (baseUrl ? baseUrl : "") + "/api/ao/" + id + "/upcoming";
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return await res.json();
-}
-
-/**
- * Fetch AO page filters data.
- */
-async function getAOFilters(
-  baseUrl: string,
-  id: number,
-): Promise<PageFilters | null> {
-  const url = (baseUrl ? baseUrl : "") + "/api/ao/" + id + "/filters";
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return null;
   return await res.json();

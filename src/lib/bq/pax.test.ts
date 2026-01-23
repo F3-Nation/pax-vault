@@ -6,13 +6,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { queryBigQuery } from "@/lib/db";
-import {
-  getPAXInfo,
-  getEvents,
-  getSummary,
-  getAOBreakdown,
-  getFilters,
-} from "./pax";
+import { getPAXInfo, getEvents, getSummary, getAOBreakdown } from "./pax";
 
 function lastQuery(): string {
   const calls = (queryBigQuery as unknown as ReturnType<typeof vi.fn>).mock
@@ -51,7 +45,7 @@ describe("bq/pax.ts", () => {
     });
 
     const q = lastQuery();
-    expect(q).toContain("FROM pv_users");
+    expect(q).toContain("FROM pv_pax");
     expect(q).toContain("WHERE user_id = 123");
     expect(q).toContain("LIMIT 1");
   });
@@ -283,25 +277,5 @@ describe("bq/pax.ts", () => {
     const q = lastQuery();
     expect(q).toContain("FROM pv_events");
     expect(q).toContain("GROUP BY ao_org_id");
-  });
-
-  it("getFilters queries pv_pax_filters and returns first row", async () => {
-    (queryBigQuery as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
-      {
-        aos: [{ ao_org_id: 1, ao_name: "AO One" }],
-        regions: [{ region_org_id: 10, region_name: "Region" }],
-        types: [{ type_id: 1, type_name: "Bootcamp" }],
-        tags: [{ tag_id: 2, tag_name: "Outdoor" }],
-      },
-    ]);
-
-    const res = await getFilters(123);
-
-    expect(res?.aos?.length).toBe(1);
-
-    const q = lastQuery();
-    expect(q).toContain("FROM pv_pax_filters");
-    expect(q).toContain("WHERE pax_id = 123");
-    expect(q).toContain("LIMIT 1");
   });
 });

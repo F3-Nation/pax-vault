@@ -6,7 +6,6 @@ import {
   Leaders,
   EventUpcoming,
   RegionKotterList,
-  PageFilters,
 } from "@/lib/types";
 
 /**
@@ -208,7 +207,10 @@ export async function getRegionInfo(
       region_name,
       sector_name,
       logo_url,
-      is_active
+      is_active,
+      aos,
+      types,
+      tags
     FROM pv_regions
     WHERE region_id = ${regionId}
     LIMIT 1
@@ -402,7 +404,7 @@ export async function getUpcomingEvents(
       event_type,
       event_category,
       q_list
-    FROM pv_upcoming_events
+    FROM pv_upcoming
     WHERE region_org_id = ${regionId}
     ORDER BY start_date ASC, start_time ASC, ao_name ASC
     LIMIT 50;
@@ -441,25 +443,4 @@ export async function getKotters(
   const results = await queryBigQuery<RegionKotterList>(query);
 
   return results || null;
-}
-
-/**
- * Fetch available filter values (AOs, types, tags) for the region pages.
- */
-export async function getFilters(
-  regionId: number,
-): Promise<PageFilters | null> {
-  const query = `
-    SELECT
-      aos,
-      types,
-      tags
-    FROM pv_region_filters
-    WHERE region_org_id = ${regionId}
-    LIMIT 1;
-  `;
-
-  const results = await queryBigQuery<PageFilters>(query);
-
-  return results?.[0] || null;
 }

@@ -163,11 +163,11 @@ export default async function AODetailPage({
         />
         <AOPageWrapper
           ao_id={Number(aoId)}
+          ao_info={aoData.info}
           ao_summary={aoData.summary}
           ao_leaders={aoData.leaders}
           ao_upcoming={aoData.upcoming || []}
           ao_events={aoData.events || []}
-          ao_filters={aoData.filters || null}
           searchParams={{
             categoryIds,
             categoryMode,

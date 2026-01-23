@@ -15,7 +15,6 @@ import {
   EventUpcoming,
   Leaders,
   RegionKotterList,
-  PageFilters,
 } from "@/lib/types";
 import { headers } from "next/headers";
 
@@ -73,7 +72,7 @@ export async function loadRegionData(
   try {
     const baseUrl = await getBaseUrl();
 
-    const [info, summary, leaders, events, upcoming, kotter, pageFilters] =
+    const [info, summary, leaders, events, upcoming, kotter] =
       await Promise.all([
         getRegionInfo(baseUrl, regionId),
         getRegionSummary(baseUrl, regionId, filters),
@@ -81,7 +80,6 @@ export async function loadRegionData(
         getRegionEvents(baseUrl, regionId, filters, 100),
         getRegionUpcomingEvents(baseUrl, regionId),
         getRegionKotters(baseUrl, regionId),
-        getRegionFilters(baseUrl, regionId),
       ]);
 
     return {
@@ -91,7 +89,6 @@ export async function loadRegionData(
       events,
       upcoming,
       kotter,
-      filters: pageFilters,
     };
   } catch (err) {
     console.error("Error fetching Region data:", err);
@@ -226,19 +223,6 @@ async function getRegionKotters(
   id: number,
 ): Promise<RegionKotterList[] | null> {
   const url = (baseUrl ? baseUrl : "") + "/api/region/" + id + "/kotter";
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return await res.json();
-}
-
-/**
- * Fetch region page filters data.
- */
-async function getRegionFilters(
-  baseUrl: string,
-  id: number,
-): Promise<PageFilters | null> {
-  const url = (baseUrl ? baseUrl : "") + "/api/region/" + id + "/filters";
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return null;
   return await res.json();

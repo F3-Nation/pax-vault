@@ -5,7 +5,6 @@ import {
   AOSummary,
   Leaders,
   EventUpcoming,
-  PageFilters,
 } from "@/lib/types";
 
 /**
@@ -191,7 +190,9 @@ export async function getAOInfo(aoId: number): Promise<AOInfo | null> {
       region_id,
       region_name,
       logo_url,
-      is_active
+      is_active,
+      types,
+      tags
     FROM pv_aos
     WHERE ao_id = ${aoId}
     LIMIT 1
@@ -381,7 +382,7 @@ export async function getUpcomingEvents(
       event_type,
       event_category,
       q_list
-    FROM pv_upcoming_events
+    FROM pv_upcoming
     WHERE ao_org_id = ${aoId}
     ORDER BY start_date ASC, start_time ASC, ao_name ASC
     LIMIT 50;
@@ -390,22 +391,4 @@ export async function getUpcomingEvents(
   const results = await queryBigQuery<EventUpcoming>(query);
 
   return results || null;
-}
-
-/**
- * Fetch available filter values (AOs, types, tags) for the AO pages.
- */
-export async function getFilters(aoId: number): Promise<PageFilters | null> {
-  const query = `
-    SELECT
-      types,
-      tags
-    FROM pv_ao_filters
-    WHERE ao_org_id = ${aoId}
-    LIMIT 1;
-  `;
-
-  const results = await queryBigQuery<PageFilters>(query);
-
-  return results?.[0] || null;
 }

@@ -169,12 +169,12 @@ export default async function RegionDetailPage({
         />
         <RegionalPageWrapper
           region_id={Number(regionId)}
+          region_info={regionData.info!}
           region_summary={regionData.summary}
           region_leaders={regionData.leaders}
           region_kotter={regionData.kotter || []}
           region_upcoming={regionData.upcoming || []}
           region_events={regionData.events || []}
-          region_filters={regionData.filters || null}
           searchParams={{
             categoryIds,
             categoryMode,

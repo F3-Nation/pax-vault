@@ -10,12 +10,7 @@
  * and focuses only on rendering and query-string passthrough.
  */
 
-import {
-  PageFilters,
-  PaxAOBreakdown,
-  PaxSummary,
-  EventData,
-} from "@/lib/types";
+import { PaxAOBreakdown, PaxSummary, EventData, PAXInfo } from "@/lib/types";
 import { Filter } from "../pageFilter";
 import { useMemo } from "react";
 import { SummaryCard } from "./SummaryCard";
@@ -24,10 +19,10 @@ import { EventsCard } from "../events";
 
 type PAXPageWrapperProps = {
   pax_id: number;
+  pax_info: PAXInfo | null;
   pax_summary: PaxSummary | null;
   pax_ao_breakdown: PaxAOBreakdown[] | null;
   pax_events: EventData[];
-  pax_filters: PageFilters | null;
   searchParams: {
     categoryIds?: string | string[];
     categoryMode?: string;
@@ -86,10 +81,10 @@ function buildEventsFiltersQuery(
 
 export function PAXPageWrapper({
   pax_id,
+  pax_info,
   pax_summary,
   pax_ao_breakdown,
   pax_events,
-  pax_filters,
   searchParams,
 }: PAXPageWrapperProps) {
   // Memoized query-string passed to events + filter components.
@@ -115,10 +110,10 @@ export function PAXPageWrapper({
       </div>
       {/* Page-level filters */}
       <Filter
-        aos={pax_filters?.aos || []}
-        regions={pax_filters?.regions || []}
-        types={pax_filters?.types || []}
-        tags={pax_filters?.tags || []}
+        aos={pax_info?.aos || []}
+        regions={pax_info?.regions || []}
+        types={pax_info?.types || []}
+        tags={pax_info?.tags || []}
         filters={eventsFiltersQuery}
       />
     </>

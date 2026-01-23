@@ -178,10 +178,10 @@ export default async function PaxDetailPage({
         />
         <PAXPageWrapper
           pax_id={Number(paxId)}
+          pax_info={paxData.info}
           pax_summary={paxData.summary}
           pax_events={paxData.events || []}
           pax_ao_breakdown={paxData.ao_breakdown || []}
-          pax_filters={paxData.filters || null}
           searchParams={{
             categoryIds,
             categoryMode,

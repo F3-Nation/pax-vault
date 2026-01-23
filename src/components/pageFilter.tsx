@@ -11,7 +11,7 @@
  * - Keep accordion sections expanded when filters are active.
  */
 type FilterProps = {
-  aos: { ao_org_id: number; ao_name: string }[];
+  aos?: { ao_org_id: number; ao_name: string }[];
   regions?: { region_org_id: number; region_name: string }[];
   types: { type_id: number; type_name: string }[];
   tags: { tag_id: number; tag_name: string }[];

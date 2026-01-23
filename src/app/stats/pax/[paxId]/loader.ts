@@ -12,7 +12,6 @@ import {
   PaxData,
   PAXInfo,
   PaxSummary,
-  PageFilters,
   PaxAOBreakdown,
 } from "@/lib/types";
 import { headers } from "next/headers";
@@ -73,21 +72,18 @@ export async function loadPaxData(
   try {
     const baseUrl = await getBaseUrl();
 
-    const [info, summary, ao_breakdown, events, pageFilters] =
-      await Promise.all([
-        getPaxInfo(baseUrl, paxId),
-        getPaxSummary(baseUrl, paxId, filters),
-        getAOBreakdown(baseUrl, paxId, filters),
-        getPaxEvents(baseUrl, paxId, filters, 100),
-        getPaxFilters(baseUrl, paxId),
-      ]);
+    const [info, summary, ao_breakdown, events] = await Promise.all([
+      getPaxInfo(baseUrl, paxId),
+      getPaxSummary(baseUrl, paxId, filters),
+      getAOBreakdown(baseUrl, paxId, filters),
+      getPaxEvents(baseUrl, paxId, filters, 100),
+    ]);
 
     return {
       info,
       summary,
       ao_breakdown,
       events,
-      filters: pageFilters,
     };
   } catch (err) {
     console.error("Error fetching Pax data:", err);
@@ -205,17 +201,4 @@ async function getPaxEvents(
         new Date(b.event_date).getTime() - new Date(a.event_date).getTime(),
     ) || null
   );
-}
-
-/**
- * Fetch pax page filters data.
- */
-async function getPaxFilters(
-  baseUrl: string,
-  id: number,
-): Promise<PageFilters | null> {
-  const url = (baseUrl ? baseUrl : "") + "/api/pax/" + id + "/filters";
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return await res.json();
 }
