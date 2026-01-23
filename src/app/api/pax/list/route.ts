@@ -4,10 +4,10 @@
  * Responsibilities:
  * - Parse and validate the search query parameter.
  * - Guard against overly-broad searches.
- * - Delegate user search to the cache/query layer.
+ * - Delegate user search to the BigQuery layer.
  */
 import { NextResponse } from "next/server";
-import { searchUsersByName } from "@/lib/cache/users";
+import { searchUsersByName } from "@/lib/bq/pax";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

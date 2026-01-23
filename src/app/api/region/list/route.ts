@@ -4,10 +4,10 @@
  * Responsibilities:
  * - Parse and validate the search query parameter.
  * - Guard against overly-broad searches.
- * - Delegate region search to the cache/query layer.
+ * - Delegate region search to the BigQuery layer.
  */
 import { NextResponse } from "next/server";
-import { searchRegionsByName } from "@/lib/cache/regions";
+import { searchRegionsByName } from "@/lib/bq/regions";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
