@@ -1,11 +1,5 @@
 import { queryBigQuery } from "@/lib/db";
-import {
-  EventData,
-  PaxSummary,
-  PageFilters,
-  PAXInfo,
-  PaxAOBreakdown,
-} from "@/lib/types";
+import { EventData, PaxSummary, PAXInfo, PaxAOBreakdown } from "@/lib/types";
 
 /**
  * Common filter options for PAX event-based queries.
@@ -225,8 +219,12 @@ export async function getPAXInfo(paxId: number): Promise<PAXInfo | null> {
       home_region_id,
       home_region_name,
       avatar_url,
-      status
-    FROM pv_users
+      status,
+      aos,
+      regions,
+      types,
+      tags
+    FROM pv_pax
     WHERE user_id = ${paxId}
     LIMIT 1
   `;
@@ -515,24 +513,4 @@ export async function getAOBreakdown(
 
   const results = await queryBigQuery<PaxAOBreakdown>(query);
   return results || null;
-}
-
-/**
- * Fetch available filter values (AOs, types, tags) for the PAX pages.
- */
-export async function getFilters(paxId: number): Promise<PageFilters | null> {
-  const query = `
-    SELECT
-      aos,
-      regions,
-      types,
-      tags
-    FROM pv_pax_filters
-    WHERE pax_id = ${paxId}
-    LIMIT 1;
-  `;
-
-  const results = await queryBigQuery<PageFilters>(query);
-
-  return results?.[0] || null;
 }

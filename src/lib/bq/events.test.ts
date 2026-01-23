@@ -31,7 +31,7 @@ describe("bq/events.ts", () => {
     await getEventDetails(999);
 
     const q = lastQuery();
-    expect(q).toContain("FROM event_instances");
+    expect(q).toContain("FROM f3data.public.event_instances");
     expect(q).toContain("WHERE id = 999");
     expect(q).toContain("LIMIT 1");
   });

@@ -21,7 +21,7 @@ export async function getEventDetails(
       backblast, 
       backblast_rich, 
       JSON_QUERY(meta, '$') as meta
-    FROM event_instances 
+    FROM f3data.public.event_instances
     WHERE id = ${eventInstanceId}
     LIMIT 1
   `;

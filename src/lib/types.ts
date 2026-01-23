@@ -3,12 +3,12 @@
 /* =========================================================== */
 
 /* PAGE FILTERS */
-export interface PageFilters {
-  aos?: { ao_org_id: number; ao_name: string }[];
-  regions?: { region_org_id: number; region_name: string }[];
-  types?: { type_id: number; type_name: string }[];
-  tags?: { tag_id: number; tag_name: string }[];
-}
+// export interface PageFilters {
+//   aos?: { ao_org_id: number; ao_name: string }[];
+//   regions?: { region_org_id: number; region_name: string }[];
+//   types?: { type_id: number; type_name: string }[];
+//   tags?: { tag_id: number; tag_name: string }[];
+// }
 
 /* USED FOR ALL EVENT DATA */
 export interface EventData {
@@ -108,7 +108,6 @@ export interface RegionData {
   events: EventData[] | null; // List of events held in the region
   upcoming: EventUpcoming[] | null; // List of upcoming events in the region
   kotter: RegionKotterList[] | null; // List of Kotter events in the region
-  filters: PageFilters | null; // Filters available for the region
 }
 
 /* USED ONLY FOR REGION INFO */
@@ -118,6 +117,9 @@ export interface RegionInfo {
   sector_name: string; // Name of the sector
   logo_url: string | null; // URL to the region's logo, can be null
   is_active: boolean; // Indicates if the region is active
+  aos: { ao_org_id: number; ao_name: string }[];
+  types: { type_id: number; type_name: string }[];
+  tags: { tag_id: number; tag_name: string }[];
 }
 
 /* USED ONLY FOR REGION SUMMARY STATS */
@@ -164,7 +166,6 @@ export interface PaxData {
   summary: PaxSummary | null; // Summary statistics for the pax
   ao_breakdown: PaxAOBreakdown[] | null; // Breakdown of events and Qs by AO
   events: EventData[] | null; // List of event data associated with the pax
-  filters: PageFilters | null; // Filter options available for the pax
 }
 
 /* USED FOR PAX INFO */
@@ -175,6 +176,10 @@ export interface PAXInfo {
   home_region_name: string; // Name of the user's home region
   avatar_url: string | null; // URL to the user's avatar image, can be null
   status: string; // Status of the user (e.g., active, inactive)
+  aos: { ao_org_id: number; ao_name: string }[];
+  regions: { region_org_id: number; region_name: string }[];
+  types: { type_id: number; type_name: string }[];
+  tags: { tag_id: number; tag_name: string }[];
 }
 
 /* USED FOR PAX SUMMARY */
@@ -222,7 +227,6 @@ export interface AOData {
   leaders: Leaders[] | null; // Leaderboard data for the AO
   events: EventData[] | null; // List of events held in the AO
   upcoming: EventUpcoming[] | null; // List of upcoming events in the AO
-  filters: PageFilters | null; // Filters available for the AO
 }
 
 /* USED ONLY FOR AO INFO */
@@ -233,6 +237,8 @@ export interface AOInfo {
   region_name: string; // Name of the region the AO belongs to
   logo_url: string | null; // URL to the AO's logo, can be null
   is_active: boolean; // Indicates if the AO is active
+  types: { type_id: number; type_name: string }[];
+  tags: { tag_id: number; tag_name: string }[];
 }
 
 /* USED ONLY FOR AO SUMMARY STATS */

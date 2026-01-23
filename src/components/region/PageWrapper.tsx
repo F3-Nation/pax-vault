@@ -16,7 +16,7 @@ import {
   EventData,
   RegionKotterList,
   EventUpcoming,
-  PageFilters,
+  RegionInfo,
 } from "@/lib/types";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "../leaders";
@@ -28,12 +28,12 @@ import { useMemo } from "react";
 
 type RegionalPageWrapperProps = {
   region_id: number;
+  region_info: RegionInfo;
   region_summary: RegionSummary | null;
   region_kotter: RegionKotterList[] | null;
   region_leaders: Leaders[] | null;
   region_upcoming: EventUpcoming[] | null;
   region_events: EventData[];
-  region_filters: PageFilters | null;
   searchParams: {
     categoryIds?: string | string[];
     categoryMode?: string;
@@ -87,12 +87,12 @@ function buildEventsFiltersQuery(
 
 export function RegionalPageWrapper({
   region_id,
+  region_info,
   region_summary,
   region_kotter,
   region_leaders,
   region_upcoming,
   region_events,
-  region_filters,
   searchParams,
 }: RegionalPageWrapperProps) {
   // Memoized query-string passed to events + filter components.
@@ -133,9 +133,9 @@ export function RegionalPageWrapper({
       </div>
       {/* Page-level filters */}
       <Filter
-        aos={region_filters?.aos || []}
-        types={region_filters?.types || []}
-        tags={region_filters?.tags || []}
+        aos={region_info.aos || []}
+        types={region_info.types || []}
+        tags={region_info.tags || []}
         filters={eventsFiltersQuery}
       />
     </>

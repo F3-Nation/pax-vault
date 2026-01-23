@@ -15,7 +15,7 @@ import {
   Leaders,
   EventData,
   EventUpcoming,
-  PageFilters,
+  AOInfo,
 } from "@/lib/types";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "../leaders";
@@ -26,11 +26,11 @@ import { useMemo } from "react";
 
 type AOPageWrapperProps = {
   ao_id: number;
+  ao_info: AOInfo | null;
   ao_summary: AOSummary | null;
   ao_leaders: Leaders[] | null;
   ao_upcoming: EventUpcoming[] | null;
   ao_events: EventData[];
-  ao_filters: PageFilters | null;
   searchParams: {
     categoryIds?: string | string[];
     categoryMode?: string;
@@ -79,11 +79,11 @@ function buildEventsFiltersQuery(
 
 export function AOPageWrapper({
   ao_id,
+  ao_info,
   ao_summary,
   ao_leaders,
   ao_upcoming,
   ao_events,
-  ao_filters,
   searchParams,
 }: AOPageWrapperProps) {
   // Memoized query-string passed to events + filter components.
@@ -123,9 +123,8 @@ export function AOPageWrapper({
       </div>
       {/* Page-level filters */}
       <Filter
-        aos={ao_filters?.aos || []}
-        types={ao_filters?.types || []}
-        tags={ao_filters?.tags || []}
+        types={ao_info?.types || []}
+        tags={ao_info?.tags || []}
         filters={eventsFiltersQuery}
       />
     </>

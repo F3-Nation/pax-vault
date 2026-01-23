@@ -15,7 +15,6 @@ import {
   getSummary,
   getLeaders,
   getUpcomingEvents,
-  getFilters,
 } from "./aos";
 
 function lastQuery(): string {
@@ -252,30 +251,9 @@ describe("bq/aos.ts", () => {
     await getUpcomingEvents(40364);
 
     const q = lastQuery();
-    expect(q).toContain("FROM pv_upcoming_events");
+    expect(q).toContain("FROM pv_upcoming");
     expect(q).toContain("WHERE ao_org_id = 40364");
     expect(q).toContain("ORDER BY start_date ASC");
     expect(q).toContain("LIMIT 50");
-  });
-
-  it("getFilters queries pv_ao_filters and returns first row", async () => {
-    (queryBigQuery as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
-      {
-        types: [{ type_id: 1, type_name: "Bootcamp" }],
-        tags: [{ tag_id: 2, tag_name: "Outdoor" }],
-      },
-    ]);
-
-    const res = await getFilters(40364);
-
-    expect(res).toEqual({
-      types: [{ type_id: 1, type_name: "Bootcamp" }],
-      tags: [{ tag_id: 2, tag_name: "Outdoor" }],
-    });
-
-    const q = lastQuery();
-    expect(q).toContain("FROM pv_ao_filters");
-    expect(q).toContain("WHERE ao_org_id = 40364");
-    expect(q).toContain("LIMIT 1");
   });
 });

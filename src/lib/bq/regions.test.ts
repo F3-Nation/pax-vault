@@ -14,7 +14,6 @@ import {
   getLeaders,
   getUpcomingEvents,
   getKotters,
-  getFilters,
 } from "./regions";
 
 function lastQuery(): string {
@@ -293,7 +292,7 @@ describe("bq/regions.ts", () => {
     await getUpcomingEvents(40364);
 
     const q = lastQuery();
-    expect(q).toContain("FROM pv_upcoming_events");
+    expect(q).toContain("FROM pv_upcoming");
     expect(q).toContain("WHERE region_org_id = 40364");
     expect(q).toContain("ORDER BY start_date ASC");
     expect(q).toContain("LIMIT 50");
@@ -310,28 +309,5 @@ describe("bq/regions.ts", () => {
     expect(q).toContain("FROM pv_kotter");
     expect(q).toContain("WHERE home_region_id = 40364");
     expect(q).toContain("ORDER BY days_since_last_event ASC");
-  });
-
-  it("getFilters queries pv_region_filters and returns first row", async () => {
-    (queryBigQuery as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
-      {
-        aos: [{ ao_org_id: 1, ao_name: "AO One" }],
-        types: [{ type_id: 1, type_name: "Bootcamp" }],
-        tags: [{ tag_id: 2, tag_name: "Outdoor" }],
-      },
-    ]);
-
-    const res = await getFilters(40364);
-
-    expect(res).toEqual({
-      aos: [{ ao_org_id: 1, ao_name: "AO One" }],
-      types: [{ type_id: 1, type_name: "Bootcamp" }],
-      tags: [{ tag_id: 2, tag_name: "Outdoor" }],
-    });
-
-    const q = lastQuery();
-    expect(q).toContain("FROM pv_region_filters");
-    expect(q).toContain("WHERE region_org_id = 40364");
-    expect(q).toContain("LIMIT 1");
   });
 });
