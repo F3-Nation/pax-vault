@@ -514,3 +514,31 @@ export async function getAOBreakdown(
   const results = await queryBigQuery<PaxAOBreakdown>(query);
   return results || null;
 }
+
+export async function searchUsersByName(q: string): Promise<PAXInfo[]> {
+  // Normalize and guard against overly-broad queries.
+  const term = (q || "").trim();
+  if (term.length < 2) return [];
+
+  // Escape single quotes to prevent SQL injection via LIKE.
+  const escapedTerm = term.replace(/'/g, "''").toLowerCase();
+
+  // Simple prefix/contains search; ranking is handled client-side if needed.
+  const query = `
+    SELECT
+      user_id,
+      f3_name,
+      home_region_id,
+      home_region_name,
+      avatar_url,
+      status
+    FROM pv_pax
+    WHERE f3_name IS NOT NULL
+      AND LOWER(f3_name) LIKE '%${escapedTerm}%'
+    ORDER BY f3_name
+    LIMIT 50
+  `;
+
+  const results = await queryBigQuery<PAXInfo>(query);
+  return results ?? [];
+}
