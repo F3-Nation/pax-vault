@@ -12,7 +12,7 @@ export async function getEventDetails(
   eventInstanceId: number,
 ): Promise<EventDetails | null> {
   // Intentionally selecting rich + plain text variants; consumers decide which to render.
-  const query = `
+  const query = `-- EVENT DETAILS
     SELECT
       id, 
       description, 

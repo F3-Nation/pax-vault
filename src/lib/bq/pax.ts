@@ -212,7 +212,7 @@ function buildRangeDates(range: string | undefined): {
  * Fetch a single PAX's metadata.
  */
 export async function getPAXInfo(paxId: number): Promise<PAXInfo | null> {
-  const query = `
+  const query = `-- PAX INFO
     SELECT
       user_id,
       f3_name,
@@ -250,7 +250,7 @@ export async function getEvents(
   const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
   const limitSql = limit ? `LIMIT ${limit}` : "";
 
-  const query = `
+  const query = `-- PAX EVENTS
     SELECT
       event_id as event_instance_id,
       event_date,
@@ -285,7 +285,7 @@ export async function getSummary(
 ): Promise<PaxSummary | null> {
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(paxId, opts);
-  const query = `
+  const query = `-- PAX SUMMARY
     WITH events AS (
       SELECT
         event_id,
@@ -464,7 +464,7 @@ export async function getAOBreakdown(
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(paxId, opts);
 
-  const query = `
+  const query = `-- PAX AO BREAKDOWN
     WITH events AS (
       SELECT
         event_id,
@@ -524,7 +524,7 @@ export async function searchUsersByName(q: string): Promise<PAXInfo[]> {
   const escapedTerm = term.replace(/'/g, "''").toLowerCase();
 
   // Simple prefix/contains search; ranking is handled client-side if needed.
-  const query = `
+  const query = `-- PAX SEARCH
     SELECT
       user_id,
       f3_name,

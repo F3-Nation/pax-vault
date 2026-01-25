@@ -183,7 +183,7 @@ function buildRangeDates(range: string | undefined): {
  * Fetch a single region's metadata.
  */
 export async function getAOInfo(aoId: number): Promise<AOInfo | null> {
-  const query = `
+  const query = `-- AO INFO
     SELECT
       ao_id,
       ao_name,
@@ -218,7 +218,7 @@ export async function getEvents(
   const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
   const limitSql = limit ? `LIMIT ${limit}` : "";
 
-  const query = `
+  const query = `-- AO EVENTS
     SELECT
       event_id as event_instance_id,
       event_date,
@@ -254,7 +254,7 @@ export async function getSummary(
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(aoId, opts);
 
-  const query = `
+  const query = `-- AO SUMMARY
     WITH events AS (
       SELECT
         event_id,
@@ -322,7 +322,7 @@ export async function getLeaders(
 ): Promise<Leaders[] | null> {
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(aoId, opts);
-  const query = `
+  const query = `-- AO LEADERS
     WITH events AS (
       SELECT
         event_id,
@@ -371,7 +371,7 @@ export async function getLeaders(
 export async function getUpcomingEvents(
   aoId: number,
 ): Promise<EventUpcoming[] | null> {
-  const query = `
+  const query = `-- AO UPCOMING EVENTS
     SELECT
       start_date,
       start_time,

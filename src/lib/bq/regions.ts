@@ -201,7 +201,7 @@ function buildRangeDates(range: string | undefined): {
 export async function getRegionInfo(
   regionId: number,
 ): Promise<RegionInfo | null> {
-  const query = `
+  const query = `-- REGION INFO
     SELECT
       region_id,
       region_name,
@@ -237,7 +237,7 @@ export async function getEvents(
   const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
   const limitSql = limit ? `LIMIT ${limit}` : "";
 
-  const query = `
+  const query = `-- REGION EVENTS
     SELECT
       event_id as event_instance_id,
       event_date,
@@ -273,7 +273,7 @@ export async function getSummary(
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(regionId, opts);
 
-  const query = `
+  const query = `-- REGION SUMMARY
     WITH events AS (
       SELECT
         event_id,
@@ -344,7 +344,7 @@ export async function getLeaders(
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(regionId, opts);
 
-  const query = `
+  const query = `-- REGION LEADERS
     WITH events AS (
       SELECT
         event_id,
@@ -393,7 +393,7 @@ export async function getLeaders(
 export async function getUpcomingEvents(
   regionId: number,
 ): Promise<EventUpcoming[] | null> {
-  const query = `
+  const query = `-- REGION UPCOMING
     SELECT
       start_date,
       start_time,
@@ -421,7 +421,7 @@ export async function getUpcomingEvents(
 export async function getKotters(
   regionId: number,
 ): Promise<RegionKotterList[] | null> {
-  const query = `
+  const query = `-- REGION KOTTERS
     SELECT
       user_id,
       f3_name,
@@ -454,7 +454,7 @@ export async function searchRegionsByName(q: string): Promise<RegionInfo[]> {
   const escapedTerm = term.replace(/'/g, "''").toLowerCase();
 
   // Simple contains search; ordering is alphabetical for predictability.
-  const query = `
+  const query = `-- REGION SEARCH
     SELECT
       region_id,
       region_name,
