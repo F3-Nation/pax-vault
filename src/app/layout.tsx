@@ -33,6 +33,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
           media="(prefers-color-scheme: dark)"
         />
 
+        {/* Prevent indexing by search engines (app is not public). */}
+        <meta name="robots" content="noindex"></meta>
+
         {/* PWA / iOS web app settings. */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
