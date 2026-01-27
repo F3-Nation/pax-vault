@@ -180,29 +180,6 @@ function buildRangeDates(range: string | undefined): {
 }
 
 /**
- * Fetch a single region's metadata.
- */
-export async function getAOInfo(aoId: number): Promise<AOInfo | null> {
-  const query = `-- AO INFO
-    SELECT
-      ao_id,
-      ao_name,
-      region_id,
-      region_name,
-      logo_url,
-      is_active,
-      types,
-      tags
-    FROM pv_aos
-    WHERE ao_id = ${aoId}
-    LIMIT 1
-  `;
-
-  const results = await queryBigQuery<AOInfo>(query);
-  return results?.[0] || null;
-}
-
-/**
  * Fetch events for a AO with optional filtering.
  */
 export async function getEvents(
@@ -211,9 +188,6 @@ export async function getEvents(
     limit?: number;
   },
 ): Promise<EventData[] | null> {
-  // Build WHERE clause from common filters.
-  const whereSql = buildEventsWhereSql(aoId, opts);
-
   // LIMIT is optional. Keep it numeric-only.
   const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
   const limitSql = limit ? `LIMIT ${limit}` : "";
@@ -235,7 +209,7 @@ export async function getEvents(
       tags,
       attendance
     FROM pv_events
-    ${whereSql}
+    WHERE ao_org_id = ${aoId}
     ORDER BY event_date DESC, event_id DESC
     ${limitSql};
   `;
@@ -244,151 +218,181 @@ export async function getEvents(
   return results || null;
 }
 
-/**
- * Compute summary metrics for a region across the selected event set.
- */
-export async function getSummary(
+export async function getPageData(
   aoId: number,
-  opts?: EventFilterOpts,
-): Promise<AOSummary | null> {
+  opts?: EventFilterOpts & { limit?: number },
+): Promise<{
+  info: AOInfo | null;
+  events: EventData[] | null;
+  summary: AOSummary | null;
+  leaders: Leaders[] | null;
+  upcoming: EventUpcoming[] | null;
+}> {
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(aoId, opts);
 
-  const query = `-- AO SUMMARY
-    WITH events AS (
-      SELECT
-        event_id,
-        event_date,
-        pax_count,
-        fng_count,
-        ao_org_id,
-        first_f_ind,
-        second_f_ind,
-        third_f_ind,
-        attendance,
-        tags,
-        types
-      FROM pv_events
-      ${whereSql}
-    ),
+  // LIMIT is optional. Keep it numeric-only.
+  const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
 
-    event_metrics AS (
-      SELECT
-        COUNT(DISTINCT event_id) AS event_count,
-        SUM(COALESCE(fng_count, 0)) AS fng_count,
-        AVG(CAST(pax_count AS FLOAT64)) AS pax_count_average
-      FROM events
-    ),
+  const query = `-- AO PAGE LOAD
+    WITH
+      events AS (
+        SELECT
+          event_id,
+          event_date,
+          event_name,
+          pax_count,
+          fng_count,
+          ao_org_id,
+          ao_name,
+          region_org_id,
+          first_f_ind,
+          second_f_ind,
+          third_f_ind,
+          types,
+          tags,
+          attendance
+        FROM pv_events
+        ${whereSql}
+      ),
 
-    attendance_flat AS (
-      SELECT
-        e.event_date,
-        a.user_id,
-        a.q_ind
-      FROM events e
-      LEFT JOIN UNNEST(e.attendance) AS a
-    ),
-
-    attendance_metrics AS (
-      SELECT
-        COUNT(DISTINCT IF(event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY), user_id, NULL)) AS active_pax,
-        COUNT(DISTINCT user_id) AS unique_pax,
-        COUNT(DISTINCT IF(q_ind = 1, user_id, NULL)) AS unique_qs
-      FROM attendance_flat
-    )
-
+      attendance_flat AS (
+        SELECT
+          e.event_id,
+          e.event_date,
+          a.user_id,
+          a.f3_name,
+          a.q_ind,
+          a.avatar_url
+        FROM events e
+        LEFT JOIN UNNEST(e.attendance) a
+        WHERE a.user_id IS NOT NULL
+      )
+        
     SELECT
-      em.event_count,
-      am.active_pax,
-      am.unique_pax,
-      am.unique_qs,
-      em.fng_count,
-      em.pax_count_average
-    FROM event_metrics em
-    CROSS JOIN attendance_metrics am;
-  `;
+      -- AO info as a STRUCT
+      (
+        SELECT AS STRUCT
+          ao_id, ao_name, region_id, region_name, logo_url, is_active, types, tags
+        FROM pv_aos
+        WHERE ao_id = ${aoId}
+        LIMIT 1
+      ) AS info,
 
-  const results = await queryBigQuery<AOSummary>(query);
+      -- Events list as an ARRAY (limit it)
+      (
+        SELECT
+          ARRAY_AGG(
+            STRUCT(
+              event_id AS event_instance_id,
+              event_date,
+              event_name,
+              pax_count,
+              fng_count,
+              ao_org_id,
+              ao_name,
+              region_org_id,
+              first_f_ind,
+              second_f_ind,
+              third_f_ind,
+              types,
+              tags,
+              attendance
+              -- omit attendance unless the UI truly needs it here
+            )
+            ORDER BY event_date DESC, event_id DESC
+            ${limit ? `LIMIT ${limit}` : ""}
+        )
+        FROM events
+      ) AS events,
 
-  return results?.[0] || null;
-}
+      -- Summary as a STRUCT
+      (
+        WITH
+          event_metrics AS (
+            SELECT
+              COUNT(DISTINCT event_id) AS event_count,
+              SUM(COALESCE(fng_count, 0)) AS fng_count,
+              AVG(CAST(pax_count AS FLOAT64)) AS pax_count_average
+            FROM events
+          ),
+          attendance_metrics AS (
+            SELECT
+              COUNT(DISTINCT IF(event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY), user_id, NULL)) AS active_pax,
+              COUNT(DISTINCT user_id) AS unique_pax,
+              COUNT(DISTINCT IF(q_ind = 1, user_id, NULL)) AS unique_qs
+            FROM attendance_flat
+          )
+        SELECT AS STRUCT
+          em.event_count,
+          am.active_pax,
+          am.unique_pax,
+          am.unique_qs,
+          em.fng_count,
+          em.pax_count_average
+        FROM event_metrics em
+        CROSS JOIN attendance_metrics am
+      ) AS summary,
 
-/**
- * Compute per-user leaderboards (posts/qs) from attendance for the selected event set.
- */
-export async function getLeaders(
-  aoId: number,
-  opts?: EventFilterOpts,
-): Promise<Leaders[] | null> {
-  // Build WHERE clause from common filters.
-  const whereSql = buildEventsWhereSql(aoId, opts);
-  const query = `-- AO LEADERS
-    WITH events AS (
-      SELECT
-        event_id,
-        event_date,
-        ao_org_id,
-        first_f_ind,
-        second_f_ind,
-        third_f_ind,
-        tags,
-        types,
-        attendance
-      FROM pv_events
-      ${whereSql}
-    ),
+      -- Leaders as an ARRAY (fixed)
+      (
+        SELECT
+          ARRAY_AGG(
+            STRUCT(
+              user_id,
+              f3_name,
+              posts,
+              qs,
+              avatar_url)
+            ORDER BY posts DESC
+            LIMIT 100)
+        FROM
+          (
+            SELECT
+              user_id,
+              ANY_VALUE(f3_name) AS f3_name,
+              COUNT(DISTINCT event_id) AS posts,
+              COUNTIF(q_ind = 1) AS qs,
+              ANY_VALUE(avatar_url) AS avatar_url
+            FROM attendance_flat
+            GROUP BY user_id
+          )
+      ) AS leaders,
 
-    attendance_flat AS (
-      SELECT
-        e.event_id,
-        a.user_id,
-        a.f3_name,
-        a.q_ind,
-        a.avatar_url
-      FROM events e
-      LEFT JOIN UNNEST(e.attendance) AS a
-      WHERE a.user_id IS NOT NULL
-    )
+      -- Upcoming as an ARRAY
+      (
+        SELECT
+          ARRAY_AGG(
+            STRUCT(
+              start_date,
+              start_time,
+              ao_name,
+              ao_org_id,
+              location_name,
+              event_name,
+              event_type,
+              event_category,
+              q_list)
+            ORDER BY start_date ASC, start_time ASC, ao_name ASC
+            LIMIT 50)
+        FROM pv_upcoming
+        WHERE ao_org_id = ${aoId}
+      ) AS upcoming
+    `;
 
-    SELECT
-      user_id,
-      ANY_VALUE(f3_name) AS f3_name,
-      COUNT(DISTINCT event_id) AS posts,
-      COUNTIF(q_ind = 1) AS qs,
-      ANY_VALUE(avatar_url) AS avatar_url
-    FROM attendance_flat
-    GROUP BY user_id
-    ORDER BY posts DESC, qs DESC, f3_name;
-  `;
+  const results = await queryBigQuery<{
+    info: AOInfo;
+    events: EventData[];
+    summary: AOSummary;
+    leaders: Leaders[];
+    upcoming: EventUpcoming[];
+  }>(query);
 
-  const results = await queryBigQuery<Leaders>(query);
-  return results || null;
-}
-
-/**
- * Fetch the next ~50 upcoming events for a region.
- */
-export async function getUpcomingEvents(
-  aoId: number,
-): Promise<EventUpcoming[] | null> {
-  const query = `-- AO UPCOMING EVENTS
-    SELECT
-      start_date,
-      start_time,
-      ao_name,
-      ao_org_id,
-      location_name,
-      event_name,
-      event_type,
-      event_category,
-      q_list
-    FROM pv_upcoming
-    WHERE ao_org_id = ${aoId}
-    ORDER BY start_date ASC, start_time ASC, ao_name ASC
-    LIMIT 50;
-  `;
-
-  const results = await queryBigQuery<EventUpcoming>(query);
-
-  return results || null;
+  return {
+    info: results?.[0]?.info || null,
+    events: results?.[0]?.events || null,
+    summary: results?.[0]?.summary || null,
+    leaders: results?.[0]?.leaders || null,
+    upcoming: results?.[0]?.upcoming || null,
+  };
 }

@@ -14,7 +14,7 @@ import {
   PaxSummary,
   PaxAOBreakdown,
 } from "@/lib/types";
-import { headers } from "next/headers";
+import { getPageData } from "@/lib/bq/pax";
 
 /**
  * Shared filter options passed through to pax API endpoints.
@@ -36,31 +36,6 @@ type PaxFilterOpts = {
 };
 
 /**
- * Resolve the request base URL from Next.js headers.
- *
- * Falls back gracefully when headers are unavailable.
- */
-async function getBaseUrl(): Promise<string> {
-  const h = await headers();
-
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  const host =
-    h.get("x-forwarded-host") ??
-    h.get("host") ??
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/^https?:\/\//, "") ??
-    "";
-
-  if (!host)
-    throw new Error("Unable to resolve base URL (missing host headers)");
-
-  // VERCEL_URL is usually host-only
-  const normalizedHost = host.startsWith("http") ? host : `${proto}://${host}`;
-  return normalizedHost.startsWith("http")
-    ? normalizedHost
-    : `${proto}://${host}`;
-}
-
-/**
  * Load all data required for the pax stats page.
  *
  * All requests are executed in parallel for performance.
@@ -70,135 +45,41 @@ export async function loadPaxData(
   filters?: PaxFilterOpts,
 ): Promise<PaxData | null> {
   try {
-    const baseUrl = await getBaseUrl();
+    const paxData = await getPageData(paxId, filters);
 
-    const [info, summary, ao_breakdown, events] = await Promise.all([
-      getPaxInfo(baseUrl, paxId),
-      getPaxSummary(baseUrl, paxId, filters),
-      getAOBreakdown(baseUrl, paxId, filters),
-      getPaxEvents(baseUrl, paxId, filters, 100),
-    ]);
+    // Next.js can only pass plain JSON-serializable data from Server -> Client components.
+    // BigQuery libraries sometimes return objects with custom / null prototypes (e.g., DATE wrappers).
+    // Normalize to plain objects here to avoid: "Only plain objects ... can be passed to Client Components".
 
-    return {
-      info,
-      summary,
-      ao_breakdown,
-      events,
+    const mergedPlain = JSON.parse(
+      JSON.stringify(paxData, (_k, v) => {
+        // Unwrap common BigQuery wrappers: { value: ... }
+        if (v && typeof v === "object" && "value" in v) return v.value;
+        if (typeof v === "bigint") return Number(v);
+        return v;
+      }),
+    ) as PaxData;
+
+    // Defensive: many UI components assume list fields are arrays and call `.map`.
+    // Preserve the existing data shape from the old REST endpoints by defaulting missing lists to [].
+    const mergedSafe: PaxData = {
+      info: mergedPlain.info as PAXInfo,
+      summary: mergedPlain.summary as PaxSummary,
+      events: (mergedPlain.events ?? []) as EventData[],
+      ao_breakdown: (mergedPlain.ao_breakdown ?? []) as PaxAOBreakdown[],
     };
+
+    mergedSafe.events = (mergedSafe.events ?? []).map((e: EventData) => ({
+      ...e,
+      attendance: Array.isArray(e?.attendance) ? e.attendance : [],
+      tags: Array.isArray(e?.tags) ? e.tags : [],
+      types: Array.isArray(e?.types) ? e.types : [],
+    })) as EventData[];
+
+    return mergedSafe;
   } catch (err) {
-    console.error("Error fetching Pax data:", err);
+    console.error("Error fetching PAX data:", err);
   }
 
   return null;
-}
-
-/**
- * Build URLSearchParams from pax filter options.
- */
-function buildFilterParams(filters?: PaxFilterOpts): URLSearchParams {
-  const qp = new URLSearchParams();
-
-  if (!filters) return qp;
-
-  if (filters.range) qp.append("range", filters.range);
-  if (filters.startDate) qp.append("startDate", filters.startDate);
-  if (filters.endDate) qp.append("endDate", filters.endDate);
-  if (filters.regionIds?.length)
-    qp.append("regionIds", filters.regionIds.join(","));
-  if (filters.regionMode) qp.append("regionMode", filters.regionMode);
-  if (filters.tagIds?.length) qp.append("tagIds", filters.tagIds.join(","));
-  if (filters.tagMode) qp.append("tagMode", filters.tagMode);
-  if (filters.typeIds?.length) qp.append("typeIds", filters.typeIds.join(","));
-  if (filters.typeMode) qp.append("typeMode", filters.typeMode);
-  if (filters.aoIds?.length) qp.append("aoIds", filters.aoIds.join(","));
-  if (filters.aoMode) qp.append("aoMode", filters.aoMode);
-  if (filters.categoryIds?.length)
-    qp.append("categoryIds", filters.categoryIds.join(","));
-  if (filters.categoryMode) qp.append("categoryMode", filters.categoryMode);
-
-  return qp;
-}
-
-/**
- * Fetch pax info data.
- */
-async function getPaxInfo(
-  baseUrl: string,
-  id: number,
-): Promise<PAXInfo | null> {
-  const url = (baseUrl ? baseUrl : "") + "/api/pax/" + id + "/info";
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return await res.json();
-}
-
-/**
- * Fetch pax summary data.
- */
-async function getPaxSummary(
-  baseUrl: string,
-  id: number,
-  filters?: PaxFilterOpts,
-): Promise<PaxSummary | null> {
-  const qp = buildFilterParams(filters);
-
-  const url =
-    (baseUrl ? baseUrl : "") + "/api/pax/" + id + "/summary?" + qp.toString();
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return await res.json();
-}
-
-/**
- * Fetch ao breakdown data.
- */
-async function getAOBreakdown(
-  baseUrl: string,
-  id: number,
-  filters?: PaxFilterOpts,
-): Promise<PaxAOBreakdown[] | null> {
-  const qp = buildFilterParams(filters);
-
-  const url =
-    (baseUrl ? baseUrl : "") +
-    "/api/pax/" +
-    id +
-    "/ao-breakdown?" +
-    qp.toString();
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-
-  const aos = await res.json();
-  return (
-    aos?.sort(
-      (a: PaxAOBreakdown, b: PaxAOBreakdown) =>
-        new Date(b.total_events).getTime() - new Date(a.total_events).getTime(),
-    ) || null
-  );
-}
-
-/**
- * Fetch pax events data.
- */
-async function getPaxEvents(
-  baseUrl: string,
-  id: number,
-  filters?: PaxFilterOpts,
-  limit?: number,
-): Promise<EventData[] | null> {
-  const qp = buildFilterParams(filters);
-  if (limit) qp.append("limit", String(limit));
-
-  const url =
-    (baseUrl ? baseUrl : "") + "/api/pax/" + id + "/events?" + qp.toString();
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-
-  const events = await res.json();
-  return (
-    events?.sort(
-      (a: EventData, b: EventData) =>
-        new Date(b.event_date).getTime() - new Date(a.event_date).getTime(),
-    ) || null
-  );
 }

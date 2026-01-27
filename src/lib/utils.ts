@@ -55,18 +55,51 @@ export function formatNumber(
  * Accepts a Date or ISO date string (YYYY-MM-DD).
  */
 export function formatDate(
-  date: string | Date,
+  date: string | Date | { value?: unknown } | unknown,
   format?: "M D Y" | "M Y",
 ): string {
+  // BigQuery/other libs sometimes return DATE/TIMESTAMP wrappers like { value: 'YYYY-MM-DD' }.
+  // Normalize everything to either an ISO date string (YYYY-MM-DD) or a real Date.
+  const normalized: string | Date | null = (() => {
+    if (date instanceof Date) return date;
+
+    if (typeof date === "string") return date;
+
+    if (date && typeof date === "object" && "value" in date) {
+      const v = date.value;
+      if (v instanceof Date) return v;
+      if (typeof v === "string") return v;
+      // BigQuery sometimes uses { value: { value: '...' } } nesting; handle one level.
+      if (
+        v &&
+        typeof v === "object" &&
+        "value" in v &&
+        typeof v.value === "string"
+      ) {
+        return v.value;
+      }
+    }
+
+    // Last resort: try to parse if it's something Date can understand.
+    try {
+      const d = new Date(date as string | number | Date);
+      return Number.isFinite(d.getTime()) ? d : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  if (!normalized) return "N/A";
+
   // Normalize input to a pure UTC date (no local conversion!)
   const d =
-    typeof date === "string"
-      ? new Date(date + "T00:00:00Z")
+    typeof normalized === "string"
+      ? new Date(normalized + "T00:00:00Z")
       : new Date(
           Date.UTC(
-            date.getUTCFullYear(),
-            date.getUTCMonth(),
-            date.getUTCDate(),
+            normalized.getUTCFullYear(),
+            normalized.getUTCMonth(),
+            normalized.getUTCDate(),
           ),
         );
 

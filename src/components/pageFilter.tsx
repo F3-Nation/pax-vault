@@ -546,6 +546,18 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
                                 {option.ao_name}
                               </Checkbox>
                             ))}
+                            <Checkbox
+                              icon={
+                                isSelected_aoMode ? <CloseIcon /> : undefined
+                              }
+                              radius="none"
+                              color={isSelected_aoMode ? "danger" : "primary"}
+                              lineThrough={isSelected_aoMode}
+                              key={0}
+                              value={String(0)}
+                            >
+                              Unknown AO
+                            </Checkbox>
                           </CheckboxGroup>
 
                           <Button
