@@ -63,6 +63,54 @@ function toUTCDateString(date: Date) {
   return date.toISOString().split("T")[0];
 }
 
+// --- Filter chip helpers ---
+type ChipColor = "primary" | "secondary" | "warning" | "default" | "success";
+
+type FilterChip = {
+  label: string;
+  color: ChipColor;
+};
+
+function findAoName(aos: FilterProps["aos"], id: string): string | null {
+  if (!aos) return null;
+  const n = Number(id);
+  const found = aos.find((a) => a.ao_org_id === n);
+  return found ? found.ao_name : null;
+}
+
+function findRegionName(
+  regions: FilterProps["regions"],
+  id: string,
+): string | null {
+  if (!regions) return null;
+  const n = Number(id);
+  const found = regions.find((r) => r.region_org_id === n);
+  return found ? found.region_name : null;
+}
+
+function findTagName(tags: FilterProps["tags"], id: string): string | null {
+  const n = Number(id);
+  const found = tags.find((t) => t.tag_id === n);
+  return found ? found.tag_name : null;
+}
+
+function findTypeName(types: FilterProps["types"], id: string): string | null {
+  const n = Number(id);
+  const found = types.find((t) => t.type_id === n);
+  return found ? found.type_name : null;
+}
+
+const CATEGORY_LOOKUP: ReadonlyArray<{ id: string; name: string }> = [
+  { id: "1", name: "1st F" },
+  { id: "2", name: "2nd F" },
+  { id: "3", name: "3rd F" },
+];
+
+function findCategoryName(id: string): string | null {
+  const found = CATEGORY_LOOKUP.find((c) => c.id === id);
+  return found ? found.name : null;
+}
+
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@heroui/button";
@@ -79,6 +127,7 @@ import { RadioGroup, Radio } from "@heroui/radio";
 import { CheckboxGroup, Checkbox } from "@heroui/checkbox";
 import { useDisclosure } from "@heroui/use-disclosure";
 import { Switch } from "@heroui/switch";
+import { Chip } from "@heroui/chip";
 
 export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
   // Drawer open/close state
@@ -173,6 +222,88 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
     () => new Set(computedExpandedKeys),
   );
+
+  // Build active filter chips
+  const activeChips = useMemo<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+
+    // Date filters (primary)
+    if (parsedFilters.range && parsedFilters.range !== ALL_HISTORY) {
+      chips.push({ label: `${parsedFilters.range}`, color: "primary" });
+    }
+    if (parsedFilters.startDate) {
+      chips.push({
+        label: `Start: ${parsedFilters.startDate}`,
+        color: "primary",
+      });
+    }
+    if (parsedFilters.endDate) {
+      chips.push({ label: `End: ${parsedFilters.endDate}`, color: "primary" });
+    }
+
+    // Regions (secondary)
+    if (
+      parsedFilters.regionMode === "exclude" &&
+      parsedFilters.regionIds.length > 0
+    ) {
+      chips.push({ label: "Exclude", color: "secondary" });
+    }
+    for (const id of parsedFilters.regionIds) {
+      const name = findRegionName(regions, id);
+      if (name) chips.push({ label: `F3 ${name}`, color: "secondary" });
+    }
+
+    // AOs (secondary)
+    if (parsedFilters.aoMode === "exclude" && parsedFilters.aoIds.length > 0) {
+      chips.push({ label: "Exclude", color: "secondary" });
+    }
+    for (const id of parsedFilters.aoIds) {
+      if (id === "0") {
+        chips.push({ label: "Unknown AO", color: "secondary" });
+        continue;
+      }
+      const name = findAoName(aos, id);
+      if (name) chips.push({ label: `${name}`, color: "secondary" });
+    }
+
+    // Tags (warning)
+    if (
+      parsedFilters.tagMode === "exclude" &&
+      parsedFilters.tagIds.length > 0
+    ) {
+      chips.push({ label: "Exclude", color: "warning" });
+    }
+    for (const id of parsedFilters.tagIds) {
+      const name = findTagName(tags, id);
+      if (name) chips.push({ label: `${name}`, color: "warning" });
+    }
+
+    // Types (default)
+    if (
+      parsedFilters.typeMode === "exclude" &&
+      parsedFilters.typeIds.length > 0
+    ) {
+      chips.push({ label: "Exclude", color: "default" });
+    }
+    for (const id of parsedFilters.typeIds) {
+      const name = findTypeName(types, id);
+      if (name) chips.push({ label: `${name}`, color: "default" });
+    }
+
+    // Categories (success)
+    if (
+      parsedFilters.categoryMode === "exclude" &&
+      parsedFilters.categoryIds.length > 0
+    ) {
+      chips.push({ label: "Exclude", color: "success" });
+    }
+    for (const id of parsedFilters.categoryIds) {
+      const name = findCategoryName(id);
+      if (name) chips.push({ label: `${name}`, color: "success" });
+    }
+
+    return chips;
+  }, [parsedFilters, aos, regions, tags, types]);
 
   // Move Next.js router hooks above shareUrl for readability
   const router = useRouter();
@@ -294,245 +425,289 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
 
   return (
     <>
-      <div className="flex w-full gap-2">
-        <Drawer
-          isOpen={isOpen}
-          onOpenChange={onOpenChange}
-          hideCloseButton
-          isDismissable={false}
-          backdrop="blur"
-          placement="left"
-          radius="none"
-          className="bg-white/50 dark:bg-gray-900/80"
-        >
-          <DrawerContent className="h-full flex flex-col">
-            {(onClose) => (
-              <>
-                <DrawerHeader className="flex flex-col gap-1 text-foreground relative">
-                  Filter Options
-                  <div className="absolute right-2 top-2">
-                    <div className="relative">
-                      <Button
-                        variant="light"
-                        aria-label="Copy share URL"
-                        isIconOnly
-                        onPress={async () => {
-                          await navigator.clipboard.writeText(shareUrl());
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 1000);
-                        }}
-                      >
-                        <CopyIcon width={20} height={20} />
-                      </Button>
-                      <Button
-                        variant="light"
-                        aria-label="Close filter drawer"
-                        isIconOnly
-                        onPress={onClose}
-                        className="ml-2"
-                      >
-                        <CloseIcon width={20} height={20} />
-                      </Button>
-                      {copied && (
-                        <div
-                          className="absolute right-0 mt-2 px-2 py-1 rounded bg-black text-white text-xs z-10 shadow"
-                          style={{ minWidth: "60px", textAlign: "center" }}
-                        >
-                          Copied To Clipboard!
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </DrawerHeader>
-                <DrawerBody className="flex-1 overflow-y-auto">
-                  <Accordion
-                    isCompact
-                    variant="splitted"
-                    selectionMode="multiple"
-                    selectedKeys={expandedKeys}
-                    onSelectionChange={(keys) => {
-                      // HeroUI passes Selection; normalize to Set<string>
-                      if (keys === "all") {
-                        setExpandedKeys(
-                          new Set([
-                            ACCORDION_KEYS.DATE,
-                            ACCORDION_KEYS.REGION,
-                            ACCORDION_KEYS.AO,
-                            ACCORDION_KEYS.TAG,
-                            ACCORDION_KEYS.TYPE,
-                            ACCORDION_KEYS.CATEGORY,
-                          ]),
-                        );
-                        return;
-                      }
-                      setExpandedKeys(new Set(Array.from(keys as Set<string>)));
-                    }}
+      <div className="grid grid-cols-1 w-full max-w-6xl">
+        {activeChips.length > 0 ? (
+          <div id="filter-container" className="w-full max-w-6xl">
+            {activeChips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md bg-card px-3 py-2">
+                <span className="text-xs text-muted-foreground mr-1">
+                  Active Filters:
+                </span>
+                {activeChips.map((c, idx) => (
+                  <Chip
+                    key={`${c.label}-${idx}`}
+                    size="sm"
+                    color={c.color}
+                    variant="bordered"
+                    className="shrink-0"
+                    radius="sm"
+                    title={c.label}
                   >
-                    <AccordionItem
-                      key={ACCORDION_KEYS.DATE}
-                      aria-label="Filter by Date Range"
-                      title="Filter by Date Range"
-                      subtitle="Select a date range for events"
-                      className="mb-4"
-                    >
-                      <div className="space-y-3">
-                        <RadioGroup
-                          value={rangeState}
-                          onValueChange={(value) =>
-                            setRangeState(value as RangeKey)
-                          }
+                    {c.label}
+                  </Chip>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+        <div className="flex w-full gap-2">
+          <Drawer
+            isOpen={isOpen}
+            onOpenChange={onOpenChange}
+            hideCloseButton
+            isDismissable={false}
+            backdrop="blur"
+            placement="left"
+            radius="none"
+            className="bg-white/50 dark:bg-gray-900/80"
+          >
+            <DrawerContent className="h-full flex flex-col">
+              {(onClose) => (
+                <>
+                  <DrawerHeader className="flex flex-col gap-1 text-foreground relative">
+                    Filter Options
+                    <div className="absolute right-2 top-2">
+                      <div className="relative">
+                        <Button
+                          variant="light"
+                          aria-label="Copy share URL"
+                          isIconOnly
+                          onPress={async () => {
+                            await navigator.clipboard.writeText(shareUrl());
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 1000);
+                          }}
                         >
-                          {[
-                            "This Week",
-                            "Last Week",
-                            "This Month",
-                            "Last Month",
-                            "Last 90 Days",
-                            "Last 180 Days",
-                            "YTD",
-                            "Prior Year",
-                            "Custom",
-                          ].map((option) => (
-                            <Radio key={option} value={option}>
-                              {option}
-                            </Radio>
-                          ))}
-                        </RadioGroup>
-
-                        {rangeState === "Custom" && (
-                          <div>
-                            <DateRangePicker
-                              variant="bordered"
-                              firstDayOfWeek="mon"
-                              onChange={(range) => {
-                                if (!range?.start || !range?.end) return;
-                                const start = toUTCDateString(
-                                  range.start.toDate("UTC"),
-                                );
-                                const end = toUTCDateString(
-                                  range.end.toDate("UTC"),
-                                );
-                                const option = "Custom";
-                                setRangeState(option);
-                                setStartDate(start);
-                                setEndDate(end);
-                              }}
-                            />
+                          <CopyIcon width={20} height={20} />
+                        </Button>
+                        <Button
+                          variant="light"
+                          aria-label="Close filter drawer"
+                          isIconOnly
+                          onPress={onClose}
+                          className="ml-2"
+                        >
+                          <CloseIcon width={20} height={20} />
+                        </Button>
+                        {copied && (
+                          <div
+                            className="absolute right-0 mt-2 px-2 py-1 rounded bg-black text-white text-xs z-10 shadow"
+                            style={{ minWidth: "60px", textAlign: "center" }}
+                          >
+                            Copied To Clipboard!
                           </div>
                         )}
-
-                        <Button
-                          size="sm"
-                          variant="light"
-                          color="danger"
-                          onPress={clearDate}
-                          className="w-full"
-                        >
-                          Clear Filter
-                        </Button>
                       </div>
-                    </AccordionItem>
-                    {regions && regions.length > 1 ? (
+                    </div>
+                  </DrawerHeader>
+                  <DrawerBody className="flex-1 overflow-y-auto">
+                    <Accordion
+                      isCompact
+                      variant="splitted"
+                      selectionMode="multiple"
+                      selectedKeys={expandedKeys}
+                      onSelectionChange={(keys) => {
+                        // HeroUI passes Selection; normalize to Set<string>
+                        if (keys === "all") {
+                          setExpandedKeys(
+                            new Set([
+                              ACCORDION_KEYS.DATE,
+                              ACCORDION_KEYS.REGION,
+                              ACCORDION_KEYS.AO,
+                              ACCORDION_KEYS.TAG,
+                              ACCORDION_KEYS.TYPE,
+                              ACCORDION_KEYS.CATEGORY,
+                            ]),
+                          );
+                          return;
+                        }
+                        setExpandedKeys(
+                          new Set(Array.from(keys as Set<string>)),
+                        );
+                      }}
+                    >
                       <AccordionItem
-                        key={ACCORDION_KEYS.REGION}
-                        aria-label="Filter by Region"
-                        title="Filter by Region"
-                        subtitle="Select one or more Regions"
+                        key={ACCORDION_KEYS.DATE}
+                        aria-label="Filter by Date Range"
+                        title="Filter by Date Range"
+                        subtitle="Select a date range for events"
                         className="mb-4"
                       >
                         <div className="space-y-3">
-                          <Switch
-                            size="sm"
-                            color="danger"
-                            isSelected={isSelected_regionMode}
-                            onValueChange={(value) => {
-                              setIsSelected_regionMode(value);
-                            }}
+                          <RadioGroup
+                            value={rangeState}
+                            onValueChange={(value) =>
+                              setRangeState(value as RangeKey)
+                            }
                           >
-                            <span
-                              className={`italic text-sm ${
-                                isSelected_regionMode
-                                  ? "text-danger"
-                                  : "text-gray-500"
-                              }`}
-                            >
-                              Exclude Selected Regions
-                            </span>
-                          </Switch>
-                          <CheckboxGroup
-                            value={regionState === "all" ? [] : regionState}
-                            onValueChange={(value) => {
-                              const v = value.length ? value : "all";
-                              setRegionState(v);
-                            }}
-                          >
-                            {regions.map((option) => (
-                              <Checkbox
-                                icon={
-                                  isSelected_regionMode ? (
-                                    <CloseIcon />
-                                  ) : undefined
-                                }
-                                radius="none"
-                                color={
-                                  isSelected_regionMode ? "danger" : "primary"
-                                }
-                                lineThrough={isSelected_regionMode}
-                                key={option.region_org_id}
-                                value={String(option.region_org_id)}
-                              >
-                                {option.region_name}
-                              </Checkbox>
+                            {[
+                              "This Week",
+                              "Last Week",
+                              "This Month",
+                              "Last Month",
+                              "Last 90 Days",
+                              "Last 180 Days",
+                              "YTD",
+                              "Prior Year",
+                              "Custom",
+                            ].map((option) => (
+                              <Radio key={option} value={option}>
+                                {option}
+                              </Radio>
                             ))}
-                          </CheckboxGroup>
+                          </RadioGroup>
+
+                          {rangeState === "Custom" && (
+                            <div>
+                              <DateRangePicker
+                                variant="bordered"
+                                firstDayOfWeek="mon"
+                                onChange={(range) => {
+                                  if (!range?.start || !range?.end) return;
+                                  const start = toUTCDateString(
+                                    range.start.toDate("UTC"),
+                                  );
+                                  const end = toUTCDateString(
+                                    range.end.toDate("UTC"),
+                                  );
+                                  const option = "Custom";
+                                  setRangeState(option);
+                                  setStartDate(start);
+                                  setEndDate(end);
+                                }}
+                              />
+                            </div>
+                          )}
 
                           <Button
                             size="sm"
                             variant="light"
                             color="danger"
-                            onPress={clearRegion}
+                            onPress={clearDate}
                             className="w-full"
                           >
                             Clear Filter
                           </Button>
                         </div>
                       </AccordionItem>
-                    ) : null}
-                    {aos && aos.length > 1 ? (
-                      <AccordionItem
-                        key={ACCORDION_KEYS.AO}
-                        aria-label="Filter by AO"
-                        title="Filter by AO"
-                        subtitle="Select one or more AOs"
-                        className="mb-4"
-                      >
-                        <div className="space-y-3">
-                          <Switch
-                            size="sm"
-                            color="danger"
-                            isSelected={isSelected_aoMode}
-                            onValueChange={(value) => {
-                              setIsSelected_aoMode(value);
-                            }}
-                          >
-                            <span
-                              className={`italic text-sm ${
-                                isSelected_aoMode
-                                  ? "text-danger"
-                                  : "text-gray-500"
-                              }`}
+                      {regions && regions.length > 1 ? (
+                        <AccordionItem
+                          key={ACCORDION_KEYS.REGION}
+                          aria-label="Filter by Region"
+                          title="Filter by Region"
+                          subtitle="Select one or more Regions"
+                          className="mb-4"
+                        >
+                          <div className="space-y-3">
+                            <Switch
+                              size="sm"
+                              color="danger"
+                              isSelected={isSelected_regionMode}
+                              onValueChange={(value) => {
+                                setIsSelected_regionMode(value);
+                              }}
                             >
-                              Exclude Selected AOs
-                            </span>
-                          </Switch>
-                          <CheckboxGroup
-                            value={aoState === "all" ? [] : aoState}
-                            onValueChange={(value) => {
-                              const v = value.length ? value : "all";
-                              setAOState(v);
-                            }}
-                          >
-                            {aos.map((option) => (
+                              <span
+                                className={`italic text-sm ${
+                                  isSelected_regionMode
+                                    ? "text-danger"
+                                    : "text-gray-500"
+                                }`}
+                              >
+                                Exclude Selected Regions
+                              </span>
+                            </Switch>
+                            <CheckboxGroup
+                              value={regionState === "all" ? [] : regionState}
+                              onValueChange={(value) => {
+                                const v = value.length ? value : "all";
+                                setRegionState(v);
+                              }}
+                            >
+                              {regions.map((option) => (
+                                <Checkbox
+                                  icon={
+                                    isSelected_regionMode ? (
+                                      <CloseIcon />
+                                    ) : undefined
+                                  }
+                                  radius="none"
+                                  color={
+                                    isSelected_regionMode ? "danger" : "primary"
+                                  }
+                                  lineThrough={isSelected_regionMode}
+                                  key={option.region_org_id}
+                                  value={String(option.region_org_id)}
+                                >
+                                  {option.region_name}
+                                </Checkbox>
+                              ))}
+                            </CheckboxGroup>
+
+                            <Button
+                              size="sm"
+                              variant="light"
+                              color="danger"
+                              onPress={clearRegion}
+                              className="w-full"
+                            >
+                              Clear Filter
+                            </Button>
+                          </div>
+                        </AccordionItem>
+                      ) : null}
+                      {aos && aos.length > 1 ? (
+                        <AccordionItem
+                          key={ACCORDION_KEYS.AO}
+                          aria-label="Filter by AO"
+                          title="Filter by AO"
+                          subtitle="Select one or more AOs"
+                          className="mb-4"
+                        >
+                          <div className="space-y-3">
+                            <Switch
+                              size="sm"
+                              color="danger"
+                              isSelected={isSelected_aoMode}
+                              onValueChange={(value) => {
+                                setIsSelected_aoMode(value);
+                              }}
+                            >
+                              <span
+                                className={`italic text-sm ${
+                                  isSelected_aoMode
+                                    ? "text-danger"
+                                    : "text-gray-500"
+                                }`}
+                              >
+                                Exclude Selected AOs
+                              </span>
+                            </Switch>
+                            <CheckboxGroup
+                              value={aoState === "all" ? [] : aoState}
+                              onValueChange={(value) => {
+                                const v = value.length ? value : "all";
+                                setAOState(v);
+                              }}
+                            >
+                              {aos.map((option) => (
+                                <Checkbox
+                                  icon={
+                                    isSelected_aoMode ? (
+                                      <CloseIcon />
+                                    ) : undefined
+                                  }
+                                  radius="none"
+                                  color={
+                                    isSelected_aoMode ? "danger" : "primary"
+                                  }
+                                  lineThrough={isSelected_aoMode}
+                                  key={option.ao_org_id}
+                                  value={String(option.ao_org_id)}
+                                >
+                                  {option.ao_name}
+                                </Checkbox>
+                              ))}
                               <Checkbox
                                 icon={
                                   isSelected_aoMode ? <CloseIcon /> : undefined
@@ -540,152 +715,210 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
                                 radius="none"
                                 color={isSelected_aoMode ? "danger" : "primary"}
                                 lineThrough={isSelected_aoMode}
-                                key={option.ao_org_id}
-                                value={String(option.ao_org_id)}
+                                key={0}
+                                value={String(0)}
                               >
-                                {option.ao_name}
+                                Unknown AO
                               </Checkbox>
-                            ))}
-                            <Checkbox
-                              icon={
-                                isSelected_aoMode ? <CloseIcon /> : undefined
-                              }
-                              radius="none"
-                              color={isSelected_aoMode ? "danger" : "primary"}
-                              lineThrough={isSelected_aoMode}
-                              key={0}
-                              value={String(0)}
-                            >
-                              Unknown AO
-                            </Checkbox>
-                          </CheckboxGroup>
+                            </CheckboxGroup>
 
-                          <Button
-                            size="sm"
-                            variant="light"
-                            color="danger"
-                            onPress={clearAO}
-                            className="w-full"
-                          >
-                            Clear Filter
-                          </Button>
-                        </div>
-                      </AccordionItem>
-                    ) : null}
-                    {tags && tags.length > 1 ? (
+                            <Button
+                              size="sm"
+                              variant="light"
+                              color="danger"
+                              onPress={clearAO}
+                              className="w-full"
+                            >
+                              Clear Filter
+                            </Button>
+                          </div>
+                        </AccordionItem>
+                      ) : null}
+                      {tags && tags.length > 1 ? (
+                        <AccordionItem
+                          key={ACCORDION_KEYS.TAG}
+                          aria-label="Filter by Tag"
+                          title="Filter by Tag"
+                          subtitle="Select one or more Tags"
+                          className="mb-4"
+                        >
+                          <div className="space-y-3">
+                            <Switch
+                              size="sm"
+                              color="danger"
+                              isSelected={isSelected_tagMode}
+                              onValueChange={(value) => {
+                                setIsSelected_tagMode(value);
+                              }}
+                            >
+                              <span
+                                className={`italic text-sm ${
+                                  isSelected_tagMode
+                                    ? "text-danger"
+                                    : "text-gray-500"
+                                }`}
+                              >
+                                Exclude Selected Tags
+                              </span>
+                            </Switch>
+                            <CheckboxGroup
+                              value={tagState === "all" ? [] : tagState}
+                              onValueChange={(value) => {
+                                const v = value.length ? value : "all";
+                                setTagState(v);
+                              }}
+                            >
+                              {tags.map((option) => (
+                                <Checkbox
+                                  icon={
+                                    isSelected_tagMode ? (
+                                      <CloseIcon />
+                                    ) : undefined
+                                  }
+                                  radius="none"
+                                  color={
+                                    isSelected_tagMode ? "danger" : "primary"
+                                  }
+                                  lineThrough={isSelected_tagMode}
+                                  key={option.tag_id}
+                                  value={String(option.tag_id)}
+                                >
+                                  {option.tag_name}
+                                </Checkbox>
+                              ))}
+                            </CheckboxGroup>
+
+                            <Button
+                              size="sm"
+                              variant="light"
+                              color="danger"
+                              onPress={clearTags}
+                              className="w-full"
+                            >
+                              Clear Filter
+                            </Button>
+                          </div>
+                        </AccordionItem>
+                      ) : null}
+                      {types && types.length > 1 ? (
+                        <AccordionItem
+                          key={ACCORDION_KEYS.TYPE}
+                          aria-label="Filter by Type"
+                          title="Filter by Type"
+                          subtitle="Select one or more Types"
+                          className="mb-4"
+                        >
+                          <div className="space-y-3">
+                            <Switch
+                              size="sm"
+                              color="danger"
+                              isSelected={isSelected_typeMode}
+                              onValueChange={(value) => {
+                                setIsSelected_typeMode(value);
+                              }}
+                            >
+                              <span
+                                className={`italic text-sm ${
+                                  isSelected_typeMode
+                                    ? "text-danger"
+                                    : "text-gray-500"
+                                }`}
+                              >
+                                Exclude Selected Types
+                              </span>
+                            </Switch>
+                            <CheckboxGroup
+                              value={typeState === "all" ? [] : typeState}
+                              onValueChange={(value) => {
+                                const v = value.length ? value : "all";
+                                setTypeState(v);
+                              }}
+                            >
+                              {types.map((option) => (
+                                <Checkbox
+                                  icon={
+                                    isSelected_typeMode ? (
+                                      <CloseIcon />
+                                    ) : undefined
+                                  }
+                                  radius="none"
+                                  color={
+                                    isSelected_typeMode ? "danger" : "primary"
+                                  }
+                                  lineThrough={isSelected_typeMode}
+                                  key={option.type_id}
+                                  value={String(option.type_id)}
+                                >
+                                  {option.type_name}
+                                </Checkbox>
+                              ))}
+                            </CheckboxGroup>
+
+                            <Button
+                              size="sm"
+                              variant="light"
+                              color="danger"
+                              onPress={clearTypes}
+                              className="w-full"
+                            >
+                              Clear Filter
+                            </Button>
+                          </div>
+                        </AccordionItem>
+                      ) : null}
                       <AccordionItem
-                        key={ACCORDION_KEYS.TAG}
-                        aria-label="Filter by Tag"
-                        title="Filter by Tag"
-                        subtitle="Select one or more Tags"
+                        key={ACCORDION_KEYS.CATEGORY}
+                        aria-label="Filter by Event Category"
+                        title="Filter by Event Category"
+                        subtitle="Select one or more event categories"
                         className="mb-4"
                       >
                         <div className="space-y-3">
                           <Switch
                             size="sm"
                             color="danger"
-                            isSelected={isSelected_tagMode}
+                            isSelected={isSelected_categoryMode}
                             onValueChange={(value) => {
-                              setIsSelected_tagMode(value);
+                              setIsSelected_categoryMode(value);
                             }}
                           >
                             <span
                               className={`italic text-sm ${
-                                isSelected_tagMode
+                                isSelected_categoryMode
                                   ? "text-danger"
                                   : "text-gray-500"
                               }`}
                             >
-                              Exclude Selected Tags
+                              Exclude Selected Categories
                             </span>
                           </Switch>
                           <CheckboxGroup
-                            value={tagState === "all" ? [] : tagState}
+                            value={categoryState === "all" ? [] : categoryState}
                             onValueChange={(value) => {
                               const v = value.length ? value : "all";
-                              setTagState(v);
+                              setCategoryState(v);
                             }}
                           >
-                            {tags.map((option) => (
+                            {[
+                              { category_id: "1", category_name: "1st F" },
+                              { category_id: "2", category_name: "2nd F" },
+                              { category_id: "3", category_name: "3rd F" },
+                            ].map((option) => (
                               <Checkbox
                                 icon={
-                                  isSelected_tagMode ? <CloseIcon /> : undefined
-                                }
-                                radius="none"
-                                color={
-                                  isSelected_tagMode ? "danger" : "primary"
-                                }
-                                lineThrough={isSelected_tagMode}
-                                key={option.tag_id}
-                                value={String(option.tag_id)}
-                              >
-                                {option.tag_name}
-                              </Checkbox>
-                            ))}
-                          </CheckboxGroup>
-
-                          <Button
-                            size="sm"
-                            variant="light"
-                            color="danger"
-                            onPress={clearTags}
-                            className="w-full"
-                          >
-                            Clear Filter
-                          </Button>
-                        </div>
-                      </AccordionItem>
-                    ) : null}
-                    {types && types.length > 1 ? (
-                      <AccordionItem
-                        key={ACCORDION_KEYS.TYPE}
-                        aria-label="Filter by Type"
-                        title="Filter by Type"
-                        subtitle="Select one or more Types"
-                        className="mb-4"
-                      >
-                        <div className="space-y-3">
-                          <Switch
-                            size="sm"
-                            color="danger"
-                            isSelected={isSelected_typeMode}
-                            onValueChange={(value) => {
-                              setIsSelected_typeMode(value);
-                            }}
-                          >
-                            <span
-                              className={`italic text-sm ${
-                                isSelected_typeMode
-                                  ? "text-danger"
-                                  : "text-gray-500"
-                              }`}
-                            >
-                              Exclude Selected Types
-                            </span>
-                          </Switch>
-                          <CheckboxGroup
-                            value={typeState === "all" ? [] : typeState}
-                            onValueChange={(value) => {
-                              const v = value.length ? value : "all";
-                              setTypeState(v);
-                            }}
-                          >
-                            {types.map((option) => (
-                              <Checkbox
-                                icon={
-                                  isSelected_typeMode ? (
+                                  isSelected_categoryMode ? (
                                     <CloseIcon />
                                   ) : undefined
                                 }
                                 radius="none"
                                 color={
-                                  isSelected_typeMode ? "danger" : "primary"
+                                  isSelected_categoryMode ? "danger" : "default"
                                 }
-                                lineThrough={isSelected_typeMode}
-                                key={option.type_id}
-                                value={String(option.type_id)}
+                                lineThrough={isSelected_categoryMode}
+                                key={option.category_id}
+                                value={option.category_id}
                               >
-                                {option.type_name}
+                                {option.category_name}
                               </Checkbox>
                             ))}
                           </CheckboxGroup>
@@ -694,134 +927,69 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
                             size="sm"
                             variant="light"
                             color="danger"
-                            onPress={clearTypes}
+                            onPress={clearCategories}
                             className="w-full"
                           >
                             Clear Filter
                           </Button>
                         </div>
                       </AccordionItem>
-                    ) : null}
-                    <AccordionItem
-                      key={ACCORDION_KEYS.CATEGORY}
-                      aria-label="Filter by Event Category"
-                      title="Filter by Event Category"
-                      subtitle="Select one or more event categories"
-                      className="mb-4"
-                    >
-                      <div className="space-y-3">
-                        <Switch
-                          size="sm"
-                          color="danger"
-                          isSelected={isSelected_categoryMode}
-                          onValueChange={(value) => {
-                            setIsSelected_categoryMode(value);
-                          }}
-                        >
-                          <span
-                            className={`italic text-sm ${
-                              isSelected_categoryMode
-                                ? "text-danger"
-                                : "text-gray-500"
-                            }`}
-                          >
-                            Exclude Selected Categories
-                          </span>
-                        </Switch>
-                        <CheckboxGroup
-                          value={categoryState === "all" ? [] : categoryState}
-                          onValueChange={(value) => {
-                            const v = value.length ? value : "all";
-                            setCategoryState(v);
-                          }}
-                        >
-                          {[
-                            { category_id: "1", category_name: "1st F" },
-                            { category_id: "2", category_name: "2nd F" },
-                            { category_id: "3", category_name: "3rd F" },
-                          ].map((option) => (
-                            <Checkbox
-                              icon={
-                                isSelected_categoryMode ? (
-                                  <CloseIcon />
-                                ) : undefined
-                              }
-                              radius="none"
-                              color={
-                                isSelected_categoryMode ? "danger" : "default"
-                              }
-                              lineThrough={isSelected_categoryMode}
-                              key={option.category_id}
-                              value={option.category_id}
-                            >
-                              {option.category_name}
-                            </Checkbox>
-                          ))}
-                        </CheckboxGroup>
-
+                    </Accordion>
+                    {/* Sticky action bar keeps Apply/Clear visible while scrolling */}
+                    <div className="sticky bottom-0 left-0 w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur pb-4">
+                      <div className="flex flex-row space-x-2">
                         <Button
-                          size="sm"
-                          variant="light"
+                          size="md"
+                          variant="bordered"
                           color="danger"
-                          onPress={clearCategories}
+                          onPress={clearAll}
                           className="w-full"
                         >
-                          Clear Filter
+                          Clear All Filters
+                        </Button>
+                        <Button
+                          size="md"
+                          color="primary"
+                          onPress={() => {
+                            const url = shareUrl();
+                            const next = url.replace(
+                              window.location.origin,
+                              "",
+                            );
+                            router.push(next);
+                            onClose();
+                          }}
+                          className="w-full mb-2"
+                        >
+                          Apply Filters
                         </Button>
                       </div>
-                    </AccordionItem>
-                  </Accordion>
-                  {/* Sticky action bar keeps Apply/Clear visible while scrolling */}
-                  <div className="sticky bottom-0 left-0 w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur pb-4">
-                    <div className="flex flex-row space-x-2">
-                      <Button
-                        size="md"
-                        variant="bordered"
-                        color="danger"
-                        onPress={clearAll}
-                        className="w-full"
-                      >
-                        Clear All Filters
-                      </Button>
-                      <Button
-                        size="md"
-                        color="primary"
-                        onPress={() => {
-                          const url = shareUrl();
-                          const next = url.replace(window.location.origin, "");
-                          router.push(next);
-                          onClose();
-                        }}
-                        className="w-full mb-2"
-                      >
-                        Apply Filters
-                      </Button>
                     </div>
-                  </div>
-                </DrawerBody>
-              </>
-            )}
-          </DrawerContent>
-        </Drawer>
-      </div>
-      {/* Mobile bottom bar (sm screens only) */}
-      <div className="md:hidden fixed bottom-0 left-0 w-full bg-white/50 dark:bg-gray-900/50 p-2 border-t border-gray-300 dark:border-gray-700 z-50">
-        <Button size="md" color="primary" className="w-full" onPress={onOpen}>
-          Filters
-        </Button>
-      </div>
-      {/* Floating button for md+ screens */}
-      <div className="hidden md:block fixed bottom-6 right-6 z-50">
-        <Button
-          variant="bordered"
-          size="lg"
-          aria-label="Close filter drawer"
-          startContent={<FilterIcon />}
-          // isIconOnly
-          onPress={onOpen}
-        >
-          Apply Filters
-        </Button>
+                  </DrawerBody>
+                </>
+              )}
+            </DrawerContent>
+          </Drawer>
+        </div>
+        {/* Mobile bottom bar (sm screens only) */}
+        <div className="md:hidden fixed bottom-0 left-0 w-full bg-white/50 dark:bg-gray-900/50 p-2 border-t border-gray-300 dark:border-gray-700 z-50">
+          <Button size="md" color="primary" className="w-full" onPress={onOpen}>
+            Filters
+          </Button>
+        </div>
+        {/* Floating button for md+ screens */}
+        <div className="hidden md:block fixed bottom-6 right-6 z-50">
+          <Button
+            variant="bordered"
+            size="lg"
+            aria-label="Close filter drawer"
+            startContent={<FilterIcon />}
+            // isIconOnly
+            onPress={onOpen}
+          >
+            Apply Filters
+          </Button>
+        </div>
       </div>
     </>
   );

@@ -95,6 +95,16 @@ export function PAXPageWrapper({
 
   return (
     <>
+      {/* Page-level filters at top of page if filters are active */}
+      {eventsFiltersQuery.length > 0 && (
+        <Filter
+          aos={pax_info?.aos || []}
+          regions={pax_info?.regions || []}
+          types={pax_info?.types || []}
+          tags={pax_info?.tags || []}
+          filters={eventsFiltersQuery}
+        />
+      )}
       {/* Summary + leaders */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
         <SummaryCard summary={pax_summary!} />
@@ -108,14 +118,16 @@ export function PAXPageWrapper({
           filtersQuery={eventsFiltersQuery}
         />
       </div>
-      {/* Page-level filters */}
-      <Filter
-        aos={pax_info?.aos || []}
-        regions={pax_info?.regions || []}
-        types={pax_info?.types || []}
-        tags={pax_info?.tags || []}
-        filters={eventsFiltersQuery}
-      />
+      {/* Page-level filters at top of page if no filters are active */}
+      {eventsFiltersQuery.length === 0 && (
+        <Filter
+          aos={pax_info?.aos || []}
+          regions={pax_info?.regions || []}
+          types={pax_info?.types || []}
+          tags={pax_info?.tags || []}
+          filters={eventsFiltersQuery}
+        />
+      )}
     </>
   );
 }
