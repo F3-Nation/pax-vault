@@ -12,10 +12,17 @@ import NavbarComponent from "@/components/navbar";
 import ServiceWorkerRegister from "@/lib/service-worker";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
+import Script from "next/script";
+import { GaPageView } from "@/components/gaPageView";
+import { Suspense } from "react";
 
 type RootLayoutProps = {
   children: ReactNode;
 };
+
+const isLocalhost =
+  typeof window !== "undefined" &&
+  (location.hostname === "localhost" || location.hostname === "127.0.0.1");
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
@@ -32,6 +39,26 @@ export default function RootLayout({ children }: RootLayoutProps) {
           content="#18181b"
           media="(prefers-color-scheme: dark)"
         />
+
+        {/* Google Analytics */}
+        {!isLocalhost && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=G-T1VBJ3V20T`}
+              strategy="afterInteractive"
+            />
+            <Script id="ga-init" strategy="afterInteractive">
+              {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-T1VBJ3V20T', {
+              anonymize_ip: true,
+            });
+          `}
+            </Script>
+          </>
+        )}
 
         {/* Prevent indexing by search engines (app is not public). */}
         <meta name="robots" content="noindex"></meta>
@@ -64,7 +91,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
       <body>
         {/* Registers the service worker client-side for offline/PWA behavior. */}
         <ServiceWorkerRegister />
-
+        {/* Google Analytics page view tracking. */}
+        <Suspense fallback={null}>
+          <GaPageView />
+        </Suspense>
         {/* ThemeProvider must wrap components that rely on theme classes. */}
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <NavbarComponent />
