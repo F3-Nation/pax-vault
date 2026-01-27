@@ -29,6 +29,7 @@ interface PageProps {
     typeMode?: string;
     tagIds?: string | string[];
     tagMode?: string;
+    persist?: string;
   }>;
 }
 
@@ -73,6 +74,7 @@ export default async function PaxDetailPage({
       | "include"
       | "exclude"
       | undefined,
+    persist: searchParamsResolved?.persist,
   };
 
   // Preserve raw query params for downstream UI state (filters, toggles, etc.)
@@ -89,7 +91,7 @@ export default async function PaxDetailPage({
   const typeMode = searchParamsResolved?.typeMode;
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
-
+  const persist = searchParamsResolved?.persist;
   const paxData = await loadPaxData(Number(paxId), { ...filters });
 
   const hasPaxData = !!paxData && Object.keys(paxData).length > 0;
@@ -196,6 +198,7 @@ export default async function PaxDetailPage({
             typeMode,
             tagIds,
             tagMode,
+            persist,
           }}
         />
       </div>

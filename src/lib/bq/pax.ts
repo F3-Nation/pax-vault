@@ -86,11 +86,20 @@ function buildEventsWhereSql(paxId: number, opts?: EventFilterOpts): string {
   // AO filters.
   if (aoList.length > 0) {
     const list = aoList.join(",");
-    whereClauses.push(
-      aoMode === "exclude"
-        ? `ao_org_id NOT IN (${list})`
-        : `ao_org_id IN (${list})`,
-    );
+    if (aoList.includes(0)) {
+      aoList.splice(aoList.indexOf(0), 1); // Remove 0 for IN clause.
+      whereClauses.push(
+        aoMode === "exclude"
+          ? `(ao_org_id NOT IN (${list}) OR ao_org_id IS NOT NULL)`
+          : `(ao_org_id IN (${list}) OR ao_org_id IS NULL)`,
+      );
+    } else {
+      whereClauses.push(
+        aoMode === "exclude"
+          ? `ao_org_id NOT IN (${list})`
+          : `ao_org_id IN (${list})`,
+      );
+    }
   }
 
   // Region filters.
@@ -209,32 +218,6 @@ function buildRangeDates(range: string | undefined): {
 }
 
 /**
- * Fetch a single PAX's metadata.
- */
-export async function getPAXInfo(paxId: number): Promise<PAXInfo | null> {
-  const query = `-- PAX INFO
-    SELECT
-      user_id,
-      f3_name,
-      home_region_id,
-      home_region_name,
-      avatar_url,
-      status,
-      aos,
-      regions,
-      types,
-      tags
-    FROM pv_pax
-    WHERE user_id = ${paxId}
-    LIMIT 1
-  `;
-
-  const results = await queryBigQuery<PAXInfo>(query);
-
-  return results?.[0] || null;
-}
-
-/**
  * Fetch events for a PAX with optional filtering.
  */
 export async function getEvents(
@@ -243,9 +226,6 @@ export async function getEvents(
     limit?: number;
   },
 ): Promise<EventData[] | null> {
-  // Build WHERE clause from common filters.
-  const whereSql = buildEventsWhereSql(paxId, opts);
-
   // LIMIT is optional. Keep it numeric-only.
   const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
   const limitSql = limit ? `LIMIT ${limit}` : "";
@@ -267,251 +247,16 @@ export async function getEvents(
       tags,
       attendance
     FROM pv_events
-    ${whereSql}
+    WHERE EXISTS (
+      SELECT 1
+      FROM UNNEST(attendance) a
+      WHERE a.user_id = ${paxId}
+    )
     ORDER BY event_date DESC, event_id DESC
     ${limitSql};
   `;
 
   const results = await queryBigQuery<EventData>(query);
-  return results || null;
-}
-
-/**
- * Compute summary metrics for a PAX across the selected event set.
- */
-export async function getSummary(
-  paxId: number,
-  opts?: EventFilterOpts,
-): Promise<PaxSummary | null> {
-  // Build WHERE clause from common filters.
-  const whereSql = buildEventsWhereSql(paxId, opts);
-  const query = `-- PAX SUMMARY
-    WITH events AS (
-      SELECT
-        event_id,
-        event_date,
-        ao_org_id,
-        ao_name,
-        first_f_ind,
-        second_f_ind,
-        third_f_ind,
-        attendance,
-        tags,
-        types
-      FROM pv_events
-      ${whereSql}
-    ),
-
-    attendance_flat AS (
-        SELECT
-            e.event_id,
-            e.event_date,
-            e.ao_org_id,
-            e.ao_name,
-            a.user_id,
-            a.f3_name,
-            a.q_ind
-        FROM events e
-        JOIN UNNEST(e.attendance) a
-        ),
-
-        self_attendance AS (
-        SELECT *
-        FROM attendance_flat
-        WHERE user_id = ${paxId}
-        ),
-
-        q_events AS (
-        SELECT *
-        FROM self_attendance
-        WHERE q_ind = 1
-        ),
-
-        event_bounds AS (
-        SELECT
-            MIN(event_date) AS first_event_date,
-            MAX(event_date) AS last_event_date
-        FROM self_attendance
-        ),
-
-        event_bounds_ao AS (
-        SELECT
-            FIRST_VALUE(ao_org_id) OVER w AS first_event_ao_id,
-            FIRST_VALUE(ao_name) OVER w AS first_event_ao_name,
-            LAST_VALUE(ao_org_id) OVER w AS last_event_ao_id,
-            LAST_VALUE(ao_name) OVER w AS last_event_ao_name
-        FROM self_attendance
-        WINDOW w AS (
-            ORDER BY event_date
-            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-        )
-        LIMIT 1
-        ),
-
-        q_bounds AS (
-        SELECT
-            MIN(event_date) AS first_q_date,
-            MAX(event_date) AS last_q_date
-        FROM q_events
-        ),
-
-        q_bounds_ao AS (
-        SELECT
-            FIRST_VALUE(ao_org_id) OVER w AS first_q_ao_id,
-            FIRST_VALUE(ao_name) OVER w AS first_q_ao_name,
-            LAST_VALUE(ao_org_id) OVER w AS last_q_ao_id,
-            LAST_VALUE(ao_name) OVER w AS last_q_ao_name
-        FROM q_events
-        WINDOW w AS (
-            ORDER BY event_date
-            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-        )
-        LIMIT 1
-        ),
-
-        co_attendance AS (
-        SELECT
-            a.user_id,
-            a.f3_name,
-            COUNT(*) AS met_count
-        FROM attendance_flat a
-        JOIN self_attendance s
-            ON a.event_id = s.event_id
-        WHERE a.user_id != ${paxId}
-        GROUP BY a.user_id, a.f3_name
-        ),
-
-        bestie AS (
-        SELECT
-            user_id AS bestie_user_id,
-            f3_name AS bestie_f3_name,
-            met_count AS bestie_user_count
-        FROM co_attendance
-        ORDER BY met_count DESC
-        LIMIT 1
-        ),
-
-        unique_users AS (
-        SELECT COUNT(DISTINCT user_id) AS unique_users_met
-        FROM co_attendance
-        ),
-
-        unique_q_users AS (
-        SELECT COUNT(DISTINCT a.user_id) AS unique_pax_when_q
-        FROM attendance_flat a
-        JOIN q_events q
-            ON a.event_id = q.event_id
-        WHERE a.user_id != ${paxId}
-        ),
-
-        metrics AS (
-        SELECT
-            COUNT(*) AS event_count,
-            SUM(CASE WHEN q_ind = 1 THEN 1 ELSE 0 END) AS q_count
-        FROM self_attendance
-        )
-
-        SELECT
-        m.event_count,
-        m.q_count,
-        eb.first_event_date,
-        ebao.first_event_ao_id,
-        ebao.first_event_ao_name,
-        eb.last_event_date,
-        ebao.last_event_ao_id,
-        ebao.last_event_ao_name,
-        b.bestie_user_id,
-        b.bestie_f3_name,
-        b.bestie_user_count,
-        u.unique_users_met,
-        uq.unique_pax_when_q,
-        qb.first_q_date,
-        qbao.first_q_ao_id,
-        qbao.first_q_ao_name,
-        qb.last_q_date,
-        qbao.last_q_ao_id,
-        qbao.last_q_ao_name,
-        SAFE_DIVIDE(
-            m.event_count,
-            DATE_DIFF(COALESCE(CURRENT_DATE(), eb.last_event_date), eb.first_event_date, DAY)
-        ) * 100 AS effective_percentage
-
-        FROM metrics m
-        CROSS JOIN event_bounds eb
-        CROSS JOIN event_bounds_ao ebao
-        CROSS JOIN q_bounds qb
-        LEFT JOIN q_bounds_ao qbao ON TRUE
-        LEFT JOIN bestie b ON TRUE
-        LEFT JOIN unique_users u ON TRUE
-        LEFT JOIN unique_q_users uq ON TRUE;
-  `;
-
-  const results = await queryBigQuery<PaxSummary>(query);
-
-  return results?.[0] || null;
-}
-
-/**
- * Fetch a list of AO-level breakdown counts for a given PAX.
- *
- * Respects the common event filters (date ranges, AO/region include/exclude,
- * tags, types, categories) via `buildEventsWhereSql`.
- */
-export async function getAOBreakdown(
-  paxId: number,
-  opts?: EventFilterOpts,
-): Promise<PaxAOBreakdown[] | null> {
-  // Build WHERE clause from common filters.
-  const whereSql = buildEventsWhereSql(paxId, opts);
-
-  const query = `-- PAX AO BREAKDOWN
-    WITH events AS (
-      SELECT
-        event_id,
-        ao_org_id,
-        ao_name,
-        region_org_id,
-        region_name,
-        attendance
-      FROM pv_events
-      ${whereSql}
-    ),
-
-    ao_events AS (
-      SELECT
-        event_id,
-        COALESCE(ao_org_id, 0) AS ao_org_id,
-        COALESCE(ANY_VALUE(ao_name), 'Unknown AO') AS ao_name,
-        ANY_VALUE(region_org_id) AS region_org_id,
-        ANY_VALUE(region_name) AS region_name,
-        -- Did this pax Q this event?
-        IF(
-          EXISTS (
-            SELECT 1
-            FROM UNNEST(attendance) a
-            WHERE a.user_id = ${paxId}
-              AND a.q_ind = 1
-          ),
-          1,
-          0
-        ) AS is_q
-      FROM events
-      GROUP BY event_id, ao_org_id, attendance
-    )
-
-    SELECT
-      ao_org_id,
-      ao_name,
-      region_org_id,
-      region_name,
-      COUNT(*) AS total_events,
-      SUM(is_q) AS total_q_count
-    FROM ao_events
-    GROUP BY ao_org_id, ao_name, region_org_id, region_name
-    ORDER BY total_events DESC, ao_name;
-  `;
-
-  const results = await queryBigQuery<PaxAOBreakdown>(query);
   return results || null;
 }
 
@@ -541,4 +286,353 @@ export async function searchUsersByName(q: string): Promise<PAXInfo[]> {
 
   const results = await queryBigQuery<PAXInfo>(query);
   return results ?? [];
+}
+
+export async function getPageData(
+  paxId: number,
+  opts?: EventFilterOpts,
+): Promise<{
+  info: PAXInfo | null;
+  events: EventData[] | null;
+  summary: PaxSummary | null;
+  ao_breakdown: PaxAOBreakdown[] | null;
+}> {
+  // Build WHERE clause from common filters.
+  const whereSql = buildEventsWhereSql(paxId, opts);
+
+  const query = `-- PAX PAGE LOAD
+    WITH
+      -- -----------------------
+      -- PAX info
+      -- -----------------------
+      pax_info AS (
+        SELECT
+          user_id,
+          f3_name,
+          home_region_id,
+          home_region_name,
+          avatar_url,
+          status,
+          aos,
+          regions,
+          types,
+          tags
+        FROM pv_pax
+        WHERE user_id = ${paxId}
+        LIMIT 1
+      ),
+
+      -- -----------------------
+      -- Events this PAX attended
+      -- -----------------------
+      events AS (
+        SELECT
+          event_id,
+          event_date,
+          event_name,
+          pax_count,
+          fng_count,
+          ao_org_id,
+          ao_name,
+          region_org_id,
+          region_name,
+          first_f_ind,
+          second_f_ind,
+          third_f_ind,
+          types,
+          tags,
+          attendance
+        FROM pv_events
+        ${whereSql}
+      ),
+
+      -- -----------------------
+      -- Attendance flattened
+      -- -----------------------
+      attendance_flat AS (
+        SELECT
+          e.event_id,
+          e.event_date,
+          e.ao_org_id,
+          e.ao_name,
+          a.user_id,
+          a.f3_name,
+          a.q_ind
+        FROM events e
+        JOIN UNNEST(e.attendance) a
+      ),
+      self_attendance AS (
+        SELECT *
+        FROM attendance_flat
+        WHERE user_id = ${paxId}
+      ),
+      q_events AS (
+        SELECT *
+        FROM self_attendance
+        WHERE q_ind = 1
+      ),
+
+      -- -----------------------
+      -- Event bounds
+      -- -----------------------
+      event_bounds AS (
+        SELECT
+          MIN(event_date) AS first_event_date,
+          MAX(event_date) AS last_event_date
+        FROM self_attendance
+      ),
+      event_bounds_ao AS (
+        SELECT
+          FIRST_VALUE(ao_org_id) OVER w AS first_event_ao_id,
+          FIRST_VALUE(ao_name) OVER w AS first_event_ao_name,
+          LAST_VALUE(ao_org_id) OVER w AS last_event_ao_id,
+          LAST_VALUE(ao_name) OVER w AS last_event_ao_name
+        FROM self_attendance
+        WINDOW
+          w AS (
+            ORDER BY event_date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+          )
+        LIMIT 1
+      ),
+
+      -- -----------------------
+      -- Q bounds
+      -- -----------------------
+      q_bounds AS (
+        SELECT
+          MIN(event_date) AS first_q_date,
+          MAX(event_date) AS last_q_date
+        FROM q_events
+      ),
+      q_bounds_ao AS (
+        SELECT
+          FIRST_VALUE(ao_org_id) OVER w AS first_q_ao_id,
+          FIRST_VALUE(ao_name) OVER w AS first_q_ao_name,
+          LAST_VALUE(ao_org_id) OVER w AS last_q_ao_id,
+          LAST_VALUE(ao_name) OVER w AS last_q_ao_name
+        FROM q_events
+        WINDOW
+          w AS (
+            ORDER BY event_date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+          )
+        LIMIT 1
+      ),
+
+      -- -----------------------
+      -- Co-attendance
+      -- -----------------------
+      co_attendance AS (
+        SELECT
+          a.user_id,
+          a.f3_name,
+          COUNT(*) AS met_count
+        FROM attendance_flat a
+        JOIN self_attendance s
+          ON a.event_id = s.event_id
+        WHERE a.user_id != ${paxId}
+        GROUP BY a.user_id, a.f3_name
+      ),
+      bestie AS (
+        SELECT
+          user_id AS bestie_user_id,
+          f3_name AS bestie_f3_name,
+          met_count AS bestie_user_count
+        FROM co_attendance
+        ORDER BY met_count DESC
+        LIMIT 1
+      ),
+      unique_users AS (
+        SELECT COUNT(DISTINCT user_id) AS unique_users_met
+        FROM co_attendance
+      ),
+      unique_q_users AS (
+        SELECT COUNT(DISTINCT a.user_id) AS unique_pax_when_q
+        FROM attendance_flat a
+        JOIN q_events q
+          ON a.event_id = q.event_id
+        WHERE a.user_id != ${paxId}
+      ),
+      metrics AS (
+        SELECT
+          COUNT(*) AS event_count,
+          SUM(CASE WHEN q_ind = 1 THEN 1 ELSE 0 END) AS q_count
+        FROM self_attendance
+      ),
+
+      -- -----------------------
+      -- Summary
+      -- -----------------------
+      pax_summary AS (
+        SELECT
+          m.event_count,
+          m.q_count,
+          eb.first_event_date,
+          ebao.first_event_ao_id,
+          ebao.first_event_ao_name,
+          eb.last_event_date,
+          ebao.last_event_ao_id,
+          ebao.last_event_ao_name,
+          b.bestie_user_id,
+          b.bestie_f3_name,
+          b.bestie_user_count,
+          u.unique_users_met,
+          uq.unique_pax_when_q,
+          qb.first_q_date,
+          qbao.first_q_ao_id,
+          qbao.first_q_ao_name,
+          qb.last_q_date,
+          qbao.last_q_ao_id,
+          qbao.last_q_ao_name,
+          SAFE_DIVIDE(
+            m.event_count,
+            DATE_DIFF(CURRENT_DATE(), eb.first_event_date, DAY))
+            * 100 AS effective_percentage
+        FROM metrics m
+        CROSS JOIN event_bounds eb
+        LEFT JOIN event_bounds_ao ebao
+          ON TRUE
+        CROSS JOIN q_bounds qb
+        LEFT JOIN q_bounds_ao qbao
+          ON TRUE
+        LEFT JOIN bestie b
+          ON TRUE
+        LEFT JOIN unique_users u
+          ON TRUE
+        LEFT JOIN unique_q_users uq
+          ON TRUE
+      ),
+
+      -- -----------------------
+      -- AO breakdown
+      -- -----------------------
+      ao_events AS (
+        SELECT
+          event_id,
+          COALESCE(ao_org_id, 0) AS ao_org_id,
+          COALESCE(ANY_VALUE(ao_name), 'Unknown AO') AS ao_name,
+          ANY_VALUE(region_org_id) AS region_org_id,
+          ANY_VALUE(region_name) AS region_name,
+          IF(
+            EXISTS(
+              SELECT 1
+              FROM UNNEST(attendance) a
+              WHERE
+                a.user_id = ${paxId}
+                AND a.q_ind = 1
+            ),
+            1,
+            0) AS is_q
+        FROM events
+        GROUP BY event_id, ao_org_id, attendance
+      ),
+      ao_breakdown AS (
+        SELECT
+          ao_org_id,
+          ao_name,
+          region_org_id,
+          region_name,
+          COUNT(*) AS total_events,
+          SUM(is_q) AS total_q_count
+        FROM ao_events
+        GROUP BY ao_org_id, ao_name, region_org_id, region_name
+      )
+
+    -- ============================
+    -- Final shape (single row)
+    -- ============================
+    SELECT
+      (
+        SELECT AS STRUCT
+          user_id,
+          f3_name,
+          home_region_id,
+          home_region_name,
+          avatar_url,
+          status,
+          aos,
+          regions,
+          types,
+          tags
+        FROM pax_info
+      ) AS info,
+      (
+        SELECT AS STRUCT
+          event_count,
+          q_count,
+          CAST(first_event_date AS STRING) AS first_event_date,
+          first_event_ao_id,
+          first_event_ao_name,
+          CAST(last_event_date AS STRING) AS last_event_date,
+          last_event_ao_id,
+          last_event_ao_name,
+          bestie_user_id,
+          bestie_f3_name,
+          bestie_user_count,
+          unique_users_met,
+          unique_pax_when_q,
+          CAST(first_q_date AS STRING) AS first_q_date,
+          first_q_ao_id,
+          first_q_ao_name,
+          CAST(last_q_date AS STRING) AS last_q_date,
+          last_q_ao_id,
+          last_q_ao_name,
+          effective_percentage
+        FROM pax_summary
+      ) AS summary,
+      IFNULL(
+        (
+          SELECT
+            ARRAY_AGG(
+              STRUCT(
+                e.event_id AS event_instance_id,
+                CAST(e.event_date AS STRING) AS event_date,
+                e.event_name,
+                e.pax_count,
+                e.fng_count,
+                e.ao_org_id,
+                e.ao_name,
+                e.region_org_id,
+                e.first_f_ind,
+                e.second_f_ind,
+                e.third_f_ind,
+                e.types,
+                e.tags,
+                e.attendance)
+              ORDER BY e.event_date DESC, e.event_id DESC)
+          FROM events e
+          LIMIT 100
+        ),
+        []) AS events,
+      IFNULL(
+        (
+          SELECT
+            ARRAY_AGG(
+              STRUCT(
+                ao_org_id,
+                ao_name,
+                region_org_id,
+                region_name,
+                total_events,
+                total_q_count)
+              ORDER BY total_events DESC, ao_name)
+          FROM ao_breakdown
+        ),
+        []) AS ao_breakdown;
+    `;
+
+  const results = await queryBigQuery<{
+    info: PAXInfo;
+    events: EventData[];
+    summary: PaxSummary;
+    ao_breakdown: PaxAOBreakdown[];
+  }>(query);
+
+  return {
+    info: results?.[0]?.info || null,
+    events: results?.[0]?.events || null,
+    summary: results?.[0]?.summary || null,
+    ao_breakdown: results?.[0]?.ao_breakdown || null,
+  };
 }

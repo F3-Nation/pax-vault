@@ -11,8 +11,10 @@ import { useState } from "react";
 
 export function AOBreakdownCard({
   AOBreakdown,
+  filters,
 }: {
   AOBreakdown: PaxAOBreakdown[];
+  filters?: string;
 }) {
   const [selected, setSelected] = useState<"asPax" | "asQ">("asPax");
 
@@ -86,14 +88,14 @@ export function AOBreakdownCard({
                         <Link
                           className="text-sm"
                           color="primary"
-                          href={`/stats/ao/${ao_org_id}`}
+                          href={`/stats/ao/${ao_org_id}${filters ? `?${filters}` : ""}`}
                         >
                           {ao_name}
                         </Link>
                         {region_org_id && (
                           <Link
                             className="text-sm"
-                            href={`/stats/region/${region_org_id}`}
+                            href={`/stats/region/${region_org_id}${filters ? `?${filters}` : ""}`}
                           >
                             <span className="text-default-400">
                               {region_name}

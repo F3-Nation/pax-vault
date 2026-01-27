@@ -16,7 +16,7 @@ import {
   Leaders,
   RegionKotterList,
 } from "@/lib/types";
-import { headers } from "next/headers";
+import { getPageData } from "@/lib/bq/regions";
 
 /**
  * Shared filter options passed through to region API endpoints.
@@ -36,31 +36,6 @@ type RegionFilterOpts = {
 };
 
 /**
- * Resolve the request base URL from Next.js headers.
- *
- * Falls back gracefully when headers are unavailable.
- */
-async function getBaseUrl(): Promise<string> {
-  const h = await headers();
-
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  const host =
-    h.get("x-forwarded-host") ??
-    h.get("host") ??
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/^https?:\/\//, "") ??
-    "";
-
-  if (!host)
-    throw new Error("Unable to resolve base URL (missing host headers)");
-
-  // VERCEL_URL is usually host-only
-  const normalizedHost = host.startsWith("http") ? host : `${proto}://${host}`;
-  return normalizedHost.startsWith("http")
-    ? normalizedHost
-    : `${proto}://${host}`;
-}
-
-/**
  * Load all data required for the region stats page.
  *
  * All requests are executed in parallel for performance.
@@ -70,160 +45,50 @@ export async function loadRegionData(
   filters?: RegionFilterOpts,
 ): Promise<RegionData | null> {
   try {
-    const baseUrl = await getBaseUrl();
+    const regionData = await getPageData(regionId, filters);
 
-    const [info, summary, leaders, events, upcoming, kotter] =
-      await Promise.all([
-        getRegionInfo(baseUrl, regionId),
-        getRegionSummary(baseUrl, regionId, filters),
-        getRegionLeaders(baseUrl, regionId, filters),
-        getRegionEvents(baseUrl, regionId, filters, 100),
-        getRegionUpcomingEvents(baseUrl, regionId),
-        getRegionKotters(baseUrl, regionId),
-      ]);
+    // Next.js can only pass plain JSON-serializable data from Server -> Client components.
+    // BigQuery libraries sometimes return objects with custom / null prototypes (e.g., DATE wrappers).
+    // Normalize to plain objects here to avoid: "Only plain objects ... can be passed to Client Components".
 
-    return {
-      info,
-      summary,
-      leaders,
-      events,
-      upcoming,
-      kotter,
+    const mergedPlain = JSON.parse(
+      JSON.stringify(regionData, (_k, v) => {
+        // Unwrap common BigQuery wrappers: { value: ... }
+        if (v && typeof v === "object" && "value" in v) return v.value;
+        if (typeof v === "bigint") return Number(v);
+        return v;
+      }),
+    ) as RegionData;
+
+    // Defensive: many UI components assume list fields are arrays and call `.map`.
+    // Preserve the existing data shape from the old REST endpoints by defaulting missing lists to [].
+    const mergedSafe: RegionData = {
+      info: mergedPlain.info as RegionInfo,
+      summary: mergedPlain.summary as RegionSummary,
+      leaders: (mergedPlain.leaders ?? []) as Leaders[],
+      events: (mergedPlain.events ?? []) as EventData[],
+      upcoming: (mergedPlain.upcoming ?? []) as EventUpcoming[],
+      kotter: (mergedPlain.kotter ?? []) as RegionKotterList[],
     };
+
+    mergedSafe.events = (mergedSafe.events ?? []).map((e: EventData) => ({
+      ...e,
+      attendance: Array.isArray(e?.attendance) ? e.attendance : [],
+      tags: Array.isArray(e?.tags) ? e.tags : [],
+      types: Array.isArray(e?.types) ? e.types : [],
+    })) as EventData[];
+
+    mergedSafe.kotter = (mergedSafe.kotter ?? []).map(
+      (k: RegionKotterList) => ({
+        ...k,
+        bestie_list: Array.isArray(k?.bestie_list) ? k.bestie_list : [],
+      }),
+    ) as RegionKotterList[];
+
+    return mergedSafe;
   } catch (err) {
     console.error("Error fetching Region data:", err);
   }
 
   return null;
-}
-
-/**
- * Build URLSearchParams from region filter options.
- */
-function buildFilterParams(filters?: RegionFilterOpts): URLSearchParams {
-  const qp = new URLSearchParams();
-
-  if (!filters) return qp;
-
-  if (filters.range) qp.append("range", filters.range);
-  if (filters.startDate) qp.append("startDate", filters.startDate);
-  if (filters.endDate) qp.append("endDate", filters.endDate);
-  if (filters.aoIds?.length) qp.append("aoIds", filters.aoIds.join(","));
-  if (filters.aoMode) qp.append("aoMode", filters.aoMode);
-  if (filters.tagIds?.length) qp.append("tagIds", filters.tagIds.join(","));
-  if (filters.tagMode) qp.append("tagMode", filters.tagMode);
-  if (filters.typeIds?.length) qp.append("typeIds", filters.typeIds.join(","));
-  if (filters.typeMode) qp.append("typeMode", filters.typeMode);
-  if (filters.categoryIds?.length)
-    qp.append("categoryIds", filters.categoryIds.join(","));
-  if (filters.categoryMode) qp.append("categoryMode", filters.categoryMode);
-
-  return qp;
-}
-
-/**
- * Fetch region info data.
- */
-async function getRegionInfo(
-  baseUrl: string,
-  id: number,
-): Promise<RegionInfo | null> {
-  const url = (baseUrl ? baseUrl : "") + "/api/region/" + id + "/info";
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return await res.json();
-}
-
-/**
- * Fetch region summary data.
- */
-async function getRegionSummary(
-  baseUrl: string,
-  id: number,
-  filters?: RegionFilterOpts,
-): Promise<RegionSummary | null> {
-  const qp = buildFilterParams(filters);
-
-  const url =
-    (baseUrl ? baseUrl : "") +
-    "/api/region/" +
-    id +
-    "/summary?" +
-    qp.toString();
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return await res.json();
-}
-
-/**
- * Fetch region leaders data.
- */
-async function getRegionLeaders(
-  baseUrl: string,
-  id: number,
-  filters?: RegionFilterOpts,
-): Promise<Leaders[] | null> {
-  const qp = buildFilterParams(filters);
-
-  const url =
-    (baseUrl ? baseUrl : "") +
-    "/api/region/" +
-    id +
-    "/leaders?" +
-    qp.toString();
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return await res.json();
-}
-
-/**
- * Fetch region events data.
- */
-async function getRegionEvents(
-  baseUrl: string,
-  id: number,
-  filters?: RegionFilterOpts,
-  limit?: number,
-): Promise<EventData[] | null> {
-  const qp = buildFilterParams(filters);
-  if (limit) qp.append("limit", String(limit));
-
-  const url =
-    (baseUrl ? baseUrl : "") + "/api/region/" + id + "/events?" + qp.toString();
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-
-  const events = await res.json();
-  return (
-    events?.sort(
-      (a: EventData, b: EventData) =>
-        new Date(b.event_date).getTime() - new Date(a.event_date).getTime(),
-    ) || null
-  );
-}
-
-/**
- * Fetch region upcoming events data.
- */
-async function getRegionUpcomingEvents(
-  baseUrl: string,
-  id: number,
-): Promise<EventUpcoming[] | null> {
-  const url = (baseUrl ? baseUrl : "") + "/api/region/" + id + "/upcoming";
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return await res.json();
-}
-
-/**
- * Fetch region kotter list data.
- */
-async function getRegionKotters(
-  baseUrl: string,
-  id: number,
-): Promise<RegionKotterList[] | null> {
-  const url = (baseUrl ? baseUrl : "") + "/api/region/" + id + "/kotter";
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return await res.json();
 }

@@ -31,9 +31,13 @@ function hasOpenQ(event: EventUpcoming) {
 
 type UpcomingEventsCardProps = {
   events: EventUpcoming[];
+  filters?: string;
 };
 
-export function UpcomingEventsCard({ events }: UpcomingEventsCardProps) {
+export function UpcomingEventsCard({
+  events,
+  filters,
+}: UpcomingEventsCardProps) {
   // Toggle to filter events with open Q spots only
   const [showOpenOnly, setShowOpenOnly] = useState(false);
 
@@ -85,7 +89,7 @@ export function UpcomingEventsCard({ events }: UpcomingEventsCardProps) {
                     <Link
                       className="font-medium text-sm"
                       color="primary"
-                      href={`/stats/ao/${event.ao_org_id}`}
+                      href={`/stats/ao/${event.ao_org_id}${filters ? `?${filters}` : ""}`}
                     >
                       {event.ao_name}
                     </Link>
@@ -117,7 +121,7 @@ export function UpcomingEventsCard({ events }: UpcomingEventsCardProps) {
                     {event.q_list.length > 0 ? (
                       <Link
                         key={`q-${event.ao_org_id}-${idx}`}
-                        href={`/stats/pax/${event.q_list[0].user_id}`}
+                        href={`/stats/pax/${event.q_list[0].user_id}${filters ? `?${filters}` : ""}`}
                         className="text-default-100"
                       >
                         <Chip

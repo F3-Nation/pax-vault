@@ -25,6 +25,7 @@ interface PageProps {
     typeMode?: string;
     tagIds?: string | string[];
     tagMode?: string;
+    persist?: string;
   }>;
 }
 
@@ -62,6 +63,7 @@ export default async function AODetailPage({
       | "include"
       | "exclude"
       | undefined,
+    persist: searchParamsResolved?.persist,
   };
 
   // Preserve raw query params for downstream UI state (filters, toggles, etc.)
@@ -74,7 +76,7 @@ export default async function AODetailPage({
   const typeMode = searchParamsResolved?.typeMode;
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
-
+  const persist = searchParamsResolved?.persist;
   const aoData = await loadAOData(Number(aoId), { ...filters });
 
   const hasAOData = !!aoData && Object.keys(aoData).length > 0;
@@ -178,6 +180,7 @@ export default async function AODetailPage({
             typeMode,
             tagIds,
             tagMode,
+            persist,
           }}
         />
       </div>

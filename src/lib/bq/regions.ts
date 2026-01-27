@@ -82,11 +82,20 @@ function buildEventsWhereSql(regionId: number, opts?: EventFilterOpts): string {
   // AO filters.
   if (aoList.length > 0) {
     const list = aoList.join(",");
-    whereClauses.push(
-      aoMode === "exclude"
-        ? `ao_org_id NOT IN (${list})`
-        : `ao_org_id IN (${list})`,
-    );
+    if (aoList.includes(0)) {
+      aoList.splice(aoList.indexOf(0), 1); // Remove 0 for IN clause.
+      whereClauses.push(
+        aoMode === "exclude"
+          ? `(ao_org_id NOT IN (${list}) OR ao_org_id IS NOT NULL)`
+          : `(ao_org_id IN (${list}) OR ao_org_id IS NULL)`,
+      );
+    } else {
+      whereClauses.push(
+        aoMode === "exclude"
+          ? `ao_org_id NOT IN (${list})`
+          : `ao_org_id IN (${list})`,
+      );
+    }
   }
 
   // Tag filters: pv_events.tags is expected to be an array of objects with an `id` field.
@@ -196,32 +205,6 @@ function buildRangeDates(range: string | undefined): {
 }
 
 /**
- * Fetch a single region's metadata.
- */
-export async function getRegionInfo(
-  regionId: number,
-): Promise<RegionInfo | null> {
-  const query = `-- REGION INFO
-    SELECT
-      region_id,
-      region_name,
-      sector_name,
-      logo_url,
-      is_active,
-      aos,
-      types,
-      tags
-    FROM pv_regions
-    WHERE region_id = ${regionId}
-    LIMIT 1
-  `;
-
-  const results = await queryBigQuery<RegionInfo>(query);
-
-  return results?.[0] || null;
-}
-
-/**
  * Fetch events for a region with optional filtering.
  */
 export async function getEvents(
@@ -230,9 +213,6 @@ export async function getEvents(
     limit?: number;
   },
 ): Promise<EventData[] | null> {
-  // Build WHERE clause from common filters.
-  const whereSql = buildEventsWhereSql(regionId, opts);
-
   // LIMIT is optional. Keep it numeric-only.
   const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
   const limitSql = limit ? `LIMIT ${limit}` : "";
@@ -254,194 +234,12 @@ export async function getEvents(
       tags,
       attendance
     FROM pv_events
-    ${whereSql}
+    WHERE region_org_id = ${regionId}
     ORDER BY event_date DESC, event_id DESC
     ${limitSql};
   `;
 
   const results = await queryBigQuery<EventData>(query);
-  return results || null;
-}
-
-/**
- * Compute summary metrics for a region across the selected event set.
- */
-export async function getSummary(
-  regionId: number,
-  opts?: EventFilterOpts,
-): Promise<RegionSummary | null> {
-  // Build WHERE clause from common filters.
-  const whereSql = buildEventsWhereSql(regionId, opts);
-
-  const query = `-- REGION SUMMARY
-    WITH events AS (
-      SELECT
-        event_id,
-        event_date,
-        pax_count,
-        fng_count,
-        ao_org_id,
-        first_f_ind,
-        second_f_ind,
-        third_f_ind,
-        attendance,
-        tags,
-        types
-      FROM pv_events
-      ${whereSql}
-    ),
-
-    event_metrics AS (
-      SELECT
-        COUNT(DISTINCT event_id) AS event_count,
-        COUNT(DISTINCT ao_org_id) AS ao_count,
-        SUM(COALESCE(fng_count, 0)) AS fng_count,
-        AVG(CAST(pax_count AS FLOAT64)) AS pax_count_average
-      FROM events
-    ),
-
-    attendance_flat AS (
-      SELECT
-        e.event_date,
-        a.user_id,
-        a.q_ind
-      FROM events e
-      LEFT JOIN UNNEST(e.attendance) AS a
-    ),
-
-    attendance_metrics AS (
-      SELECT
-        COUNT(DISTINCT IF(event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY), user_id, NULL)) AS active_pax,
-        COUNT(DISTINCT user_id) AS unique_pax,
-        COUNT(DISTINCT IF(q_ind = 1, user_id, NULL)) AS unique_qs
-      FROM attendance_flat
-    )
-
-    SELECT
-      em.event_count,
-      em.ao_count,
-      am.active_pax,
-      am.unique_pax,
-      am.unique_qs,
-      em.fng_count,
-      em.pax_count_average
-    FROM event_metrics em
-    CROSS JOIN attendance_metrics am;
-  `;
-
-  const results = await queryBigQuery<RegionSummary>(query);
-
-  return results?.[0] || null;
-}
-
-/**
- * Compute per-user leaderboards (posts/qs) from attendance for the selected event set.
- */
-export async function getLeaders(
-  regionId: number,
-  opts?: EventFilterOpts,
-): Promise<Leaders[] | null> {
-  // Build WHERE clause from common filters.
-  const whereSql = buildEventsWhereSql(regionId, opts);
-
-  const query = `-- REGION LEADERS
-    WITH events AS (
-      SELECT
-        event_id,
-        event_date,
-        ao_org_id,
-        first_f_ind,
-        second_f_ind,
-        third_f_ind,
-        tags,
-        types,
-        attendance
-      FROM pv_events
-      ${whereSql}
-    ),
-
-    attendance_flat AS (
-      SELECT
-        e.event_id,
-        a.user_id,
-        a.f3_name,
-        a.q_ind,
-        a.avatar_url
-      FROM events e
-      LEFT JOIN UNNEST(e.attendance) AS a
-      WHERE a.user_id IS NOT NULL
-    )
-
-    SELECT
-      user_id,
-      ANY_VALUE(f3_name) AS f3_name,
-      COUNT(DISTINCT event_id) AS posts,
-      COUNTIF(q_ind = 1) AS qs,
-      ANY_VALUE(avatar_url) AS avatar_url
-    FROM attendance_flat
-    GROUP BY user_id
-    ORDER BY posts DESC, qs DESC, f3_name;
-  `;
-
-  const results = await queryBigQuery<Leaders>(query);
-  return results || null;
-}
-
-/**
- * Fetch the next ~50 upcoming events for a region.
- */
-export async function getUpcomingEvents(
-  regionId: number,
-): Promise<EventUpcoming[] | null> {
-  const query = `-- REGION UPCOMING
-    SELECT
-      start_date,
-      start_time,
-      ao_name,
-      ao_org_id,
-      location_name,
-      event_name,
-      event_type,
-      event_category,
-      q_list
-    FROM pv_upcoming
-    WHERE region_org_id = ${regionId}
-    ORDER BY start_date ASC, start_time ASC, ao_name ASC
-    LIMIT 50;
-  `;
-
-  const results = await queryBigQuery<EventUpcoming>(query);
-
-  return results || null;
-}
-
-/**
- * Fetch Kotter list for a region (people trending toward coming back).
- */
-export async function getKotters(
-  regionId: number,
-): Promise<RegionKotterList[] | null> {
-  const query = `-- REGION KOTTERS
-    SELECT
-      user_id,
-      f3_name,
-      avatar_url,
-      kotter_status,
-      total_events,
-      first_event_date,
-      days_since_last_event,
-      last_event_date,
-      last_event_name,
-      last_event_ao_name,
-      last_event_ao_org_id,
-      bestie_list
-    FROM pv_kotter
-    WHERE home_region_id = ${regionId}
-    ORDER BY days_since_last_event ASC, last_event_date ASC, f3_name ASC;
-  `;
-
-  const results = await queryBigQuery<RegionKotterList>(query);
-
   return results || null;
 }
 
@@ -471,24 +269,19 @@ export async function searchRegionsByName(q: string): Promise<RegionInfo[]> {
   return results ?? [];
 }
 
-/* SAVING FOR LATER - COMBINED REGION PAGE LOAD QUERY
-export async function regionPageLoad(
+export async function getPageData(
   regionId: number,
-  opts?: EventFilterOpts & { limit?: number },
+  opts?: EventFilterOpts,
 ): Promise<{
   info: RegionInfo | null;
   events: EventData[] | null;
   summary: RegionSummary | null;
   leaders: Leaders[] | null;
   upcoming: EventUpcoming[] | null;
-  kotters: RegionKotterList[] | null;
+  kotter: RegionKotterList[] | null;
 }> {
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(regionId, opts);
-
-  // LIMIT is optional. Keep it numeric-only.
-  const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
-  const limitSql = limit ? `LIMIT ${limit}` : "";
 
   const query = `-- REGION PAGE LOAD
     WITH
@@ -524,85 +317,140 @@ export async function regionPageLoad(
         LEFT JOIN UNNEST(e.attendance) a
         WHERE a.user_id IS NOT NULL
       )
-
+        
     SELECT
       -- Region info as a STRUCT
-      (SELECT AS STRUCT region_id, region_name, sector_name, logo_url, is_active, aos, types, tags
-      FROM pv_regions
-      WHERE region_id = ${regionId}
-      LIMIT 1) AS regionInfo,
+      (
+        SELECT AS STRUCT
+          region_id, region_name, sector_name, logo_url, is_active, aos, types, tags
+        FROM pv_regions
+        WHERE region_id = ${regionId}
+        LIMIT 1
+      ) AS regionInfo,
 
       -- Events list as an ARRAY (limit it)
-      (SELECT ARRAY_AGG(STRUCT(
-          event_id AS event_instance_id,
-          event_date,
-          event_name,
-          pax_count,
-          fng_count,
-          ao_org_id,
-          ao_name,
-          region_org_id,
-          first_f_ind,
-          second_f_ind,
-          third_f_ind,
-          types,
-          tags
-          -- omit attendance unless the UI truly needs it here
+      (
+        SELECT
+          ARRAY_AGG(
+            STRUCT(
+              event_id AS event_instance_id,
+              event_date,
+              event_name,
+              pax_count,
+              fng_count,
+              ao_org_id,
+              ao_name,
+              region_org_id,
+              first_f_ind,
+              second_f_ind,
+              third_f_ind,
+              types,
+              tags,
+              attendance
+              -- omit attendance unless the UI truly needs it here
+            )
+            ORDER BY event_date DESC, event_id DESC
+            LIMIT 100
         )
-        ORDER BY event_date DESC, event_id DESC
-        LIMIT ${limit || 100}
-      )
-      FROM events) AS events,
+        FROM events
+      ) AS events,
 
       -- Summary as a STRUCT
-      (SELECT AS STRUCT
-          COUNT(DISTINCT event_id) AS event_count,
-          COUNT(DISTINCT ao_org_id) AS ao_count,
-          COUNT(DISTINCT IF(event_date >= DATE(@activeCutoffDate), user_id, NULL)) AS active_pax,
-          COUNT(DISTINCT user_id) AS unique_pax,
-          COUNT(DISTINCT IF(q_ind = 1, user_id, NULL)) AS unique_qs,
-          SUM(COALESCE(fng_count, 0)) AS fng_count,
-          AVG(CAST(pax_count AS FLOAT64)) AS pax_count_average
-      FROM events
-      LEFT JOIN attendance_flat USING(event_id, event_date)
+      (
+        WITH
+          event_metrics AS (
+            SELECT
+              COUNT(DISTINCT event_id) AS event_count,
+              COUNT(DISTINCT ao_org_id) AS ao_count,
+              SUM(COALESCE(fng_count, 0)) AS fng_count,
+              AVG(CAST(pax_count AS FLOAT64)) AS pax_count_average
+            FROM events
+          ),
+          attendance_metrics AS (
+            SELECT
+              COUNT(DISTINCT IF(event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY), user_id, NULL)) AS active_pax,
+              COUNT(DISTINCT user_id) AS unique_pax,
+              COUNT(DISTINCT IF(q_ind = 1, user_id, NULL)) AS unique_qs
+            FROM attendance_flat
+          )
+        SELECT AS STRUCT
+          em.event_count,
+          em.ao_count,
+          am.active_pax,
+          am.unique_pax,
+          am.unique_qs,
+          em.fng_count,
+          em.pax_count_average
+        FROM event_metrics em
+        CROSS JOIN attendance_metrics am
       ) AS summary,
 
-      -- Leaders as an ARRAY
-      (SELECT ARRAY_AGG(STRUCT(
-          user_id,
-          ANY_VALUE(f3_name) AS f3_name,
-          COUNT(DISTINCT event_id) AS posts,
-          COUNTIF(q_ind = 1) AS qs,
-          ANY_VALUE(avatar_url) AS avatar_url
-        )
-        ORDER BY posts DESC, qs DESC, f3_name
-        LIMIT 100
-      )
-      FROM attendance_flat
-      GROUP BY user_id
+      -- Leaders as an ARRAY (fixed)
+      (
+        SELECT
+          ARRAY_AGG(
+            STRUCT(
+              user_id,
+              f3_name,
+              posts,
+              qs,
+              avatar_url)
+            ORDER BY posts DESC
+            LIMIT 100)
+        FROM
+          (
+            SELECT
+              user_id,
+              ANY_VALUE(f3_name) AS f3_name,
+              COUNT(DISTINCT event_id) AS posts,
+              COUNTIF(q_ind = 1) AS qs,
+              ANY_VALUE(avatar_url) AS avatar_url
+            FROM attendance_flat
+            GROUP BY user_id
+          )
       ) AS leaders,
 
       -- Upcoming as an ARRAY
-      (SELECT ARRAY_AGG(STRUCT(
-          start_date, start_time, ao_name, ao_org_id, location_name, event_name, event_type, event_category, q_list
-        )
-        ORDER BY start_date ASC, start_time ASC, ao_name ASC
-        LIMIT 50
-      )
-      FROM pv_upcoming
-      WHERE region_org_id = ${regionId}
+      (
+        SELECT
+          ARRAY_AGG(
+            STRUCT(
+              start_date,
+              start_time,
+              ao_name,
+              ao_org_id,
+              location_name,
+              event_name,
+              event_type,
+              event_category,
+              q_list)
+            ORDER BY start_date ASC, start_time ASC, ao_name ASC
+            LIMIT 50)
+        FROM pv_upcoming
+        WHERE region_org_id = ${regionId}
       ) AS upcoming,
 
       -- Kotters as an ARRAY
-      (SELECT ARRAY_AGG(STRUCT(
-          user_id, f3_name, avatar_url, kotter_status, total_events, first_event_date,
-          days_since_last_event, last_event_date, last_event_name, last_event_ao_name, last_event_ao_org_id, bestie_list
-        )
-        ORDER BY days_since_last_event ASC, last_event_date ASC, f3_name ASC
-      )
-      FROM pv_kotter
-      WHERE home_region_id = ${regionId}
-      ) AS kotters; 
+      (
+        SELECT
+          ARRAY_AGG(
+            STRUCT(
+              user_id,
+              f3_name,
+              avatar_url,
+              kotter_status,
+              total_events,
+              first_event_date,
+              days_since_last_event,
+              last_event_date,
+              last_event_name,
+              last_event_ao_name,
+              last_event_ao_org_id,
+              bestie_list)
+            ORDER BY days_since_last_event ASC, last_event_date ASC, f3_name ASC)
+        FROM pv_kotter
+        WHERE home_region_id = ${regionId}
+      ) AS kotter;
     `;
 
   const results = await queryBigQuery<{
@@ -611,7 +459,7 @@ export async function regionPageLoad(
     summary: RegionSummary;
     leaders: Leaders[];
     upcoming: EventUpcoming[];
-    kotters: RegionKotterList[];
+    kotter: RegionKotterList[];
   }>(query);
 
   return {
@@ -620,6 +468,6 @@ export async function regionPageLoad(
     summary: results?.[0]?.summary || null,
     leaders: results?.[0]?.leaders || null,
     upcoming: results?.[0]?.upcoming || null,
-    kotters: results?.[0]?.kotters || null,
+    kotter: results?.[0]?.kotter || null,
   };
-}*/
+}

@@ -24,6 +24,7 @@ type LeadersCardProps = {
   leaders: Leaders[];
   height: number;
   title?: string;
+  filters?: string;
 };
 
 /**
@@ -35,7 +36,12 @@ function renderLeaderValue(leader: Leaders, mode: "posts" | "qs") {
     : `${formatNumber(leader.qs)} Qs`;
 }
 
-export function LeadersCard({ leaders, height, title }: LeadersCardProps) {
+export function LeadersCard({
+  leaders,
+  height,
+  title,
+  filters,
+}: LeadersCardProps) {
   // Current leaderboard mode (posts vs Qs)
   const [mode, setMode] = useState<"posts" | "qs">("posts");
 
@@ -91,7 +97,7 @@ export function LeadersCard({ leaders, height, title }: LeadersCardProps) {
                   <Link
                     className="text-sm"
                     color="primary"
-                    href={`/stats/pax/${leader.user_id}`}
+                    href={`/stats/pax/${leader.user_id}${filters ? `?${filters}` : ""}`}
                   >
                     {leader.f3_name ?? leader.user_id.toString()}
                   </Link>

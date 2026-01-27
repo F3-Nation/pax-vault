@@ -37,6 +37,7 @@ type PAXPageWrapperProps = {
     typeMode?: string;
     tagIds?: string | string[];
     tagMode?: string;
+    persist?: string;
   };
 };
 
@@ -76,6 +77,8 @@ function buildEventsFiltersQuery(
   if (searchParams.categoryMode)
     qp.append("categoryMode", searchParams.categoryMode);
 
+  if (searchParams.persist) qp.append("persist", searchParams.persist);
+
   return qp.toString();
 }
 
@@ -95,10 +98,23 @@ export function PAXPageWrapper({
 
   return (
     <>
+      {/* Page-level filters at top of page if filters are active */}
+      {eventsFiltersQuery.length > 0 && (
+        <Filter
+          aos={pax_info?.aos || []}
+          regions={pax_info?.regions || []}
+          types={pax_info?.types || []}
+          tags={pax_info?.tags || []}
+          filters={eventsFiltersQuery}
+        />
+      )}
       {/* Summary + leaders */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
-        <SummaryCard summary={pax_summary!} />
-        <AOBreakdownCard AOBreakdown={pax_ao_breakdown!} />
+        <SummaryCard summary={pax_summary!} filters={eventsFiltersQuery} />
+        <AOBreakdownCard
+          AOBreakdown={pax_ao_breakdown!}
+          filters={eventsFiltersQuery}
+        />
       </div>
       {/* Event list */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
@@ -106,16 +122,19 @@ export function PAXPageWrapper({
           events={pax_events}
           thisPaxId={pax_id}
           filtersQuery={eventsFiltersQuery}
+          filters={eventsFiltersQuery}
         />
       </div>
-      {/* Page-level filters */}
-      <Filter
-        aos={pax_info?.aos || []}
-        regions={pax_info?.regions || []}
-        types={pax_info?.types || []}
-        tags={pax_info?.tags || []}
-        filters={eventsFiltersQuery}
-      />
+      {/* Page-level filters at top of page if no filters are active */}
+      {eventsFiltersQuery.length === 0 && (
+        <Filter
+          aos={pax_info?.aos || []}
+          regions={pax_info?.regions || []}
+          types={pax_info?.types || []}
+          tags={pax_info?.tags || []}
+          filters={eventsFiltersQuery}
+        />
+      )}
     </>
   );
 }

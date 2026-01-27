@@ -41,6 +41,7 @@ type AOPageWrapperProps = {
     typeMode?: string;
     tagIds?: string | string[];
     tagMode?: string;
+    persist?: string;
   };
 };
 
@@ -74,6 +75,8 @@ function buildEventsFiltersQuery(
   if (searchParams.categoryMode)
     qp.append("categoryMode", searchParams.categoryMode);
 
+  if (searchParams.persist) qp.append("persist", searchParams.persist);
+
   return qp.toString();
 }
 
@@ -94,6 +97,14 @@ export function AOPageWrapper({
 
   return (
     <>
+      {/* Page-level filters at top of page if filters are active */}
+      {eventsFiltersQuery.length > 0 && (
+        <Filter
+          types={ao_info?.types || []}
+          tags={ao_info?.tags || []}
+          filters={eventsFiltersQuery}
+        />
+      )}
       {/* Summary + leaders */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
         <SummaryCard summary={ao_summary!} />
@@ -107,11 +118,15 @@ export function AOPageWrapper({
           }
           title="AO"
           height={260}
+          filters={eventsFiltersQuery}
         />
       </div>
       {/* Kotters + upcoming events */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
-        <UpcomingEventsCard events={ao_upcoming || []} />
+        <UpcomingEventsCard
+          events={ao_upcoming || []}
+          filters={eventsFiltersQuery}
+        />
       </div>
       {/* Event list */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
@@ -119,14 +134,17 @@ export function AOPageWrapper({
           events={ao_events}
           thisAOId={ao_id}
           filtersQuery={eventsFiltersQuery}
+          filters={eventsFiltersQuery}
         />
       </div>
-      {/* Page-level filters */}
-      <Filter
-        types={ao_info?.types || []}
-        tags={ao_info?.tags || []}
-        filters={eventsFiltersQuery}
-      />
+      {/* Page-level filters at top of page if no filters are active */}
+      {eventsFiltersQuery.length === 0 && (
+        <Filter
+          types={ao_info?.types || []}
+          tags={ao_info?.tags || []}
+          filters={eventsFiltersQuery}
+        />
+      )}
     </>
   );
 }

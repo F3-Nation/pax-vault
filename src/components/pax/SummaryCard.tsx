@@ -6,7 +6,13 @@ import { PaxSummary } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
 import { Link } from "@heroui/link";
 
-export function SummaryCard({ summary }: { summary: PaxSummary }) {
+export function SummaryCard({
+  summary,
+  filters,
+}: {
+  summary: PaxSummary;
+  filters?: string;
+}) {
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="flex justify-between items-center px-6 lg:min-h-16">
@@ -47,7 +53,7 @@ export function SummaryCard({ summary }: { summary: PaxSummary }) {
                   <Link
                     className="text-sm"
                     color="secondary"
-                    href={`/stats/ao/${summary?.first_event_ao_id}`}
+                    href={`/stats/ao/${summary?.first_event_ao_id}${filters ? `?${filters}` : ""}`}
                   >
                     {summary?.first_event_ao_name
                       ? summary?.first_event_ao_name
@@ -69,7 +75,7 @@ export function SummaryCard({ summary }: { summary: PaxSummary }) {
                   <Link
                     className="text-sm"
                     color="secondary"
-                    href={`/stats/ao/${summary?.last_event_ao_id}`}
+                    href={`/stats/ao/${summary?.last_event_ao_id}${filters ? `?${filters}` : ""}`}
                   >
                     {summary?.last_event_ao_name
                       ? summary?.last_event_ao_name
@@ -86,12 +92,12 @@ export function SummaryCard({ summary }: { summary: PaxSummary }) {
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>
-                  {summary?.bestie_count}
+                  {summary?.bestie_user_count}
                   {" BDs with "}
                   <Link
                     className="text-sm"
                     color="secondary"
-                    href={`/stats/pax/${summary?.bestie_user_id}`}
+                    href={`/stats/pax/${summary?.bestie_user_id}${filters ? `?${filters}` : ""}`}
                   >
                     {summary?.bestie_f3_name}
                   </Link>
@@ -121,7 +127,7 @@ export function SummaryCard({ summary }: { summary: PaxSummary }) {
                   <Link
                     className="text-sm"
                     color="secondary"
-                    href={`/stats/ao/${summary?.first_q_ao_id}`}
+                    href={`/stats/ao/${summary?.first_q_ao_id}${filters ? `?${filters}` : ""}`}
                   >
                     {summary?.first_q_ao_name
                       ? summary?.first_q_ao_name
@@ -143,7 +149,7 @@ export function SummaryCard({ summary }: { summary: PaxSummary }) {
                   <Link
                     className="text-sm"
                     color="secondary"
-                    href={`/stats/ao/${summary?.last_q_ao_id}`}
+                    href={`/stats/ao/${summary?.last_q_ao_id}${filters ? `?${filters}` : ""}`}
                   >
                     {summary?.last_q_ao_name
                       ? summary?.last_q_ao_name
