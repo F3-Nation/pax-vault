@@ -470,3 +470,156 @@ export async function searchRegionsByName(q: string): Promise<RegionInfo[]> {
   const results = await queryBigQuery<RegionInfo>(query);
   return results ?? [];
 }
+
+/* SAVING FOR LATER - COMBINED REGION PAGE LOAD QUERY
+export async function regionPageLoad(
+  regionId: number,
+  opts?: EventFilterOpts & { limit?: number },
+): Promise<{
+  info: RegionInfo | null;
+  events: EventData[] | null;
+  summary: RegionSummary | null;
+  leaders: Leaders[] | null;
+  upcoming: EventUpcoming[] | null;
+  kotters: RegionKotterList[] | null;
+}> {
+  // Build WHERE clause from common filters.
+  const whereSql = buildEventsWhereSql(regionId, opts);
+
+  // LIMIT is optional. Keep it numeric-only.
+  const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
+  const limitSql = limit ? `LIMIT ${limit}` : "";
+
+  const query = `-- REGION PAGE LOAD
+    WITH
+      events AS (
+        SELECT
+          event_id,
+          event_date,
+          event_name,
+          pax_count,
+          fng_count,
+          ao_org_id,
+          ao_name,
+          region_org_id,
+          first_f_ind,
+          second_f_ind,
+          third_f_ind,
+          types,
+          tags,
+          attendance
+        FROM pv_events
+        ${whereSql}
+      ),
+
+      attendance_flat AS (
+        SELECT
+          e.event_id,
+          e.event_date,
+          a.user_id,
+          a.f3_name,
+          a.q_ind,
+          a.avatar_url
+        FROM events e
+        LEFT JOIN UNNEST(e.attendance) a
+        WHERE a.user_id IS NOT NULL
+      )
+
+    SELECT
+      -- Region info as a STRUCT
+      (SELECT AS STRUCT region_id, region_name, sector_name, logo_url, is_active, aos, types, tags
+      FROM pv_regions
+      WHERE region_id = ${regionId}
+      LIMIT 1) AS regionInfo,
+
+      -- Events list as an ARRAY (limit it)
+      (SELECT ARRAY_AGG(STRUCT(
+          event_id AS event_instance_id,
+          event_date,
+          event_name,
+          pax_count,
+          fng_count,
+          ao_org_id,
+          ao_name,
+          region_org_id,
+          first_f_ind,
+          second_f_ind,
+          third_f_ind,
+          types,
+          tags
+          -- omit attendance unless the UI truly needs it here
+        )
+        ORDER BY event_date DESC, event_id DESC
+        LIMIT ${limit || 100}
+      )
+      FROM events) AS events,
+
+      -- Summary as a STRUCT
+      (SELECT AS STRUCT
+          COUNT(DISTINCT event_id) AS event_count,
+          COUNT(DISTINCT ao_org_id) AS ao_count,
+          COUNT(DISTINCT IF(event_date >= DATE(@activeCutoffDate), user_id, NULL)) AS active_pax,
+          COUNT(DISTINCT user_id) AS unique_pax,
+          COUNT(DISTINCT IF(q_ind = 1, user_id, NULL)) AS unique_qs,
+          SUM(COALESCE(fng_count, 0)) AS fng_count,
+          AVG(CAST(pax_count AS FLOAT64)) AS pax_count_average
+      FROM events
+      LEFT JOIN attendance_flat USING(event_id, event_date)
+      ) AS summary,
+
+      -- Leaders as an ARRAY
+      (SELECT ARRAY_AGG(STRUCT(
+          user_id,
+          ANY_VALUE(f3_name) AS f3_name,
+          COUNT(DISTINCT event_id) AS posts,
+          COUNTIF(q_ind = 1) AS qs,
+          ANY_VALUE(avatar_url) AS avatar_url
+        )
+        ORDER BY posts DESC, qs DESC, f3_name
+        LIMIT 100
+      )
+      FROM attendance_flat
+      GROUP BY user_id
+      ) AS leaders,
+
+      -- Upcoming as an ARRAY
+      (SELECT ARRAY_AGG(STRUCT(
+          start_date, start_time, ao_name, ao_org_id, location_name, event_name, event_type, event_category, q_list
+        )
+        ORDER BY start_date ASC, start_time ASC, ao_name ASC
+        LIMIT 50
+      )
+      FROM pv_upcoming
+      WHERE region_org_id = ${regionId}
+      ) AS upcoming,
+
+      -- Kotters as an ARRAY
+      (SELECT ARRAY_AGG(STRUCT(
+          user_id, f3_name, avatar_url, kotter_status, total_events, first_event_date,
+          days_since_last_event, last_event_date, last_event_name, last_event_ao_name, last_event_ao_org_id, bestie_list
+        )
+        ORDER BY days_since_last_event ASC, last_event_date ASC, f3_name ASC
+      )
+      FROM pv_kotter
+      WHERE home_region_id = ${regionId}
+      ) AS kotters; 
+    `;
+
+  const results = await queryBigQuery<{
+    regionInfo: RegionInfo;
+    events: EventData[];
+    summary: RegionSummary;
+    leaders: Leaders[];
+    upcoming: EventUpcoming[];
+    kotters: RegionKotterList[];
+  }>(query);
+
+  return {
+    info: results?.[0]?.regionInfo || null,
+    events: results?.[0]?.events || null,
+    summary: results?.[0]?.summary || null,
+    leaders: results?.[0]?.leaders || null,
+    upcoming: results?.[0]?.upcoming || null,
+    kotters: results?.[0]?.kotters || null,
+  };
+}*/
