@@ -25,9 +25,10 @@ import { formatDate, formatNumber } from "@/lib/utils";
 
 type KotterCardProps = {
   kotters: RegionKotterList[];
+  filters?: string;
 };
 
-export function KotterCard({ kotters }: KotterCardProps) {
+export function KotterCard({ kotters, filters }: KotterCardProps) {
   // Current status filter; "all" disables filtering.
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -132,7 +133,7 @@ export function KotterCard({ kotters }: KotterCardProps) {
                         <Link
                           className="text-sm"
                           color="primary"
-                          href={`/stats/pax/${kotter.user_id}`}
+                          href={`/stats/pax/${kotter.user_id}${filters ? `?${filters}` : ""}`}
                         >
                           {kotter.f3_name ?? kotter.user_id.toString()}
                         </Link>
@@ -143,7 +144,7 @@ export function KotterCard({ kotters }: KotterCardProps) {
                         <span className="italic">
                           <Link
                             className="text-xs italic text-default-500"
-                            href={`/stats/ao/${kotter.last_event_ao_org_id}`}
+                            href={`/stats/ao/${kotter.last_event_ao_org_id}${filters ? `?${filters}` : ""}`}
                           >
                             {kotter.last_event_ao_name}
                           </Link>
@@ -158,7 +159,7 @@ export function KotterCard({ kotters }: KotterCardProps) {
                             >
                               <Link
                                 key={`${kotter.user_id}-${bestie.user_id}-${idx}`}
-                                href={`/stats/pax/${bestie.user_id}`}
+                                href={`/stats/pax/${bestie.user_id}${filters ? `?${filters}` : ""}`}
                                 className="text-secondary text-xs"
                               >
                                 {bestie.f3_name ?? bestie.user_id.toString()}

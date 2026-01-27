@@ -27,6 +27,7 @@ interface PageProps {
     typeMode?: string;
     tagIds?: string | string[];
     tagMode?: string;
+    persist?: string;
   }>;
 }
 
@@ -66,6 +67,7 @@ export default async function RegionDetailPage({
       | "include"
       | "exclude"
       | undefined,
+    persist: searchParamsResolved?.persist,
   };
 
   // Preserve raw query params for downstream UI state (filters, toggles, etc.)
@@ -80,7 +82,7 @@ export default async function RegionDetailPage({
   const typeMode = searchParamsResolved?.typeMode;
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
-
+  const persist = searchParamsResolved?.persist;
   const regionData = await loadRegionData(Number(regionId), { ...filters });
 
   const hasRegionData = !!regionData && Object.keys(regionData).length > 0;
@@ -187,6 +189,7 @@ export default async function RegionDetailPage({
             typeMode,
             tagIds,
             tagMode,
+            persist,
           }}
         />
       </div>

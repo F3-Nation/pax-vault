@@ -67,6 +67,7 @@ type EventsCardProps = {
   thisRegionId?: number;
   thisAOId?: number;
   filtersQuery?: string;
+  filters?: string;
 };
 
 export function EventsCard({
@@ -75,6 +76,7 @@ export function EventsCard({
   thisRegionId,
   thisAOId,
   filtersQuery,
+  filters,
 }: EventsCardProps) {
   // Local copy of events (allows client-side filtering and reload-all behavior)
   const [eventsData, setEventsData] = useState<EventData[]>(() => events ?? []);
@@ -308,8 +310,8 @@ export function EventsCard({
                               <Link
                                 href={
                                   event.ao_org_id
-                                    ? `/stats/ao/${event.ao_org_id}`
-                                    : `/stats/region/${event.region_org_id}`
+                                    ? `/stats/ao/${event.ao_org_id}${filters ? `?${filters}` : ""}`
+                                    : `/stats/region/${event.region_org_id}${filters ? `?${filters}` : ""}`
                                 }
                               >
                                 <span className="text-default-400 text-sm italic">
@@ -368,7 +370,7 @@ export function EventsCard({
                               q_list.map((q, i) => (
                                 <Link
                                   key={`q-${event.event_instance_id}-${i}`}
-                                  href={`/stats/pax/${q.user_id}`}
+                                  href={`/stats/pax/${q.user_id}${filters ? `?${filters}` : ""}`}
                                   className="text-default-100"
                                 >
                                   <Chip
@@ -401,7 +403,7 @@ export function EventsCard({
                               pax_list.map((pax, i) => (
                                 <Link
                                   key={`pax-${event.event_instance_id}-${i}`}
-                                  href={`/stats/pax/${pax.user_id}`}
+                                  href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
                                   className="text-default-100"
                                 >
                                   <Chip
@@ -475,8 +477,8 @@ export function EventsCard({
                   <Link
                     href={
                       selectedEvent.ao_org_id
-                        ? `/stats/ao/${selectedEvent.ao_org_id}`
-                        : `/stats/region/${selectedEvent.region_org_id}`
+                        ? `/stats/ao/${selectedEvent.ao_org_id}${filters ? `?${filters}` : ""}`
+                        : `/stats/region/${selectedEvent.region_org_id}${filters ? `?${filters}` : ""}`
                     }
                     className="text-default-500 hover:text-default-700"
                   >
@@ -488,7 +490,7 @@ export function EventsCard({
                     <>
                       <span className="text-default-400">•</span>
                       <Link
-                        href={`/stats/region/${selectedEvent.region_org_id}`}
+                        href={`/stats/region/${selectedEvent.region_org_id}${filters ? `?${filters}` : ""}`}
                         className="text-default-500 hover:text-default-700"
                       >
                         {selectedEvent.region_name}
@@ -569,7 +571,7 @@ export function EventsCard({
                               getQList(selectedEvent).map((q, i) => (
                                 <Link
                                   key={`modal-q-${selectedEvent.event_instance_id}-${i}`}
-                                  href={`/stats/pax/${q.user_id}`}
+                                  href={`/stats/pax/${q.user_id}${filters ? `?${filters}` : ""}`}
                                   className="text-default-100"
                                 >
                                   <Chip
@@ -610,7 +612,7 @@ export function EventsCard({
                               getPaxList(selectedEvent).map((pax, i) => (
                                 <Link
                                   key={`modal-pax-${selectedEvent.event_instance_id}-${i}`}
-                                  href={`/stats/pax/${pax.user_id}`}
+                                  href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
                                   className="text-default-100"
                                 >
                                   <Chip
@@ -712,7 +714,7 @@ export function EventsCard({
                             getQList(selectedEvent).map((q, i) => (
                               <Link
                                 key={`modal-q-${selectedEvent.event_instance_id}-${i}`}
-                                href={`/stats/pax/${q.user_id}`}
+                                href={`/stats/pax/${q.user_id}${filters ? `?${filters}` : ""}`}
                                 className="text-default-100"
                               >
                                 <Chip
@@ -753,7 +755,7 @@ export function EventsCard({
                             getPaxList(selectedEvent).map((pax, i) => (
                               <Link
                                 key={`modal-pax-${selectedEvent.event_instance_id}-${i}`}
-                                href={`/stats/pax/${pax.user_id}`}
+                                href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
                                 className="text-default-100"
                               >
                                 <Chip

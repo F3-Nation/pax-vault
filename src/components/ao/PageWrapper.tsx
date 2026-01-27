@@ -41,6 +41,7 @@ type AOPageWrapperProps = {
     typeMode?: string;
     tagIds?: string | string[];
     tagMode?: string;
+    persist?: string;
   };
 };
 
@@ -73,6 +74,8 @@ function buildEventsFiltersQuery(
   appendList("categoryIds", searchParams.categoryIds);
   if (searchParams.categoryMode)
     qp.append("categoryMode", searchParams.categoryMode);
+
+  if (searchParams.persist) qp.append("persist", searchParams.persist);
 
   return qp.toString();
 }
@@ -115,11 +118,15 @@ export function AOPageWrapper({
           }
           title="AO"
           height={260}
+          filters={eventsFiltersQuery}
         />
       </div>
       {/* Kotters + upcoming events */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
-        <UpcomingEventsCard events={ao_upcoming || []} />
+        <UpcomingEventsCard
+          events={ao_upcoming || []}
+          filters={eventsFiltersQuery}
+        />
       </div>
       {/* Event list */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
@@ -127,6 +134,7 @@ export function AOPageWrapper({
           events={ao_events}
           thisAOId={ao_id}
           filtersQuery={eventsFiltersQuery}
+          filters={eventsFiltersQuery}
         />
       </div>
       {/* Page-level filters at top of page if no filters are active */}

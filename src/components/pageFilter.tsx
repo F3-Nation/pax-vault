@@ -148,6 +148,7 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
   const [endDate, setEndDate] = useState<string | null>(null);
   const [isSelected_categoryMode, setIsSelected_categoryMode] = useState(false);
   const [categoryState, setCategoryState] = useState<"all" | string[]>("all");
+  const [persistState, setPersistState] = useState(false);
 
   const parsedFilters = useMemo(() => {
     const sp = new URLSearchParams(filters ?? "");
@@ -178,6 +179,7 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
         ? "exclude"
         : "include") as IncludeExclude,
       categoryIds: parseIdList(sp.get("categoryIds")),
+      persist: sp.get("persist") === "true",
     };
   }, [filters]);
 
@@ -311,6 +313,7 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
   /**
    * Build a shareable URL reflecting current local filter state.
    */
+
   const shareUrl = () => {
     const params = new URLSearchParams();
 
@@ -346,7 +349,12 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
       isSelected_categoryMode,
     );
 
+    if (persistState) {
+      params.set("persist", "true");
+    }
+
     const qs = params.toString();
+    console.log(qs);
     return `${window.location.origin}${pathname}${qs ? `?${qs}` : ""}`;
   };
 
@@ -382,6 +390,10 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
     setIsSelected_categoryMode(false);
   };
 
+  const clearPersist = () => {
+    setPersistState(false);
+  };
+
   const clearAll = () => {
     clearDate();
     clearAO();
@@ -389,6 +401,7 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
     clearTags();
     clearTypes();
     clearCategories();
+    clearPersist();
   };
 
   useEffect(() => {
@@ -418,6 +431,8 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
     setCategoryState(
       parsedFilters.categoryIds.length > 0 ? parsedFilters.categoryIds : "all",
     );
+
+    setPersistState(parsedFilters.persist === true);
 
     // Sync Accordion expansion based on active filters
     setExpandedKeys(new Set(computedExpandedKeys));
@@ -501,6 +516,26 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
                     </div>
                   </DrawerHeader>
                   <DrawerBody className="flex-1 overflow-y-auto">
+                    <div className="px-2">
+                      <div className="flex items-center justify-between gap-4 rounded-lg bg-content1 px-4 py-3">
+                        <div className="flex flex-col gap-1 text-left">
+                          <p className="text-medium">Persistant Filtering</p>
+                          <p className="text-tiny text-danger-400">
+                            Not all pax, aos or regions include all filter
+                            options.
+                          </p>
+                        </div>
+                        <Switch
+                          size="sm"
+                          color="success"
+                          isSelected={persistState}
+                          aria-label="Enable persistent filtering"
+                          onValueChange={() => {
+                            setPersistState(!persistState);
+                          }}
+                        />
+                      </div>
+                    </div>
                     <Accordion
                       isCompact
                       variant="splitted"
@@ -927,7 +962,7 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
                             size="sm"
                             variant="light"
                             color="danger"
-                            onPress={clearCategories}
+                            onPress={clearAll}
                             className="w-full"
                           >
                             Clear Filter
