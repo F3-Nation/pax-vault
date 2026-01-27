@@ -290,7 +290,7 @@ export async function searchUsersByName(q: string): Promise<PAXInfo[]> {
 
 export async function getPageData(
   paxId: number,
-  opts?: EventFilterOpts & { limit?: number },
+  opts?: EventFilterOpts,
 ): Promise<{
   info: PAXInfo | null;
   events: EventData[] | null;
@@ -299,9 +299,6 @@ export async function getPageData(
 }> {
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(paxId, opts);
-
-  // LIMIT is optional. Keep it numeric-only.
-  const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
 
   const query = `-- PAX PAGE LOAD
     WITH
@@ -605,7 +602,7 @@ export async function getPageData(
                 e.attendance)
               ORDER BY e.event_date DESC, e.event_id DESC)
           FROM events e
-          ${limit ? `LIMIT ${limit}` : ""}
+          LIMIT 100
         ),
         []) AS events,
       IFNULL(

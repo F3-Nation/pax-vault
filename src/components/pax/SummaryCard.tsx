@@ -92,7 +92,7 @@ export function SummaryCard({
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>
-                  {summary?.bestie_count}
+                  {summary?.bestie_user_count}
                   {" BDs with "}
                   <Link
                     className="text-sm"

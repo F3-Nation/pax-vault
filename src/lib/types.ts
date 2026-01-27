@@ -2,14 +2,6 @@
 /*                  TYPES USED ACROSS APP                      */
 /* =========================================================== */
 
-/* PAGE FILTERS */
-// export interface PageFilters {
-//   aos?: { ao_org_id: number; ao_name: string }[];
-//   regions?: { region_org_id: number; region_name: string }[];
-//   types?: { type_id: number; type_name: string }[];
-//   tags?: { tag_id: number; tag_name: string }[];
-// }
-
 /* USED FOR ALL EVENT DATA */
 export interface EventData {
   event_instance_id: number; // Unique identifier for the event instance
@@ -193,7 +185,7 @@ export interface PaxSummary {
   last_event_ao_id: number | null; // ID of the last event in the region
   last_event_ao_name: string | null; // Name of the AO (Area of Operation) for the last event
   bestie_user_id: number | null; // User ID of the bestie (most attended by the main user)
-  bestie_count: number; // Number of events attended by the bestie
+  bestie_user_count: number; // Number of events attended by the bestie
   bestie_f3_name: string | null; // F3 name of the bestie
   unique_users_met: number; // Number of unique users met by the main user
   first_q_date: string | null; // Date of the first event where the main user was a Q
@@ -251,34 +243,3 @@ export interface AOSummary {
   fng_count: number; // Total number of first-time participants (FNGs) in the AO
   pax_count_average: number; // Average number of participants (pax) per event in the AO
 }
-
-// // USED ONLY FOR AO SUMMARY STATS
-// export interface AOSummary {
-//   event_count: number; // Total number of events held in the AO
-//   first_event_date: string | null; // Date of the first event held in the AO
-//   active_pax: number; // Number of active participants (pax) in the AO
-//   unique_pax: number; // Number of unique participants (pax) who have attended events in the AO
-//   unique_qs: number; // Number of unique Qs (leaders) who have led events in the AO
-//   fng_count: number; // Total number of first-time participants (FNGs) in the AO
-//   pax_count_average: number; // Average number of participants (pax) per event in the AO
-// }
-
-// // USED ONLY FOR AO CHART DATA
-// export interface AOChartData {
-//   uniquePax: AOChart_UniquePax;
-//   workoutAOCount: AOChart_WorkoutAOCount[];
-// }
-
-// export interface AOChart_UniquePax {
-//   itteration_type: "month" | "week" | "day" | ""; // Type of iteration (month, week, day, or none)
-//   data: {
-//     iteration: string; // e.g., month or week identifier
-//     count: number; // Number of unique pax in that month/week
-//     average: number; // Average pax count for that month/week
-//   }[];
-// }
-
-// export interface AOChart_WorkoutAOCount {
-//   aoName: string; // Name of the AO
-//   count: number; // Number of workouts held at the AO
-// }

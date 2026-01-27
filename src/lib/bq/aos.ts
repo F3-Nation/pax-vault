@@ -220,7 +220,7 @@ export async function getEvents(
 
 export async function getPageData(
   aoId: number,
-  opts?: EventFilterOpts & { limit?: number },
+  opts?: EventFilterOpts,
 ): Promise<{
   info: AOInfo | null;
   events: EventData[] | null;
@@ -230,9 +230,6 @@ export async function getPageData(
 }> {
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(aoId, opts);
-
-  // LIMIT is optional. Keep it numeric-only.
-  const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
 
   const query = `-- AO PAGE LOAD
     WITH
@@ -301,7 +298,7 @@ export async function getPageData(
               -- omit attendance unless the UI truly needs it here
             )
             ORDER BY event_date DESC, event_id DESC
-            ${limit ? `LIMIT ${limit}` : ""}
+            LIMIT 100
         )
         FROM events
       ) AS events,
