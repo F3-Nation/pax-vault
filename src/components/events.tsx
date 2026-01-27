@@ -300,13 +300,9 @@ export function EventsCard({
                       <CardBody className="text-sm">
                         <div className="flex justify-between gap-4">
                           <div className="pb-4 justify-start">
-                            <Link
-                              href={`/stats/event/${event.event_instance_id}`}
-                            >
-                              <div className="font-semibold text-primary text-lg">
-                                {cleanEventName(event.event_name)}
-                              </div>
-                            </Link>
+                            <div className="font-semibold text-primary text-lg">
+                              {cleanEventName(event.event_name)}
+                            </div>
                             <div className="text-default-400">
                               {formatDate(event.event_date)} @{" "}
                               <Link
