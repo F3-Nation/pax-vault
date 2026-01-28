@@ -116,8 +116,8 @@ export function AOPageWrapper({
                 : [ao_leaders]
               : []
           }
-          title="AO"
           height={260}
+          page="ao"
           filters={eventsFiltersQuery}
         />
       </div>

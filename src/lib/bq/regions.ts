@@ -304,7 +304,6 @@ export async function getPageData(
         FROM pv_events
         ${whereSql}
       ),
-
       attendance_flat AS (
         SELECT
           e.event_id,
@@ -316,8 +315,42 @@ export async function getPageData(
         FROM events e
         LEFT JOIN UNNEST(e.attendance) a
         WHERE a.user_id IS NOT NULL
+      ),
+
+      -- Leaders in-region (also used as the "who to include" list)
+      leaders_region_dim AS (
+        SELECT
+          user_id,
+          ANY_VALUE(f3_name) AS f3_name,
+          ANY_VALUE(avatar_url) AS avatar_url
+        FROM attendance_flat
+        GROUP BY user_id
+      ),
+      leader_ids AS (
+        SELECT user_id FROM leaders_region_dim
+      ),
+
+      -- Single pass over pv_events for ONLY those users; compute region + all in one rollup
+      leaders_rollup AS (
+        SELECT
+          a.user_id,
+
+          -- Region-scoped (distinct events)
+          COUNT(DISTINCT IF(e.region_org_id = ${regionId}, e.event_id, NULL)) AS posts,
+          COUNT(
+            DISTINCT IF(e.region_org_id = ${regionId} AND a.q_ind = 1, e.event_id, NULL))
+            AS qs,
+
+          -- All-regions (distinct events)
+          COUNT(DISTINCT e.event_id) AS all_posts,
+          COUNT(DISTINCT IF(a.q_ind = 1, e.event_id, NULL)) AS all_qs
+        FROM pv_events e
+        JOIN UNNEST(e.attendance) a
+        JOIN leader_ids li
+          ON li.user_id = a.user_id
+        WHERE a.user_id IS NOT NULL
+        GROUP BY a.user_id
       )
-        
     SELECT
       -- Region info as a STRUCT
       (
@@ -350,8 +383,7 @@ export async function getPageData(
               -- omit attendance unless the UI truly needs it here
             )
             ORDER BY event_date DESC, event_id DESC
-            LIMIT 100
-        )
+            LIMIT 100)
         FROM events
       ) AS events,
 
@@ -368,7 +400,12 @@ export async function getPageData(
           ),
           attendance_metrics AS (
             SELECT
-              COUNT(DISTINCT IF(event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY), user_id, NULL)) AS active_pax,
+              COUNT(
+                DISTINCT
+                  IF(
+                    event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY),
+                    user_id,
+                    NULL)) AS active_pax,
               COUNT(DISTINCT user_id) AS unique_pax,
               COUNT(DISTINCT IF(q_ind = 1, user_id, NULL)) AS unique_qs
             FROM attendance_flat
@@ -385,29 +422,23 @@ export async function getPageData(
         CROSS JOIN attendance_metrics am
       ) AS summary,
 
-      -- Leaders as an ARRAY (fixed)
+      -- Leaders as an ARRAY (region + all-regions, Q-safe)
       (
         SELECT
           ARRAY_AGG(
             STRUCT(
-              user_id,
-              f3_name,
-              posts,
-              qs,
-              avatar_url)
-            ORDER BY posts DESC
+              d.user_id,
+              d.f3_name,
+              r.posts,
+              r.qs,
+              r.all_posts,
+              r.all_qs,
+              d.avatar_url)
+            ORDER BY r.posts DESC, r.qs DESC
             LIMIT 100)
-        FROM
-          (
-            SELECT
-              user_id,
-              ANY_VALUE(f3_name) AS f3_name,
-              COUNT(DISTINCT event_id) AS posts,
-              COUNTIF(q_ind = 1) AS qs,
-              ANY_VALUE(avatar_url) AS avatar_url
-            FROM attendance_flat
-            GROUP BY user_id
-          )
+        FROM leaders_region_dim d
+        JOIN leaders_rollup r
+          USING (user_id)
       ) AS leaders,
 
       -- Upcoming as an ARRAY

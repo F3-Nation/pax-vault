@@ -23,59 +23,94 @@ import { formatNumber } from "@/lib/utils";
 type LeadersCardProps = {
   leaders: Leaders[];
   height: number;
-  title?: string;
+  page: "region" | "ao";
   filters?: string;
 };
 
 /**
  * Render the numeric value for a leaderboard row based on the active mode.
  */
-function renderLeaderValue(leader: Leaders, mode: "posts" | "qs") {
+function renderLeaderValue(
+  leader: Leaders,
+  scope: "region" | "nation",
+  mode: "posts" | "qs",
+) {
+  const posts = scope === "nation" ? leader.all_posts : leader.posts;
+  const qs = scope === "nation" ? leader.all_qs : leader.qs;
+
   return mode === "posts"
-    ? `${formatNumber(leader.posts)} Posts`
-    : `${formatNumber(leader.qs)} Qs`;
+    ? `${formatNumber(posts ?? 0)} Posts`
+    : `${formatNumber(qs ?? 0)} Qs`;
 }
 
 export function LeadersCard({
   leaders,
   height,
-  title,
+  page,
   filters,
 }: LeadersCardProps) {
   // Current leaderboard mode (posts vs Qs)
   const [mode, setMode] = useState<"posts" | "qs">("posts");
+  // Scope: Region (this region only) vs Nation (all regions)
+  const [scope, setScope] = useState<"region" | "nation">("region");
 
   // Leaders sorted by the active metric
   const sortedLeaders = [...leaders].sort((a, b) => {
-    if (mode === "posts") return b.posts - a.posts;
-    return b.qs - a.qs;
+    const aPosts = scope === "nation" ? a.all_posts : a.posts;
+    const bPosts = scope === "nation" ? b.all_posts : b.posts;
+    const aQs = scope === "nation" ? a.all_qs : a.qs;
+    const bQs = scope === "nation" ? b.all_qs : b.qs;
+
+    if (mode === "posts") return (bPosts ?? 0) - (aPosts ?? 0);
+    return (bQs ?? 0) - (aQs ?? 0);
   });
 
   // Hide zero-Q leaders when viewing Qs
   const visibleLeaders =
     mode === "qs"
-      ? sortedLeaders.filter((leader) => leader.qs > 0)
+      ? sortedLeaders.filter(
+          (leader) =>
+            (scope === "nation" ? (leader.all_qs ?? 0) : leader.qs) > 0,
+        )
       : sortedLeaders;
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="flex justify-between items-center px-6">
         <div className="flex items-center justify-between w-full">
-          <div className="font-semibold text-xl">
-            {title ? `${title} Leaderboard` : "Leaderboard"}
+          <div className="font-semibold text-xl">Leaders</div>
+          <div className="flex items-center gap-2">
+            {page === "region" && (
+              <Tabs
+                aria-label={`Select Leaders Scope`}
+                selectedKey={scope}
+                onSelectionChange={(key) =>
+                  setScope(key as "region" | "nation")
+                }
+                size="sm"
+                radius="sm"
+                variant="bordered"
+                color="secondary"
+                className="text-default-100"
+              >
+                <Tab key="region" title="Region" />
+                <Tab key="nation" title="Nation" />
+              </Tabs>
+            )}
+
+            <Tabs
+              aria-label={`Select Leaders View`}
+              selectedKey={mode}
+              onSelectionChange={(key) => setMode(key as "posts" | "qs")}
+              size="sm"
+              radius="sm"
+              variant="bordered"
+              color="primary"
+              className="text-default-100"
+            >
+              <Tab key="posts" title="Posts" />
+              <Tab key="qs" title="Qs" />
+            </Tabs>
           </div>
-          <Tabs
-            aria-label={`Select ${title ? `${title} Leaders View` : ""}Leaders View`}
-            selectedKey={mode}
-            onSelectionChange={(key) => setMode(key as "posts" | "qs")}
-            size="sm"
-            radius="sm"
-            variant="bordered"
-            color="primary"
-            className="text-default-100"
-          >
-            <Tab key="posts" title="Posts" />
-            <Tab key="qs" title="Qs" />
-          </Tabs>
         </div>
       </CardHeader>
       <Divider />
@@ -102,7 +137,7 @@ export function LeadersCard({
                     {leader.f3_name ?? leader.user_id.toString()}
                   </Link>
                 </div>
-                {renderLeaderValue(leader, mode)}
+                {renderLeaderValue(leader, scope, mode)}
               </div>
             ))}
           </div>
