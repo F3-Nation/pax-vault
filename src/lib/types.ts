@@ -85,6 +85,8 @@ export interface Leaders {
   f3_name: string; // F3 name (nickname) of the user
   posts: number; // Total number of posts (events attended) by the user at the AO
   qs: number; // Total number of Q appearances by the user at the AO
+  all_posts?: number; // Total number of posts (events attended) by the user across all AOs
+  all_qs?: number; // Total number of Q appearances by the user across all AOs
   avatar_url?: string; // Optional URL to the user's avatar image
 }
 

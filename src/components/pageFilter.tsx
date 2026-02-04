@@ -519,7 +519,7 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
                     <div className="px-2">
                       <div className="flex items-center justify-between gap-4 rounded-lg bg-content1 px-4 py-3">
                         <div className="flex flex-col gap-1 text-left">
-                          <p className="text-medium">Persistant Filtering</p>
+                          <p className="text-medium">Persist Filtering</p>
                           <p className="text-tiny text-danger-400">
                             Not all pax, aos or regions include all filter
                             options.

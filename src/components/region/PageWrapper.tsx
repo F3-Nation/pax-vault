@@ -126,8 +126,8 @@ export function RegionalPageWrapper({
                 : [region_leaders]
               : []
           }
-          title="Region"
           height={260}
+          page="region"
           filters={eventsFiltersQuery}
         />
       </div>
