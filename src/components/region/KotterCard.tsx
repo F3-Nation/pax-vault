@@ -7,7 +7,7 @@
  * Users can filter by kotter status and navigate to PAX / AO detail pages.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Avatar } from "@heroui/avatar";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
@@ -22,6 +22,9 @@ import {
 import { Button } from "@heroui/button";
 import { RegionKotterList } from "@/lib/types";
 import { formatDate, formatNumber } from "@/lib/utils";
+import { HelpIcon } from "@/components/icons";
+import { Tooltip } from "@heroui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@heroui/popover";
 
 type KotterCardProps = {
   kotters: RegionKotterList[];
@@ -31,6 +34,26 @@ type KotterCardProps = {
 export function KotterCard({ kotters, filters }: KotterCardProps) {
   // Current status filter; "all" disables filtering.
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  // Tooltip hover isn't great on mobile; switch to Popover on small screens.
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    // Tailwind 'sm' breakpoint is 640px
+    const mq = window.matchMedia("(max-width: 640px)");
+
+    const update = () => setIsMobile(mq.matches);
+    update();
+
+    // Safari < 14 uses addListener/removeListener
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", update);
+      return () => mq.removeEventListener("change", update);
+    }
+
+    mq.addListener(update);
+    return () => mq.removeListener(update);
+  }, []);
 
   // Derive unique, sorted status values from the dataset.
   const statusOptions = useMemo(() => {
@@ -68,8 +91,89 @@ export function KotterCard({ kotters, filters }: KotterCardProps) {
       <CardHeader className="flex justify-between items-center px-6">
         <div className="flex items-center justify-between w-full gap-3">
           <div className="font-semibold text-xl">Kotter List</div>
-
           <div className="flex items-center gap-2">
+            {(() => {
+              const helpContent = (
+                <>
+                  <div className="text-lg justify-start font-bold">
+                    Filter PAX by status
+                  </div>
+                  <table>
+                    <tbody>
+                      <tr className="text-primary">
+                        <td>Soft Drift</td>
+                        <td className="pl-2">
+                          PAX who have slowed attendance but may return.
+                        </td>
+                      </tr>
+                      <tr className="text-danger">
+                        <td>Veteran Drift</td>
+                        <td className="pl-2">
+                          Veteran PAX who have largely stopped attending.
+                        </td>
+                      </tr>
+                      <tr className="text-secondary">
+                        <td>Seasonal</td>
+                        <td className="pl-2">
+                          PAX who have been attending off and on.
+                        </td>
+                      </tr>
+                      <tr className="text-warning">
+                        <td>New Pax Drop</td>
+                        <td className="pl-2">
+                          New PAX who have not returned after initial events.
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span>Inactive</span>
+                        </td>
+                        <td className="pl-2">
+                          PAX who don&apos;t meet other criteria but
+                          haven&apos;t attended recently.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              );
+
+              if (isMobile) {
+                return (
+                  <Popover placement="bottom-start">
+                    <PopoverTrigger>
+                      <Button
+                        isIconOnly
+                        size="sm"
+                        variant="light"
+                        aria-label="Kotter status help"
+                      >
+                        <HelpIcon
+                          className="inline-block text-default"
+                          height={28}
+                          width={28}
+                        />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="max-w-[320px] p-3">
+                      {helpContent}
+                    </PopoverContent>
+                  </Popover>
+                );
+              }
+
+              return (
+                <Tooltip placement="left-start" content={helpContent}>
+                  <span className="inline-flexv cursor-help">
+                    <HelpIcon
+                      className="inline-block text-default"
+                      height={28}
+                      width={28}
+                    />
+                  </span>
+                </Tooltip>
+              );
+            })()}
             <Dropdown>
               <DropdownTrigger>
                 <Button size="md" variant="bordered" color="default">
