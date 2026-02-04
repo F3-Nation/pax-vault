@@ -47,7 +47,10 @@ const cleanNumberList = (vals?: number[]) =>
  * - tagIds/typeIds use EXISTS / NOT EXISTS against the nested arrays.
  * - categories maps 1/2/3 to first_f_ind/second_f_ind/third_f_ind and combines with OR.
  */
-function buildEventsWhereSql(regionId: number, opts?: EventFilterOpts): string {
+function buildEventsFilterClauses(
+  opts?: EventFilterOpts,
+  alias?: string,
+): string[] {
   const rangeDates = buildRangeDates(opts?.range);
   const startDate = opts?.startDate ?? rangeDates.startDate;
   const endDate = opts?.endDate ?? rangeDates.endDate;
@@ -65,76 +68,119 @@ function buildEventsWhereSql(regionId: number, opts?: EventFilterOpts): string {
     (c) => c === 1 || c === 2 || c === 3,
   );
 
-  const whereClauses: string[] = [];
-  whereClauses.push(`region_org_id = ${regionId}`);
+  const col = (name: string) => (alias ? `${alias}.${name}` : name);
+
+  const clauses: string[] = [];
 
   // Date filters.
   if (startDate && endDate) {
-    whereClauses.push(
-      `event_date BETWEEN DATE('${startDate}') AND DATE('${endDate}')`,
+    clauses.push(
+      `${col("event_date")} BETWEEN DATE('${startDate}') AND DATE('${endDate}')`,
     );
   } else if (startDate) {
-    whereClauses.push(`event_date >= DATE('${startDate}')`);
+    clauses.push(`${col("event_date")} >= DATE('${startDate}')`);
   } else if (endDate) {
-    whereClauses.push(`event_date <= DATE('${endDate}')`);
+    clauses.push(`${col("event_date")} <= DATE('${endDate}')`);
   }
 
   // AO filters.
+  // Special case: `0` is treated as a sentinel for "no AO" (NULL ao_org_id).
   if (aoList.length > 0) {
-    const list = aoList.join(",");
-    if (aoList.includes(0)) {
-      aoList.splice(aoList.indexOf(0), 1); // Remove 0 for IN clause.
-      whereClauses.push(
-        aoMode === "exclude"
-          ? `(ao_org_id NOT IN (${list}) OR ao_org_id IS NOT NULL)`
-          : `(ao_org_id IN (${list}) OR ao_org_id IS NULL)`,
-      );
+    const hasNullSentinel = aoList.includes(0);
+    const aoListNoZero = aoList.filter((id) => id !== 0);
+    const list = aoListNoZero.join(",");
+
+    if (hasNullSentinel) {
+      // INCLUDE mode: include selected AOs plus NULL.
+      // EXCLUDE mode: exclude selected AOs and also exclude NULL.
+      if (aoMode === "exclude") {
+        if (aoListNoZero.length > 0) {
+          clauses.push(
+            `${col("ao_org_id")} IS NOT NULL AND ${col("ao_org_id")} NOT IN (${list})`,
+          );
+        } else {
+          // Only 0 was provided => exclude NULLs.
+          clauses.push(`${col("ao_org_id")} IS NOT NULL`);
+        }
+      } else {
+        if (aoListNoZero.length > 0) {
+          clauses.push(
+            `(${col("ao_org_id")} IS NULL OR ${col("ao_org_id")} IN (${list}))`,
+          );
+        } else {
+          // Only 0 was provided => only NULLs.
+          clauses.push(`${col("ao_org_id")} IS NULL`);
+        }
+      }
     } else {
-      whereClauses.push(
-        aoMode === "exclude"
-          ? `ao_org_id NOT IN (${list})`
-          : `ao_org_id IN (${list})`,
-      );
+      // Normal case: no NULL sentinel.
+      if (aoListNoZero.length > 0) {
+        clauses.push(
+          aoMode === "exclude"
+            ? `${col("ao_org_id")} NOT IN (${list})`
+            : `${col("ao_org_id")} IN (${list})`,
+        );
+      }
     }
   }
 
   // Tag filters: pv_events.tags is expected to be an array of objects with an `id` field.
   if (tagList.length > 0) {
     const list = tagList.join(",");
-    whereClauses.push(
+    clauses.push(
       tagMode === "exclude"
-        ? `NOT EXISTS (SELECT 1 FROM UNNEST(tags) t WHERE t.id IN (${list}))`
-        : `EXISTS (SELECT 1 FROM UNNEST(tags) t WHERE t.id IN (${list}))`,
+        ? `NOT EXISTS (SELECT 1 FROM UNNEST(${col("tags")}) t WHERE t.id IN (${list}))`
+        : `EXISTS (SELECT 1 FROM UNNEST(${col("tags")}) t WHERE t.id IN (${list}))`,
     );
   }
 
   // Type filters: pv_events.types is expected to be an array of objects with an `id` field.
   if (typeList.length > 0) {
     const list = typeList.join(",");
-    whereClauses.push(
+    clauses.push(
       typeMode === "exclude"
-        ? `NOT EXISTS (SELECT 1 FROM UNNEST(types) ty WHERE ty.id IN (${list}))`
-        : `EXISTS (SELECT 1 FROM UNNEST(types) ty WHERE ty.id IN (${list}))`,
+        ? `NOT EXISTS (SELECT 1 FROM UNNEST(${col("types")}) ty WHERE ty.id IN (${list}))`
+        : `EXISTS (SELECT 1 FROM UNNEST(${col("types")}) ty WHERE ty.id IN (${list}))`,
     );
   }
 
   // Category filters: 1 => first_f_ind, 2 => second_f_ind, 3 => third_f_ind.
   if (categoryList.length > 0) {
     const parts: string[] = [];
-    if (categoryList.includes(1)) parts.push(`first_f_ind = 1`);
-    if (categoryList.includes(2)) parts.push(`second_f_ind = 1`);
-    if (categoryList.includes(3)) parts.push(`third_f_ind = 1`);
+    if (categoryList.includes(1)) parts.push(`${col("first_f_ind")} = 1`);
+    if (categoryList.includes(2)) parts.push(`${col("second_f_ind")} = 1`);
+    if (categoryList.includes(3)) parts.push(`${col("third_f_ind")} = 1`);
 
     if (parts.length > 0) {
       const expr = parts.map((p) => `(${p})`).join(" OR ");
-      whereClauses.push(
-        categoryMode === "exclude" ? `NOT (${expr})` : `(${expr})`,
-      );
+      clauses.push(categoryMode === "exclude" ? `NOT (${expr})` : `(${expr})`);
     }
   }
 
+  return clauses;
+}
+
+function buildEventsWhereSql(
+  regionId: number,
+  opts?: EventFilterOpts,
+  alias?: string,
+): string {
+  const whereClauses: string[] = [];
+  const col = (name: string) => (alias ? `${alias}.${name}` : name);
+
+  whereClauses.push(`${col("region_org_id")} = ${regionId}`);
+  whereClauses.push(...buildEventsFilterClauses(opts, alias));
+
   return whereClauses.length
     ? `WHERE ${whereClauses.join("\n      AND ")}`
+    : "";
+}
+
+// Convenience for appending filters to an existing WHERE clause (no region filter).
+function buildEventsAndSql(opts?: EventFilterOpts, alias?: string): string {
+  const clauses = buildEventsFilterClauses(opts, alias);
+  return clauses.length
+    ? `\n        AND ${clauses.join("\n        AND ")}`
     : "";
 }
 
@@ -217,6 +263,8 @@ export async function getEvents(
   const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
   const limitSql = limit ? `LIMIT ${limit}` : "";
 
+  const whereSql = buildEventsWhereSql(regionId, opts);
+
   const query = `-- REGION EVENTS
     SELECT
       event_id as event_instance_id,
@@ -234,7 +282,7 @@ export async function getEvents(
       tags,
       attendance
     FROM pv_events
-    WHERE region_org_id = ${regionId}
+    ${whereSql}
     ORDER BY event_date DESC, event_id DESC
     ${limitSql};
   `;
@@ -280,8 +328,10 @@ export async function getPageData(
   upcoming: EventUpcoming[] | null;
   kotter: RegionKotterList[] | null;
 }> {
-  // Build WHERE clause from common filters.
+  // Build WHERE clause from common filters (region-scoped).
   const whereSql = buildEventsWhereSql(regionId, opts);
+  // Build non-region filters for re-use against aliased pv_events scans.
+  const eventsFilterAndSql = buildEventsAndSql(opts, "e");
 
   const query = `-- REGION PAGE LOAD
     WITH
@@ -348,7 +398,7 @@ export async function getPageData(
         JOIN UNNEST(e.attendance) a
         JOIN leader_ids li
           ON li.user_id = a.user_id
-        WHERE a.user_id IS NOT NULL
+        WHERE a.user_id IS NOT NULL${eventsFilterAndSql}
         GROUP BY a.user_id
       )
     SELECT
