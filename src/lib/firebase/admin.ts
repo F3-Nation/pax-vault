@@ -40,7 +40,3 @@ export function getAdminApp(): App {
 export function getAdminAuth(): Auth {
   return getAuth(getAdminApp());
 }
-
-// Backwards-compatible export for existing imports.
-// Prefer importing/using getAdminAuth() in new code.
-export const adminAuth: Auth = getAdminAuth();

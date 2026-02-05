@@ -4,7 +4,7 @@ import {
   SESSION_COOKIE_MAX_AGE,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth/constants";
-import { adminAuth } from "@/lib/firebase/admin";
+import { getAdminAuth } from "@/lib/firebase/admin";
 import { isAuthorizedEmail } from "@/lib/auth/allowlist";
 
 export async function POST(request: Request) {
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
   }
 
   let decoded: { email?: string } | null = null;
+  const adminAuth = getAdminAuth();
 
   try {
     decoded = await adminAuth.verifyIdToken(idToken);
