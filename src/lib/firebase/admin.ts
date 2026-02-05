@@ -1,28 +1,46 @@
-import { cert, getApps, initializeApp } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
+import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
+import { getAuth, type Auth } from "firebase-admin/auth";
 
-const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
-const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(
-  /\\n/g,
-  "\n",
-);
-
-if (!projectId || !clientEmail || !privateKey) {
-  throw new Error(
-    "Missing Firebase Admin credentials. Set FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY.",
-  );
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) {
+    throw new Error(
+      `Missing Firebase Admin credentials. Set FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY. Missing: ${name}`,
+    );
+  }
+  return v;
 }
 
-const app =
-  getApps().length > 0
-    ? getApps()[0]
-    : initializeApp({
-        credential: cert({
-          projectId,
-          clientEmail,
-          privateKey,
-        }),
-      });
+/**
+ * Lazily initializes Firebase Admin.
+ *
+ * IMPORTANT:
+ * - Do NOT read env vars or throw at module import time.
+ * - Next.js/GitHub CI may import server files during build/route analysis.
+ */
+export function getAdminApp(): App {
+  if (getApps().length > 0) return getApps()[0]!;
 
-export const adminAuth = getAuth(app);
+  const projectId = requireEnv("FIREBASE_ADMIN_PROJECT_ID");
+  const clientEmail = requireEnv("FIREBASE_ADMIN_CLIENT_EMAIL");
+  const privateKey = requireEnv("FIREBASE_ADMIN_PRIVATE_KEY").replace(
+    /\\n/g,
+    "\n",
+  );
+
+  return initializeApp({
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey,
+    }),
+  });
+}
+
+export function getAdminAuth(): Auth {
+  return getAuth(getAdminApp());
+}
+
+// Backwards-compatible export for existing imports.
+// Prefer importing/using getAdminAuth() in new code.
+export const adminAuth: Auth = getAdminAuth();
