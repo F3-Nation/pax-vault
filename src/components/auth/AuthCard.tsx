@@ -25,7 +25,7 @@ function normalizeRedirect(path: string | null) {
 export default function AuthCard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
 
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -144,11 +144,6 @@ export default function AuthCard() {
     await finishSignIn(email.trim(), href);
   }, [email, finishSignIn]);
 
-  const handleSignOut = useCallback(async () => {
-    await signOut();
-    router.replace("/");
-  }, [router, signOut]);
-
   if (loading) {
     return (
       <Card
@@ -175,26 +170,13 @@ export default function AuthCard() {
         className="border border-default-200/60 bg-default-50/80 dark:bg-default-100/60"
       >
         <CardHeader className="flex items-center justify-between">
-          <div className="text-sm font-semibold">You&apos;re signed in</div>
+          <div className="text-sm font-semibold">
+            Congrats! You&apos;re signed in
+          </div>
           <Chip size="sm" color="success" variant="flat">
             Active
           </Chip>
         </CardHeader>
-        <CardBody className="flex flex-col gap-3">
-          <p className="text-sm text-foreground/70">
-            Signed in as <span className="font-semibold">{user.email}</span>.
-          </p>
-          <div>
-            <Button
-              size="sm"
-              color="danger"
-              variant="flat"
-              onPress={handleSignOut}
-            >
-              Sign out
-            </Button>
-          </div>
-        </CardBody>
       </Card>
     );
   }
@@ -213,14 +195,22 @@ export default function AuthCard() {
       </CardHeader>
       <CardBody className="space-y-4">
         <p className="text-sm text-foreground/70">
-          Enter your email and we&apos;ll send a sign-in link. No password
-          required.
+          Enter your email that you registered with on Slack and we&apos;ll send
+          a sign-in link. No password required.
         </p>
+        <div className="rounded-md border border-danger-200 px-3 py-2 text-sm text-danger dark:border-danger dark:text-danger">
+          <strong>Why sign in?</strong>
+          <div className="mt-1">
+            Signing in verifies you as an active PAX member and unlocks access
+            to region stats, event history, and leadership tools that aren’t
+            available to the public.
+          </div>
+        </div>
 
         <Input
           type="email"
           label="Email"
-          placeholder="you@example.com"
+          placeholder="pax@example.com"
           value={email}
           onValueChange={setEmail}
           variant="bordered"

@@ -144,6 +144,75 @@ function makeNavSelectionHandler(args: {
   };
 }
 
+// --- Inline SVG icon components for Sign in / Sign out ---
+function SignInIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M10 17L15 12L10 7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M15 12H3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M21 4V20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SignOutIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M14 7L19 12L14 17"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19 12H7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3 4V20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function NavbarClient() {
   const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
@@ -417,8 +486,8 @@ export default function NavbarClient() {
           <NavbarItem>
             {isAuthed ? (
               <Button
-                size="sm"
-                variant="flat"
+                size="md"
+                variant="ghost"
                 color="danger"
                 onPress={handleSignOut}
               >
@@ -426,8 +495,8 @@ export default function NavbarClient() {
               </Button>
             ) : (
               <Button
-                size="sm"
-                variant="flat"
+                size="md"
+                variant="ghost"
                 color="primary"
                 onPress={handleSignIn}
               >
@@ -462,20 +531,24 @@ export default function NavbarClient() {
             {isAuthed ? (
               <Button
                 size="sm"
-                variant="flat"
+                variant="light"
                 color="danger"
                 onPress={handleSignOut}
+                isIconOnly
+                aria-label="Sign out"
               >
-                Sign out
+                <SignOutIcon width={18} height={18} />
               </Button>
             ) : (
               <Button
                 size="sm"
-                variant="flat"
+                variant="light"
                 color="primary"
                 onPress={handleSignIn}
+                isIconOnly
+                aria-label="Sign in"
               >
-                Sign in
+                <SignInIcon width={18} height={18} />
               </Button>
             )}
           </NavbarItem>

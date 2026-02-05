@@ -27,8 +27,13 @@ export default function App() {
   const sampleRegionId = process.env.SAMPLE_REGION ?? "";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-default-50 px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background to-default-50 px-4">
       {/* Main marketing card */}
+      <div className="pb-6 w-full max-w-3xl">
+        <Suspense fallback={null}>
+          <AuthCard />
+        </Suspense>
+      </div>
       <Card
         className="w-full max-w-3xl bg-background/80 dark:bg-default-100/60"
         shadow="lg"
@@ -102,11 +107,6 @@ export default function App() {
                 </p>
               </CardBody>
             </Card>
-          </div>
-          <div className="pt-6">
-            <Suspense fallback={null}>
-              <AuthCard />
-            </Suspense>
           </div>
           {/* Sample data entry points */}
           <div className="flex flex-col items-center gap-3 pt-2">
