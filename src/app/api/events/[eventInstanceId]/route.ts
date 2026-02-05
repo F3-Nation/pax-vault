@@ -10,11 +10,17 @@
  */
 import { NextResponse } from "next/server";
 import { getEventDetails } from "@/lib/bq/events";
+import { getSessionUser } from "@/lib/auth/server";
 
 export async function GET(
   _req: Request,
   context: { params: Promise<{ eventInstanceId?: string }> },
 ): Promise<NextResponse> {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { eventInstanceId: rawEventId } = await context.params;
 
   // Route params arrive as strings; normalize to a finite integer.

@@ -1,6 +1,7 @@
 // middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { SESSION_COOKIE_NAME } from "@/lib/auth/constants";
 
 function ipv4ToInt(ip: string): number | null {
   const parts = ip.split(".");
@@ -37,7 +38,23 @@ function getClientIp(req: NextRequest): string | null {
 export function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
+  const isPublicPath =
+    pathname === "/" ||
+    pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/icons/") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/manifest.json" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/sw.js" ||
+    pathname.startsWith("/workbox-");
+
+  if (isPublicPath) return NextResponse.next();
+
   // Only guard expensive surfaces
+  const isApiRoute = pathname.startsWith("/api/");
+
   const isExpensive =
     pathname.startsWith("/api/pax/") ||
     pathname.startsWith("/api/events/") ||
@@ -60,10 +77,23 @@ export function middleware(req: NextRequest) {
     return new NextResponse("Forbidden", { status: 403 });
   }
 
+  const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+  if (!sessionCookie) {
+    if (isApiRoute) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const redirectUrl = req.nextUrl.clone();
+    redirectUrl.pathname = "/";
+    const redirectPath = `${pathname}${req.nextUrl.search}`;
+    redirectUrl.searchParams.set("redirect", redirectPath);
+    return NextResponse.redirect(redirectUrl);
+  }
+
   return NextResponse.next();
 }
 
 // Limit middleware execution to the routes you care about
 export const config = {
-  matcher: ["/api/:path*", "/stats/:path*"],
+  matcher: ["/:path*"],
 };

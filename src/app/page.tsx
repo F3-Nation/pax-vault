@@ -10,6 +10,7 @@ import Link from "next/link";
 import { Button } from "@heroui/button";
 import { Card, CardBody, CardHeader, CardFooter } from "@heroui/card";
 import { Chip } from "@heroui/chip";
+import AuthCard from "@/components/auth/AuthCard";
 
 /**
  * Resolve a human-readable environment label from runtime configuration.
@@ -101,7 +102,9 @@ export default function App() {
               </CardBody>
             </Card>
           </div>
-
+          <div className="pt-6">
+            <AuthCard />
+          </div>
           {/* Sample data entry points */}
           <div className="flex flex-col items-center gap-3 pt-2">
             <p className="text-xs text-foreground/60 text-center">
