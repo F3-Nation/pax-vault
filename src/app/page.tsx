@@ -11,6 +11,7 @@ import { Button } from "@heroui/button";
 import { Card, CardBody, CardHeader, CardFooter } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import AuthCard from "@/components/auth/AuthCard";
+import { Suspense } from "react";
 
 /**
  * Resolve a human-readable environment label from runtime configuration.
@@ -103,7 +104,9 @@ export default function App() {
             </Card>
           </div>
           <div className="pt-6">
-            <AuthCard />
+            <Suspense fallback={null}>
+              <AuthCard />
+            </Suspense>
           </div>
           {/* Sample data entry points */}
           <div className="flex flex-col items-center gap-3 pt-2">
