@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/pageHeader";
 import { PAXPageWrapper } from "@/components/pax/PageWrapper";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
+import { requireAuth } from "@/lib/auth/server";
 
 interface PageProps {
   params: Promise<{ paxId: string }>;
@@ -48,6 +49,8 @@ export default async function PaxDetailPage({
   params,
   searchParams,
 }: PageProps) {
+  await requireAuth();
+
   const { paxId } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;
 

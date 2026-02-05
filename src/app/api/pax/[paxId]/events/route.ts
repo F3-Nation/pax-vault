@@ -9,6 +9,7 @@
  */
 import { NextResponse } from "next/server";
 import { getEvents } from "@/lib/bq/pax";
+import { getSessionUser } from "@/lib/auth/server";
 
 /**
  * Parse a comma-separated query parameter into a finite number list.
@@ -31,6 +32,11 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ paxId?: string }> },
 ) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const params = await context.params;
   const rawId = params?.paxId;
   const paxId = Number(rawId);

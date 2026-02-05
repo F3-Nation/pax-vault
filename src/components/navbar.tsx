@@ -17,6 +17,7 @@ import { useDisclosure } from "@heroui/use-disclosure";
 import { Divider } from "@heroui/divider";
 import { ThemeSwitcher } from "@/lib/theme-switcher";
 import { RegionInfo, PAXInfo } from "@/lib/types";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
 /**
  * Small helper for debounced, client-side search against a JSON endpoint.
@@ -143,8 +144,79 @@ function makeNavSelectionHandler(args: {
   };
 }
 
+// --- Inline SVG icon components for Sign in / Sign out ---
+function SignInIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M10 17L15 12L10 7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M15 12H3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M21 4V20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SignOutIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M14 7L19 12L14 17"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19 12H7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3 4V20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function NavbarClient() {
   const router = useRouter();
+  const { user, loading: authLoading, signOut } = useAuth();
+  const isAuthed = !!user;
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
   // --- Search state (shared pattern: input -> debounced API -> options -> selection navigates) ---
@@ -286,6 +358,15 @@ export default function NavbarClient() {
     [router.push, onOpenChange],
   );
 
+  const handleSignIn = useCallback(() => {
+    router.push("/#signin");
+  }, [router]);
+
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    router.push("/");
+  }, [router, signOut]);
+
   return (
     <Navbar
       isBordered
@@ -307,218 +388,278 @@ export default function NavbarClient() {
 
       {/* Desktop Search Fields */}
       <NavbarContent className="hidden lg:flex" justify="end">
-        <NavbarItem className="w-64">
-          <Autocomplete
-            className="w-full"
-            label="SEARCH FOR A REGION"
-            defaultItems={regionOptions}
-            inputValue={regionInput}
-            isLoading={regionLoading || regionApiLoading}
-            itemHeight={40}
-            selectedKey={regionKey !== null ? String(regionKey) : null}
-            onInputChange={handleRegionInputChange}
-            onSelectionChange={handleRegionSelection}
-            variant="bordered"
-            color="primary"
-            size="sm"
-            isClearable
-          >
-            {(region) => (
-              <AutocompleteItem
-                key={region.region_id}
-                textValue={region.region_name}
+        {isAuthed && (
+          <>
+            <NavbarItem className="w-64">
+              <Autocomplete
+                className="w-full"
+                label="SEARCH FOR A REGION"
+                defaultItems={regionOptions}
+                inputValue={regionInput}
+                isLoading={regionLoading || regionApiLoading}
+                itemHeight={40}
+                selectedKey={regionKey !== null ? String(regionKey) : null}
+                onInputChange={handleRegionInputChange}
+                onSelectionChange={handleRegionSelection}
+                variant="bordered"
+                color="primary"
+                size="sm"
+                isClearable
               >
-                <div className="flex gap-2 items-center">
-                  <Avatar
-                    alt={region.region_name}
-                    className="flex-shrink-0"
-                    size="sm"
-                    src={region.logo_url ?? undefined}
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-small">{region.region_name}</span>
-                  </div>
+                {(region) => (
+                  <AutocompleteItem
+                    key={region.region_id}
+                    textValue={region.region_name}
+                  >
+                    <div className="flex gap-2 items-center">
+                      <Avatar
+                        alt={region.region_name}
+                        className="flex-shrink-0"
+                        size="sm"
+                        src={region.logo_url ?? undefined}
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-small">{region.region_name}</span>
+                      </div>
+                    </div>
+                  </AutocompleteItem>
+                )}
+              </Autocomplete>
+              {regionApiError && (
+                <div className="mt-1 text-tiny text-danger-500">
+                  {regionApiError}
                 </div>
-              </AutocompleteItem>
-            )}
-          </Autocomplete>
-          {regionApiError && (
-            <div className="mt-1 text-tiny text-danger-500">
-              {regionApiError}
-            </div>
-          )}
-        </NavbarItem>
+              )}
+            </NavbarItem>
 
-        <NavbarItem className="w-64">
-          <Autocomplete
-            className="w-full"
-            label="SEARCH FOR A PAX"
-            defaultItems={paxOptions}
-            inputValue={paxInput}
-            isLoading={paxLoading || paxApiLoading}
-            itemHeight={40}
-            selectedKey={paxKey !== null ? String(paxKey) : null}
-            onInputChange={handlePaxInputChange}
-            onSelectionChange={handlePaxSelection}
-            variant="bordered"
-            color="primary"
-            size="sm"
-            isClearable
-          >
-            {(pax) => (
-              <AutocompleteItem key={pax.user_id} textValue={pax.f3_name}>
-                <div className="flex gap-2 items-center">
-                  <Avatar
-                    alt={pax.f3_name}
-                    className="flex-shrink-0"
-                    size="sm"
-                    src={pax.avatar_url ?? undefined}
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-small">
-                      {pax.f3_name && pax.f3_name.length > 20
-                        ? pax.f3_name.slice(0, 20) + "..."
-                        : pax.f3_name || "Unknown PAX"}
-                    </span>
-                    <span className="text-tiny text-default-400">
-                      {pax.home_region_name || "Unknown Region"}
-                    </span>
-                  </div>
+            <NavbarItem className="w-64">
+              <Autocomplete
+                className="w-full"
+                label="SEARCH FOR A PAX"
+                defaultItems={paxOptions}
+                inputValue={paxInput}
+                isLoading={paxLoading || paxApiLoading}
+                itemHeight={40}
+                selectedKey={paxKey !== null ? String(paxKey) : null}
+                onInputChange={handlePaxInputChange}
+                onSelectionChange={handlePaxSelection}
+                variant="bordered"
+                color="primary"
+                size="sm"
+                isClearable
+              >
+                {(pax) => (
+                  <AutocompleteItem key={pax.user_id} textValue={pax.f3_name}>
+                    <div className="flex gap-2 items-center">
+                      <Avatar
+                        alt={pax.f3_name}
+                        className="flex-shrink-0"
+                        size="sm"
+                        src={pax.avatar_url ?? undefined}
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-small">
+                          {pax.f3_name && pax.f3_name.length > 20
+                            ? pax.f3_name.slice(0, 20) + "..."
+                            : pax.f3_name || "Unknown PAX"}
+                        </span>
+                        <span className="text-tiny text-default-400">
+                          {pax.home_region_name || "Unknown Region"}
+                        </span>
+                      </div>
+                    </div>
+                  </AutocompleteItem>
+                )}
+              </Autocomplete>
+              {paxApiError && (
+                <div className="mt-1 text-tiny text-danger-500">
+                  {paxApiError}
                 </div>
-              </AutocompleteItem>
-            )}
-          </Autocomplete>
-          {paxApiError && (
-            <div className="mt-1 text-tiny text-danger-500">{paxApiError}</div>
-          )}
-        </NavbarItem>
+              )}
+            </NavbarItem>
+          </>
+        )}
         <NavbarItem>
           <ThemeSwitcher size="sm" iconSize="sm" />
         </NavbarItem>
+        {!authLoading && (
+          <NavbarItem>
+            {isAuthed ? (
+              <Button
+                size="md"
+                variant="ghost"
+                color="danger"
+                onPress={handleSignOut}
+              >
+                Sign out
+              </Button>
+            ) : (
+              <Button
+                size="md"
+                variant="ghost"
+                color="primary"
+                onPress={handleSignIn}
+              >
+                Sign in
+              </Button>
+            )}
+          </NavbarItem>
+        )}
       </NavbarContent>
 
       {/* Mobile Search Buttons */}
       <NavbarContent className="flex lg:hidden" justify="end">
-        <NavbarItem>
-          <Button
-            key="search-region-pax"
-            className="w-40"
-            variant="bordered"
-            color="primary"
-            size="sm"
-            onPress={() => onOpen()}
-          >
-            FIND REGION OR PAX
-          </Button>
-        </NavbarItem>
+        {isAuthed && (
+          <NavbarItem>
+            <Button
+              key="search-region-pax"
+              className="w-40"
+              variant="bordered"
+              color="primary"
+              size="sm"
+              onPress={() => onOpen()}
+            >
+              FIND REGION OR PAX
+            </Button>
+          </NavbarItem>
+        )}
         <NavbarItem>
           <ThemeSwitcher size="sm" iconSize="sm" />
         </NavbarItem>
+        {!authLoading && (
+          <NavbarItem>
+            {isAuthed ? (
+              <Button
+                size="sm"
+                variant="light"
+                color="danger"
+                onPress={handleSignOut}
+                isIconOnly
+                aria-label="Sign out"
+              >
+                <SignOutIcon width={18} height={18} />
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="light"
+                color="primary"
+                onPress={handleSignIn}
+                isIconOnly
+                aria-label="Sign in"
+              >
+                <SignInIcon width={18} height={18} />
+              </Button>
+            )}
+          </NavbarItem>
+        )}
       </NavbarContent>
 
-      <Drawer
-        isOpen={isOpen}
-        key={isOpen ? "mobile_open" : "mobile_closed"}
-        backdrop="blur"
-        placement="top"
-        classNames={{
-          wrapper: "h-full",
-        }}
-        onOpenChange={onOpenChange}
-        isDismissable={false}
-        isKeyboardDismissDisabled={true}
-      >
-        <DrawerContent>
-          <DrawerHeader className="flex flex-col gap-1">
-            SEARCH FOR A REGION OR A PAX
-          </DrawerHeader>
-          <Divider />
-          <DrawerBody className="flex flex-col gap-10 py-10">
-            <Autocomplete
-              className="w-full"
-              label="SEARCH FOR A REGION"
-              defaultItems={regionOptions}
-              inputValue={regionInput}
-              isLoading={regionLoading || regionApiLoading}
-              itemHeight={40}
-              selectedKey={String(regionKey) ?? null}
-              onInputChange={handleRegionInputChange}
-              onSelectionChange={handleRegionSelectionMobile}
-              variant="bordered"
-              size="lg"
-              color="primary"
-              isClearable
-            >
-              {(region) => (
-                <AutocompleteItem
-                  key={region.region_id}
-                  textValue={region.region_name}
-                >
-                  <div className="flex gap-2 items-center">
-                    <Avatar
-                      alt={region.region_name}
-                      className="flex-shrink-0"
-                      size="sm"
-                      src={region.logo_url ?? undefined}
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-small">{region.region_name}</span>
+      {isAuthed && (
+        <Drawer
+          isOpen={isOpen}
+          key={isOpen ? "mobile_open" : "mobile_closed"}
+          backdrop="blur"
+          placement="top"
+          classNames={{
+            wrapper: "h-full",
+          }}
+          onOpenChange={onOpenChange}
+          isDismissable={false}
+          isKeyboardDismissDisabled={true}
+        >
+          <DrawerContent>
+            <DrawerHeader className="flex flex-col gap-1">
+              SEARCH FOR A REGION OR A PAX
+            </DrawerHeader>
+            <Divider />
+            <DrawerBody className="flex flex-col gap-10 py-10">
+              <Autocomplete
+                className="w-full"
+                label="SEARCH FOR A REGION"
+                defaultItems={regionOptions}
+                inputValue={regionInput}
+                isLoading={regionLoading || regionApiLoading}
+                itemHeight={40}
+                selectedKey={String(regionKey) ?? null}
+                onInputChange={handleRegionInputChange}
+                onSelectionChange={handleRegionSelectionMobile}
+                variant="bordered"
+                size="lg"
+                color="primary"
+                isClearable
+              >
+                {(region) => (
+                  <AutocompleteItem
+                    key={region.region_id}
+                    textValue={region.region_name}
+                  >
+                    <div className="flex gap-2 items-center">
+                      <Avatar
+                        alt={region.region_name}
+                        className="flex-shrink-0"
+                        size="sm"
+                        src={region.logo_url ?? undefined}
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-small">{region.region_name}</span>
+                      </div>
                     </div>
-                  </div>
-                </AutocompleteItem>
+                  </AutocompleteItem>
+                )}
+              </Autocomplete>
+              {regionApiError && (
+                <div className="mt-1 text-tiny text-danger-500">
+                  {regionApiError}
+                </div>
               )}
-            </Autocomplete>
-            {regionApiError && (
-              <div className="mt-1 text-tiny text-danger-500">
-                {regionApiError}
-              </div>
-            )}
-            <Autocomplete
-              className="w-full"
-              label="SEARCH FOR A PAX"
-              defaultItems={paxOptions}
-              inputValue={paxInput}
-              isLoading={paxLoading || paxApiLoading}
-              itemHeight={40}
-              selectedKey={String(paxKey) ?? null}
-              onInputChange={handlePaxInputChange}
-              onSelectionChange={handlePaxSelectionMobile}
-              variant="bordered"
-              size="lg"
-              color="primary"
-              isClearable
-            >
-              {(pax) => (
-                <AutocompleteItem key={pax.user_id} textValue={pax.f3_name}>
-                  <div className="flex gap-2 items-center">
-                    <Avatar
-                      alt={pax.f3_name}
-                      className="flex-shrink-0"
-                      size="sm"
-                      src={pax.avatar_url ?? undefined}
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-small">
-                        {pax.f3_name && pax.f3_name.length > 20
-                          ? pax.f3_name.slice(0, 20) + "..."
-                          : pax.f3_name || "Unknown PAX"}
-                      </span>
-                      <span className="text-tiny text-default-400">
-                        {pax.home_region_name || "Unknown Region"}
-                      </span>
+              <Autocomplete
+                className="w-full"
+                label="SEARCH FOR A PAX"
+                defaultItems={paxOptions}
+                inputValue={paxInput}
+                isLoading={paxLoading || paxApiLoading}
+                itemHeight={40}
+                selectedKey={String(paxKey) ?? null}
+                onInputChange={handlePaxInputChange}
+                onSelectionChange={handlePaxSelectionMobile}
+                variant="bordered"
+                size="lg"
+                color="primary"
+                isClearable
+              >
+                {(pax) => (
+                  <AutocompleteItem key={pax.user_id} textValue={pax.f3_name}>
+                    <div className="flex gap-2 items-center">
+                      <Avatar
+                        alt={pax.f3_name}
+                        className="flex-shrink-0"
+                        size="sm"
+                        src={pax.avatar_url ?? undefined}
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-small">
+                          {pax.f3_name && pax.f3_name.length > 20
+                            ? pax.f3_name.slice(0, 20) + "..."
+                            : pax.f3_name || "Unknown PAX"}
+                        </span>
+                        <span className="text-tiny text-default-400">
+                          {pax.home_region_name || "Unknown Region"}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </AutocompleteItem>
+                  </AutocompleteItem>
+                )}
+              </Autocomplete>
+              {paxApiError && (
+                <div className="mt-1 text-tiny text-danger-500">
+                  {paxApiError}
+                </div>
               )}
-            </Autocomplete>
-            {paxApiError && (
-              <div className="mt-1 text-tiny text-danger-500">
-                {paxApiError}
-              </div>
-            )}
-          </DrawerBody>
-        </DrawerContent>
-      </Drawer>
+            </DrawerBody>
+          </DrawerContent>
+        </Drawer>
+      )}
     </Navbar>
   );
 }

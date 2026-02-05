@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/pageHeader";
 import { AOPageWrapper } from "@/components/ao/PageWrapper";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
+import { requireAuth } from "@/lib/auth/server";
 
 interface PageProps {
   params: Promise<{ aoId: string }>;
@@ -44,6 +45,8 @@ export default async function AODetailPage({
   params,
   searchParams,
 }: PageProps) {
+  await requireAuth();
+
   const { aoId } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;
 

@@ -10,6 +10,8 @@ import Link from "next/link";
 import { Button } from "@heroui/button";
 import { Card, CardBody, CardHeader, CardFooter } from "@heroui/card";
 import { Chip } from "@heroui/chip";
+import AuthCard from "@/components/auth/AuthCard";
+import { Suspense } from "react";
 
 /**
  * Resolve a human-readable environment label from runtime configuration.
@@ -25,8 +27,13 @@ export default function App() {
   const sampleRegionId = process.env.SAMPLE_REGION ?? "";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-default-50 px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background to-default-50 px-4">
       {/* Main marketing card */}
+      <div className="pb-6 w-full max-w-3xl">
+        <Suspense fallback={null}>
+          <AuthCard />
+        </Suspense>
+      </div>
       <Card
         className="w-full max-w-3xl bg-background/80 dark:bg-default-100/60"
         shadow="lg"
@@ -101,7 +108,6 @@ export default function App() {
               </CardBody>
             </Card>
           </div>
-
           {/* Sample data entry points */}
           <div className="flex flex-col items-center gap-3 pt-2">
             <p className="text-xs text-foreground/60 text-center">

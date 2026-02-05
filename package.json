@@ -65,6 +65,8 @@
     "@heroui/toast": "^2.0.10",
     "@heroui/tooltip": "^2.2.17",
     "@heroui/user": "^2.2.16",
+    "firebase": "^10.14.1",
+    "firebase-admin": "^12.0.0",
     "framer-motion": "^12.15.0",
     "hero-cli": "^0.0.1",
     "next": "^16.0.8",

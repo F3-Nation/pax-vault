@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
 import Script from "next/script";
 import { GaPageView } from "@/components/gaPageView";
 import { Suspense } from "react";
+import { AuthProvider } from "@/lib/auth/AuthProvider";
 
 type RootLayoutProps = {
   children: ReactNode;
@@ -97,10 +98,12 @@ export default function RootLayout({ children }: RootLayoutProps) {
         </Suspense>
         {/* ThemeProvider must wrap components that rely on theme classes. */}
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <NavbarComponent />
+          <AuthProvider>
+            <NavbarComponent />
 
-          {/* App-wide UI providers (toasts, modals, HeroUI, etc.). */}
-          <Providers>{children}</Providers>
+            {/* App-wide UI providers (toasts, modals, HeroUI, etc.). */}
+            <Providers>{children}</Providers>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

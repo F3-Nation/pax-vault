@@ -9,8 +9,8 @@ if [[ -f "$HOME/google-cloud-sdk/path.bash.inc" ]]; then
 fi
 
 # Configuration constants
-SECRET_VARS=("NEXT_PUBLIC_SITE_URL" "SAMPLE_PAX" "SAMPLE_AO" "SAMPLE_REGION" "ENVIRONMENT" "BIGQUERY_PROJECT_ID" "BIGQUERY_DATASET" "BIGQUERY_CLIENT_EMAIL" "BIGQUERY_PRIVATE_KEY")
-SECRET_IDS=("next-public-site-url" "sample-pax" "sample-ao" "sample-region" "environment" "bigquery-project-id" "bigquery-dataset" "bigquery-client-email" "bigquery-private-key")
+SECRET_VARS=("NEXT_PUBLIC_SITE_URL" "SAMPLE_PAX" "SAMPLE_AO" "SAMPLE_REGION" "ENVIRONMENT" "BIGQUERY_PROJECT_ID" "BIGQUERY_DATASET" "BIGQUERY_CLIENT_EMAIL" "BIGQUERY_PRIVATE_KEY" "NEXT_PUBLIC_FIREBASE_API_KEY" "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" "NEXT_PUBLIC_FIREBASE_PROJECT_ID" "NEXT_PUBLIC_FIREBASE_APP_ID" "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID" "FIREBASE_ADMIN_PROJECT_ID" "FIREBASE_ADMIN_CLIENT_EMAIL" "FIREBASE_ADMIN_PRIVATE_KEY")
+SECRET_IDS=("next-public-site-url" "sample-pax" "sample-ao" "sample-region" "environment" "bigquery-project-id" "bigquery-dataset" "bigquery-client-email" "bigquery-private-key" "firebase-api-key" "firebase-auth-domain" "firebase-project-id" "firebase-app-id" "firebase-messaging-sender-id" "firebase-storage-bucket" "firebase-measurement-id" "firebase-admin-project-id" "firebase-admin-client-email" "firebase-admin-private-key")
 
 #####################################
 # MAIN EXECUTION FUNCTION
