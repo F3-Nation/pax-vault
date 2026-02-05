@@ -66,43 +66,43 @@ env:
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    secret: firebase-api-key
+    secret: next-public-firebase-api-key
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    secret: firebase-auth-domain
+    secret: next-public-firebase-auth-domain
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    secret: firebase-project-id
+    secret: next-public-firebase-project-id
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    secret: firebase-app-id
+    secret: next-public-firebase-app-id
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    secret: firebase-messaging-sender-id
+    secret: next-public-firebase-messaging-sender-id
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    secret: firebase-storage-bucket
+    secret: next-public-firebase-storage-bucket
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
-    secret: firebase-measurement-id
+    secret: next-public-firebase-measurement-id
     availability:
       - BUILD
       - RUNTIME
