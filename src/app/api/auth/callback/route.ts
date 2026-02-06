@@ -60,10 +60,16 @@ export async function GET(request: NextRequest) {
 
   const returnTo = state.returnTo || "/stats/nation";
 
+  // Validate PKCE code verifier cookie
+  const codeVerifier = request.cookies.get("oauth_code_verifier")?.value;
+  if (!codeVerifier) {
+    return errorRedirect(baseUrl, "missing_code_verifier", returnTo);
+  }
+
   // Exchange code for tokens
   let accessToken: string;
   try {
-    const tokens = await exchangeCodeForToken({ code });
+    const tokens = await exchangeCodeForToken({ code, codeVerifier });
     accessToken = (tokens.access_token ?? tokens.accessToken) as string;
     if (!accessToken) {
       return errorRedirect(baseUrl, "token_exchange_failed", returnTo);
@@ -110,14 +116,16 @@ export async function GET(request: NextRequest) {
     maxAge: SESSION_COOKIE_MAX_AGE,
   });
 
-  // Clear CSRF cookie
-  response.cookies.set("oauth_csrf", "", {
+  // Clear OAuth flow cookies
+  const clearCookieOpts = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "lax" as const,
     path: "/",
     maxAge: 0,
-  });
+  };
+  response.cookies.set("oauth_csrf", "", clearCookieOpts);
+  response.cookies.set("oauth_code_verifier", "", clearCookieOpts);
 
   return response;
 }

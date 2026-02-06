@@ -16,6 +16,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   expired_state: "Sign-in link expired. Please try again.",
   invalid_state: "Invalid sign-in request. Please try again.",
   missing_params: "Incomplete sign-in response. Please try again.",
+  missing_code_verifier: "Security check failed. Please try again.",
 };
 
 function normalizeRedirect(path: string | null) {

@@ -29,8 +29,41 @@ export function getOAuthConfig() {
   return getAuthClient().getOAuthConfig();
 }
 
-export async function exchangeCodeForToken(params: { code: string }) {
-  return getAuthClient().exchangeCodeForToken(params);
+export async function exchangeCodeForToken(params: {
+  code: string;
+  codeVerifier: string;
+}) {
+  const config = getAuthClient().getOAuthConfig();
+  const clientSecret = getRequiredEnv("OAUTH_CLIENT_SECRET");
+
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    code: params.code,
+    redirect_uri: config.REDIRECT_URI,
+    client_id: config.CLIENT_ID,
+    client_secret: clientSecret,
+    code_verifier: params.codeVerifier,
+  });
+
+  const response = await fetch(`${config.AUTH_SERVER_URL}/api/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  if (!response.ok) {
+    let errorData: Record<string, string>;
+    try {
+      errorData = (await response.json()) as Record<string, string>;
+    } catch {
+      errorData = { error: "Unknown error" };
+    }
+    throw new Error(
+      `Token exchange failed: ${errorData.error_description || errorData.error || response.statusText}`,
+    );
+  }
+
+  return response.json() as Promise<Record<string, unknown>>;
 }
 
 export async function getUserInfo(
