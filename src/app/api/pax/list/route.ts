@@ -30,6 +30,9 @@ export async function GET(request: Request) {
     return NextResponse.json(users, { status: 200 });
   } catch (err) {
     console.error("Pax search failed:", err);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json(
+      { error: "Pax search failed. Please try again." },
+      { status: 500 },
+    );
   }
 }

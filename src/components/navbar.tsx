@@ -74,7 +74,8 @@ function useDebouncedApiSearch<T>({
         });
 
         if (!res.ok) {
-          throw new Error(`Request failed: ${res.status} ${res.statusText}`);
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || `Request failed: ${res.status}`);
         }
 
         const data = (await res.json()) as unknown;

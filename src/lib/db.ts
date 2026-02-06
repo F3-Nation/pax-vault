@@ -4,7 +4,7 @@ const projectId = process.env.BIGQUERY_PROJECT_ID!;
 const datasetId = process.env.BIGQUERY_DATASET!;
 const clientEmail = process.env.BIGQUERY_CLIENT_EMAIL!;
 const privateKey = process.env.BIGQUERY_PRIVATE_KEY?.replace(/\\n/g, "\n");
-const location = process.env.BIGQUERY_LOCATION || "US";
+const location = process.env.BIGQUERY_LOCATION || "us-central1";
 
 // Create a single BigQuery client per Lambda/Node process
 const bigquery = new BigQuery({
@@ -43,6 +43,7 @@ export async function queryBigQuery<T = BigQueryRow>(
   const [rawRows] = await bigquery.query({
     query: sql,
     defaultDataset: { datasetId, projectId },
+    location,
   });
 
   const rows = (rawRows as BigQueryRow[]).map((row) =>
