@@ -1,28 +1,42 @@
 import { AuthClient, type AuthClientConfig } from "f3-nation-auth-sdk";
 
-const authConfig: AuthClientConfig = {
-  client: {
-    CLIENT_ID: process.env.OAUTH_CLIENT_ID || "",
-    CLIENT_SECRET: process.env.OAUTH_CLIENT_SECRET || "",
-    REDIRECT_URI: process.env.OAUTH_REDIRECT_URI || "",
-    AUTH_SERVER_URL: process.env.AUTH_PROVIDER_URL || "",
-  },
-};
+function getRequiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} env var is required`);
+  return value;
+}
 
-const authClient = new AuthClient(authConfig);
+function buildAuthConfig(): AuthClientConfig {
+  return {
+    client: {
+      CLIENT_ID: getRequiredEnv("OAUTH_CLIENT_ID"),
+      CLIENT_SECRET: getRequiredEnv("OAUTH_CLIENT_SECRET"),
+      REDIRECT_URI: getRequiredEnv("OAUTH_REDIRECT_URI"),
+      AUTH_SERVER_URL: getRequiredEnv("AUTH_PROVIDER_URL"),
+    },
+  };
+}
+
+let _authClient: AuthClient | null = null;
+function getAuthClient(): AuthClient {
+  if (!_authClient) {
+    _authClient = new AuthClient(buildAuthConfig());
+  }
+  return _authClient;
+}
 
 export function getOAuthConfig() {
-  return authClient.getOAuthConfig();
+  return getAuthClient().getOAuthConfig();
 }
 
 export async function exchangeCodeForToken(params: { code: string }) {
-  return authClient.exchangeCodeForToken(params);
+  return getAuthClient().exchangeCodeForToken(params);
 }
 
 export async function getUserInfo(
   accessToken: string,
 ): Promise<{ sub: string; email: string; name?: string }> {
-  const authServerUrl = authConfig.client.AUTH_SERVER_URL;
+  const authServerUrl = getAuthClient().getOAuthConfig().AUTH_SERVER_URL;
   if (!authServerUrl) {
     throw new Error("AUTH_PROVIDER_URL is not configured");
   }
