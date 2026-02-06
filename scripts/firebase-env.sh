@@ -27,12 +27,6 @@ main() {
     exit 1
   fi
 
-  if ! command -v firebase &>/dev/null; then
-    log_error "firebase CLI not found. Please install Firebase CLI:"
-    log_error "  npm install -g firebase-tools"
-    exit 1
-  fi
-
   # Get project root and file paths
   local project_root=$(get_project_root)
   local env_file="$project_root/.env.firebase"
@@ -388,8 +382,9 @@ grant_firebase_access() {
   for i in "${!SECRET_VARS[@]}"; do
     local secret_id="${SECRET_IDS[$i]}"
     log_info "Granting Firebase App Hosting access to '$secret_id' on backend '$backend_id'…"
-    firebase apphosting:secrets:grantaccess "$secret_id" \
+    npx -y -p firebase-tools firebase apphosting:secrets:grantaccess "$secret_id" \
       --backend "$backend_id" \
+      --project "$project_id" \
       --non-interactive
   done
 }
