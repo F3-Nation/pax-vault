@@ -62,18 +62,12 @@ export async function GET(request: NextRequest) {
 
   // Exchange code for tokens
   let accessToken: string;
-  let refreshToken: string | undefined;
-  let expiresIn: number | undefined;
   try {
     const tokens = await exchangeCodeForToken({ code });
     accessToken = (tokens.access_token ?? tokens.accessToken) as string;
     if (!accessToken) {
       return errorRedirect(baseUrl, "token_exchange_failed", returnTo);
     }
-    refreshToken = (tokens.refresh_token ?? tokens.refreshToken) as
-      | string
-      | undefined;
-    expiresIn = (tokens.expires_in ?? tokens.expiresIn) as number | undefined;
   } catch (err) {
     console.error("Token exchange failed", err);
     return errorRedirect(baseUrl, "token_exchange_failed", returnTo);
@@ -104,11 +98,6 @@ export async function GET(request: NextRequest) {
     sub: userInfo.sub,
     email: userInfo.email,
     name: userInfo.name,
-    accessToken,
-    refreshToken,
-    expiresAt: expiresIn
-      ? Math.floor(Date.now() / 1000) + expiresIn
-      : Math.floor(Date.now() / 1000) + 3600,
   });
 
   const response = NextResponse.redirect(new URL(returnTo, baseUrl).toString());

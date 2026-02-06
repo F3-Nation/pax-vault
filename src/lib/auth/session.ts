@@ -5,9 +5,6 @@ export interface SessionPayload {
   sub: string;
   email: string;
   name?: string;
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt: number;
   iat: number;
 }
 
