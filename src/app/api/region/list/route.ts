@@ -25,7 +25,11 @@ export async function GET(request: Request) {
     return NextResponse.json([], { status: 200 });
   }
 
-  const regions = await searchRegionsByName(q);
-
-  return NextResponse.json(regions, { status: 200 });
+  try {
+    const regions = await searchRegionsByName(q);
+    return NextResponse.json(regions, { status: 200 });
+  } catch (err) {
+    console.error("Region search failed:", err);
+    return NextResponse.json([], { status: 200 });
+  }
 }

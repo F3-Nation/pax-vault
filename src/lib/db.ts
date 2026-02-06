@@ -4,6 +4,7 @@ const projectId = process.env.BIGQUERY_PROJECT_ID!;
 const datasetId = process.env.BIGQUERY_DATASET!;
 const clientEmail = process.env.BIGQUERY_CLIENT_EMAIL!;
 const privateKey = process.env.BIGQUERY_PRIVATE_KEY?.replace(/\\n/g, "\n");
+const location = process.env.BIGQUERY_LOCATION || "US";
 
 // Create a single BigQuery client per Lambda/Node process
 const bigquery = new BigQuery({
@@ -12,6 +13,7 @@ const bigquery = new BigQuery({
     client_email: clientEmail,
     private_key: privateKey,
   },
+  location,
 });
 
 type BigQueryRow = Record<string, unknown>;
