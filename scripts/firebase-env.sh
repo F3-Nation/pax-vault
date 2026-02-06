@@ -9,8 +9,8 @@ if [[ -f "$HOME/google-cloud-sdk/path.bash.inc" ]]; then
 fi
 
 # Configuration constants
-SECRET_VARS=("NEXT_PUBLIC_SITE_URL" "SAMPLE_PAX" "SAMPLE_AO" "SAMPLE_REGION" "ENVIRONMENT" "BIGQUERY_PROJECT_ID" "BIGQUERY_DATASET" "BIGQUERY_CLIENT_EMAIL" "BIGQUERY_PRIVATE_KEY" "NEXT_PUBLIC_FIREBASE_API_KEY" "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" "NEXT_PUBLIC_FIREBASE_PROJECT_ID" "NEXT_PUBLIC_FIREBASE_APP_ID" "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID" "FIREBASE_ADMIN_PROJECT_ID" "FIREBASE_ADMIN_CLIENT_EMAIL" "FIREBASE_ADMIN_PRIVATE_KEY")
-SECRET_IDS=("next-public-site-url" "sample-pax" "sample-ao" "sample-region" "environment" "bigquery-project-id" "bigquery-dataset" "bigquery-client-email" "bigquery-private-key" "firebase-api-key" "firebase-auth-domain" "firebase-project-id" "firebase-app-id" "firebase-messaging-sender-id" "firebase-storage-bucket" "firebase-measurement-id" "firebase-admin-project-id" "firebase-admin-client-email" "firebase-admin-private-key")
+SECRET_VARS=("NEXT_PUBLIC_SITE_URL" "SAMPLE_PAX" "SAMPLE_AO" "SAMPLE_REGION" "ENVIRONMENT" "BIGQUERY_PROJECT_ID" "BIGQUERY_DATASET" "BIGQUERY_CLIENT_EMAIL" "BIGQUERY_PRIVATE_KEY" "OAUTH_CLIENT_ID" "OAUTH_CLIENT_SECRET" "OAUTH_REDIRECT_URI" "AUTH_PROVIDER_URL" "SESSION_SECRET")
+SECRET_IDS=("next-public-site-url" "sample-pax" "sample-ao" "sample-region" "environment" "bigquery-project-id" "bigquery-dataset" "bigquery-client-email" "bigquery-private-key" "oauth-client-id" "oauth-client-secret" "oauth-redirect-uri" "auth-provider-url" "session-secret")
 
 #####################################
 # MAIN EXECUTION FUNCTION
@@ -24,12 +24,6 @@ main() {
     log_error "gcloud CLI not found. Please install Google Cloud SDK:"
     log_error "  brew install google-cloud-sdk"
     log_error "  or visit: https://cloud.google.com/sdk/docs/install"
-    exit 1
-  fi
-
-  if ! command -v firebase &>/dev/null; then
-    log_error "firebase CLI not found. Please install Firebase CLI:"
-    log_error "  npm install -g firebase-tools"
     exit 1
   fi
 
@@ -388,8 +382,9 @@ grant_firebase_access() {
   for i in "${!SECRET_VARS[@]}"; do
     local secret_id="${SECRET_IDS[$i]}"
     log_info "Granting Firebase App Hosting access to '$secret_id' on backend '$backend_id'…"
-    firebase apphosting:secrets:grantaccess "$secret_id" \
+    npx -y -p firebase-tools firebase apphosting:secrets:grantaccess "$secret_id" \
       --backend "$backend_id" \
+      --project "$project_id" \
       --non-interactive
   done
 }

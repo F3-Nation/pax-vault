@@ -1,21 +1,16 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
-import type { User } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
-import { clearSession, createSession } from "@/lib/auth/client";
+
+type AuthUser = {
+  sub: string;
+  email: string;
+  name?: string;
+};
 
 type AuthContextValue = {
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
 };
@@ -23,35 +18,32 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const hasInitialized = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
-      setUser(nextUser);
-      setLoading(false);
+    let cancelled = false;
 
+    async function checkSession() {
       try {
-        if (nextUser) {
-          const idToken = await nextUser.getIdToken();
-          await createSession(idToken);
-        } else if (hasInitialized.current) {
-          await clearSession();
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = (await res.json()) as { user: AuthUser | null };
+          if (!cancelled) setUser(data.user);
+        } else {
+          if (!cancelled) setUser(null);
         }
-      } catch (err) {
-        console.error("Auth session sync failed", err);
-        if (nextUser) {
-          await firebaseSignOut(auth);
-        } else if (hasInitialized.current) {
-          await clearSession();
-        }
+      } catch {
+        if (!cancelled) setUser(null);
       } finally {
-        hasInitialized.current = true;
+        if (!cancelled) setLoading(false);
       }
-    });
+    }
 
-    return () => unsubscribe();
+    checkSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const value = useMemo(
@@ -59,7 +51,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       signOut: async () => {
-        await firebaseSignOut(auth);
+        await fetch("/api/auth/logout", { method: "POST" });
+        setUser(null);
+        window.location.href = "/";
       },
     }),
     [user, loading],

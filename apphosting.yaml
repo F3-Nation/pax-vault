@@ -65,67 +65,30 @@ env:
       - BUILD
       - RUNTIME
 
-  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    secret: next-public-firebase-api-key
+  - variable: OAUTH_CLIENT_ID
+    secret: oauth-client-id
     availability:
       - BUILD
       - RUNTIME
 
-  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    secret: next-public-firebase-auth-domain
+  - variable: OAUTH_CLIENT_SECRET
+    secret: oauth-client-secret
+    availability:
+      - RUNTIME
+
+  - variable: OAUTH_REDIRECT_URI
+    secret: oauth-redirect-uri
     availability:
       - BUILD
       - RUNTIME
 
-  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    secret: next-public-firebase-project-id
+  - variable: AUTH_PROVIDER_URL
+    secret: auth-provider-url
     availability:
       - BUILD
       - RUNTIME
 
-  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    secret: next-public-firebase-app-id
+  - variable: SESSION_SECRET
+    secret: session-secret
     availability:
-      - BUILD
       - RUNTIME
-
-  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    secret: next-public-firebase-messaging-sender-id
-    availability:
-      - BUILD
-      - RUNTIME
-
-  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    secret: next-public-firebase-storage-bucket
-    availability:
-      - BUILD
-      - RUNTIME
-
-  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
-    secret: next-public-firebase-measurement-id
-    availability:
-      - BUILD
-      - RUNTIME
-
-  - variable: FIREBASE_ADMIN_PROJECT_ID
-    secret: firebase-admin-project-id
-    availability:
-      - BUILD
-      - RUNTIME
-
-  - variable: FIREBASE_ADMIN_CLIENT_EMAIL
-    secret: firebase-admin-client-email
-    availability:
-      - BUILD
-      - RUNTIME
-
-  - variable: FIREBASE_ADMIN_PRIVATE_KEY
-    secret: firebase-admin-private-key
-    availability:
-      - BUILD
-      - RUNTIME
-
-  # Grant access to secrets in Cloud Secret Manager.
-  # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
-  # - variable: MY_SECRET
-  #   secret: mySecretRef

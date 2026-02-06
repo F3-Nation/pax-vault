@@ -5,19 +5,12 @@ on:
 
 env:
   NEXT_PUBLIC_SITE_URL: mock-next-public-site-url
-  # Firebase client (NEXT_PUBLIC_* are baked into the Next.js build)
-  NEXT_PUBLIC_FIREBASE_API_KEY: AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMYDUMMYDUM
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: mock.firebaseapp.com
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID: mock-firebase-project
-  NEXT_PUBLIC_FIREBASE_APP_ID: 1:1234567890:web:abcdef1234567890abcdef
-  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "1234567890"
-  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: mock-firebase-project.appspot.com
-  NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: G-ABCDEFGH12
-
-  # Firebase Admin (server-side). Keep as mocks for PR gates.
-  FIREBASE_ADMIN_PROJECT_ID: mock-firebase-project
-  FIREBASE_ADMIN_CLIENT_EMAIL: mock-firebase-admin@mock-firebase-project.iam.gserviceaccount.com
-  FIREBASE_ADMIN_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nMOCK\\n-----END PRIVATE KEY-----\\n"
+  # OAuth (f3-nation-auth). Keep as mocks for PR gates.
+  OAUTH_CLIENT_ID: mock-oauth-client-id
+  OAUTH_CLIENT_SECRET: mock-oauth-client-secret
+  OAUTH_REDIRECT_URI: http://localhost:3000/api/auth/callback
+  AUTH_PROVIDER_URL: http://localhost:3001
+  SESSION_SECRET: 0000000000000000000000000000000000000000000000000000000000000000
   SAMPLE_PAX: mock-sample-pax
   SAMPLE_AO: mock-sample-ao
   SAMPLE_REGION: mock-sample-region
