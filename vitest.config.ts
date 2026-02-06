@@ -28,7 +28,6 @@ export default defineConfig({
         "src/lib/bq/**", // DISABLING TESTS FOR NOW UNTIL MORE CONTROLS ARE IMPLEMENTED
         "middleware.ts", // DISABLING TESTS FOR NOW UNTIL MORE CONTROLS ARE IMPLEMENTED
         "src/lib/auth/**", // DISABLING TESTS FOR NOW UNTIL MORE CONTROLS ARE IMPLEMENTED
-        "src/lib/firebase/**", // DISABLING TESTS FOR NOW UNTIL MORE CONTROLS ARE IMPLEMENTED
       ],
       thresholds: {
         lines: 70,
