@@ -87,7 +87,7 @@ export async function loadRegionData(
 
     return mergedSafe;
   } catch (err) {
-    console.error("Error fetching Region data:", err);
+    console.error(`Error fetching Region data (region=${regionId}):`, err);
   }
 
   return null;
