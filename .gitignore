@@ -50,3 +50,6 @@ public/workbox-*.js
 pax-vault-bq*.json
 
 pr.md
+
+# large log files in issue context
+.context/issues/**/*.json
