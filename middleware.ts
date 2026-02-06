@@ -38,19 +38,6 @@ function getClientIp(req: NextRequest): string | null {
 export function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
-  // CORS preflight for OAuth callback (auth provider redirect)
-  if (pathname === "/api/auth/callback" && req.method === "OPTIONS") {
-    return new NextResponse(null, {
-      status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": process.env.AUTH_PROVIDER_URL || "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Max-Age": "86400",
-      },
-    });
-  }
-
   const isPublicPath =
     pathname === "/" ||
     pathname.startsWith("/api/auth/") ||
