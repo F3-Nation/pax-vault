@@ -67,6 +67,9 @@ export async function GET(request: NextRequest) {
   try {
     const tokens = await exchangeCodeForToken({ code });
     accessToken = (tokens.access_token ?? tokens.accessToken) as string;
+    if (!accessToken) {
+      return errorRedirect(baseUrl, "token_exchange_failed", returnTo);
+    }
     refreshToken = (tokens.refresh_token ?? tokens.refreshToken) as
       | string
       | undefined;
