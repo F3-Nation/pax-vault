@@ -15,6 +15,14 @@ interface StatePayload {
   timestamp: number;
 }
 
+function getPublicOrigin(request: NextRequest): string {
+  const proto = request.headers.get("x-forwarded-proto") || "https";
+  const host =
+    request.headers.get("x-forwarded-host") || request.headers.get("host");
+  if (host) return `${proto}://${host}`;
+  return request.nextUrl.origin;
+}
+
 function errorRedirect(baseUrl: string, error: string, returnTo?: string) {
   const url = new URL("/", baseUrl);
   url.searchParams.set("error", error);
@@ -27,7 +35,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const stateParam = searchParams.get("state");
   const errorParam = searchParams.get("error");
-  const baseUrl = request.nextUrl.origin;
+  const baseUrl = getPublicOrigin(request);
 
   if (errorParam) {
     return errorRedirect(baseUrl, errorParam);
