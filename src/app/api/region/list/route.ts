@@ -30,6 +30,9 @@ export async function GET(request: Request) {
     return NextResponse.json(regions, { status: 200 });
   } catch (err) {
     console.error("Region search failed:", err);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json(
+      { error: "Region search failed. Please try again." },
+      { status: 500 },
+    );
   }
 }
