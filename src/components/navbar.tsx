@@ -2,22 +2,35 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTheme } from "next-themes";
 import { Navbar, NavbarBrand, NavbarContent, NavbarItem } from "@heroui/navbar";
 import { Link } from "@heroui/link";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { Avatar } from "@heroui/avatar";
 import { Button } from "@heroui/button";
 import {
+  Dropdown,
+  DropdownItem,
+  DropdownMenu,
+  DropdownTrigger,
+} from "@heroui/dropdown";
+import {
   Drawer,
   DrawerContent,
   DrawerHeader,
   DrawerBody,
 } from "@heroui/drawer";
+import { Modal, ModalBody, ModalContent, ModalHeader } from "@heroui/modal";
 import { useDisclosure } from "@heroui/use-disclosure";
 import { Divider } from "@heroui/divider";
-import { ThemeSwitcher } from "@/lib/theme-switcher";
 import { RegionInfo, PAXInfo } from "@/lib/types";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { MoonIcon, SunIcon } from "@/components/icons";
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
 
 /**
  * Small helper for debounced, client-side search against a JSON endpoint.
@@ -214,11 +227,120 @@ function SignOutIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+function MenuIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M4 6H20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M4 12H20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M4 18H20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function BugIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M9 9L6.5 7.5M15 9L17.5 7.5M4 14H7M17 14H20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 7C9.2 7 7 9.2 7 12V14C7 16.8 9.2 19 12 19C14.8 19 17 16.8 17 14V12C17 9.2 14.8 7 12 7Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M12 5V7M9 5H15"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function DownloadIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M12 3V14"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 10L12 14L16 10"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5 20H19"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export default function NavbarClient() {
   const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
   const isAuthed = !!user;
-  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const {
+    isOpen: isDrawerOpen,
+    onOpen: onDrawerOpen,
+    onOpenChange: onDrawerOpenChange,
+  } = useDisclosure();
+  const {
+    isOpen: isInstallOpen,
+    onOpen: onInstallOpen,
+    onOpenChange: onInstallOpenChange,
+  } = useDisclosure();
+  const [pwaPrompt, setPwaPrompt] = useState<BeforeInstallPromptEvent | null>(
+    null,
+  );
+  const [pwaInstalled, setPwaInstalled] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [themeMounted, setThemeMounted] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
 
   // --- Search state (shared pattern: input -> debounced API -> options -> selection navigates) ---
 
@@ -330,10 +452,10 @@ export default function NavbarClient() {
         routeForKey: (key) => `/stats/pax/${key}`,
         setKey: setPaxKey,
         clearInput: () => setPaxInput(""),
-        onAfterNavigate: () => onOpenChange(),
+        onAfterNavigate: () => onDrawerOpenChange(),
         routerPush: router.push,
       }),
-    [router.push, onOpenChange],
+    [router.push, onDrawerOpenChange],
   );
 
   const handleRegionSelection = useMemo(
@@ -353,10 +475,10 @@ export default function NavbarClient() {
         routeForKey: (key) => `/stats/region/${key}`,
         setKey: setRegionKey,
         clearInput: () => setRegionInput(""),
-        onAfterNavigate: () => onOpenChange(),
+        onAfterNavigate: () => onDrawerOpenChange(),
         routerPush: router.push,
       }),
-    [router.push, onOpenChange],
+    [router.push, onDrawerOpenChange],
   );
 
   const handleSignIn = useCallback(() => {
@@ -367,6 +489,126 @@ export default function NavbarClient() {
     await signOut();
     router.push("/");
   }, [router, signOut]);
+
+  const handlePwaInstall = useCallback(async () => {
+    if (isIOS) {
+      onInstallOpen();
+      return;
+    }
+
+    if (!pwaPrompt) return;
+
+    await pwaPrompt.prompt();
+    await pwaPrompt.userChoice;
+    setPwaPrompt(null);
+  }, [isIOS, onInstallOpen, pwaPrompt]);
+
+  const handleReportBug = useCallback(() => {
+    window.open(
+      "https://github.com/F3-Nation/pax-vault/issues",
+      "_blank",
+      "noopener,noreferrer",
+    );
+  }, []);
+
+  useEffect(() => {
+    setThemeMounted(true);
+    const nav = window.navigator as Navigator & { standalone?: boolean };
+    const ua = window.navigator.userAgent ?? "";
+    const iOS =
+      /iPad|iPhone|iPod/.test(ua) ||
+      (window.navigator.platform === "MacIntel" &&
+        window.navigator.maxTouchPoints > 1);
+    setIsIOS(iOS);
+    const isStandalone =
+      window.matchMedia?.("(display-mode: standalone)").matches ||
+      nav.standalone === true;
+    setPwaInstalled(Boolean(isStandalone));
+
+    const handleBeforeInstall = (event: Event) => {
+      event.preventDefault();
+      setPwaPrompt(event as BeforeInstallPromptEvent);
+    };
+
+    const handleInstalled = () => {
+      setPwaInstalled(true);
+      setPwaPrompt(null);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+    window.addEventListener("appinstalled", handleInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
+  }, []);
+
+  const showInstallAction = (Boolean(pwaPrompt) || isIOS) && !pwaInstalled;
+  const isDark = themeMounted && resolvedTheme === "dark";
+
+  const handleToggleTheme = useCallback(() => {
+    if (!themeMounted) return;
+    setTheme(isDark ? "light" : "dark");
+  }, [isDark, setTheme, themeMounted]);
+
+  const renderActionMenu = (size: "sm" | "md" | "lg") => (
+    <Dropdown>
+      <DropdownTrigger>
+        <Button
+          size={size}
+          variant="light"
+          color="default"
+          startContent={<MenuIcon className="h-4 w-4" />}
+        >
+          Menu
+        </Button>
+      </DropdownTrigger>
+      <DropdownMenu aria-label="Feature menu">
+        {themeMounted ? (
+          <DropdownItem key="theme" onPress={handleToggleTheme}>
+            <div className="flex items-center gap-2">
+              {isDark ? (
+                <SunIcon className="h-4 w-4" />
+              ) : (
+                <MoonIcon className="h-4 w-4" />
+              )}
+              <span>{isDark ? "Light Theme" : "Dark Theme"}</span>
+            </div>
+          </DropdownItem>
+        ) : null}
+        {showInstallAction ? (
+          <DropdownItem key="install" onPress={handlePwaInstall}>
+            <div className="flex items-center gap-2">
+              <DownloadIcon className="h-4 w-4" />
+              <span>Install App</span>
+            </div>
+          </DropdownItem>
+        ) : null}
+        {!authLoading ? (
+          <DropdownItem
+            key={isAuthed ? "sign-out" : "sign-in"}
+            onPress={isAuthed ? handleSignOut : handleSignIn}
+          >
+            <div className="flex items-center gap-2">
+              {isAuthed ? (
+                <SignOutIcon className="h-4 w-4" />
+              ) : (
+                <SignInIcon className="h-4 w-4" />
+              )}
+              <span>{isAuthed ? "Sign out" : "Sign in"}</span>
+            </div>
+          </DropdownItem>
+        ) : null}
+        <DropdownItem key="report-bug" onPress={handleReportBug}>
+          <div className="flex items-center gap-2">
+            <BugIcon className="h-4 w-4" />
+            <span>Report Bug</span>
+          </div>
+        </DropdownItem>
+      </DropdownMenu>
+    </Dropdown>
+  );
 
   return (
     <Navbar
@@ -380,9 +622,9 @@ export default function NavbarClient() {
             className="flex items-center gap-2 font-bold text-inherit"
           >
             PAX VAULT
-            <span className="px-2 py-[2px] text-[10px] rounded-md bg-warning-200 text-warning-800 dark:bg-warning-300/20 dark:text-warning-300 font-semibold tracking-wide">
+            {/* <span className="px-2 py-[2px] text-[10px] rounded-md bg-warning-200 text-warning-800 dark:bg-warning-300/20 dark:text-warning-300 font-semibold tracking-wide">
               ALPHA
-            </span>
+            </span> */}
           </Link>
         </NavbarBrand>
       </NavbarContent>
@@ -480,32 +722,7 @@ export default function NavbarClient() {
             </NavbarItem>
           </>
         )}
-        <NavbarItem>
-          <ThemeSwitcher size="sm" iconSize="sm" />
-        </NavbarItem>
-        {!authLoading && (
-          <NavbarItem>
-            {isAuthed ? (
-              <Button
-                size="md"
-                variant="ghost"
-                color="danger"
-                onPress={handleSignOut}
-              >
-                Sign out
-              </Button>
-            ) : (
-              <Button
-                size="md"
-                variant="ghost"
-                color="primary"
-                onPress={handleSignIn}
-              >
-                Sign in
-              </Button>
-            )}
-          </NavbarItem>
-        )}
+        <NavbarItem>{renderActionMenu("lg")}</NavbarItem>
       </NavbarContent>
 
       {/* Mobile Search Buttons */}
@@ -518,54 +735,25 @@ export default function NavbarClient() {
               variant="bordered"
               color="primary"
               size="sm"
-              onPress={() => onOpen()}
+              onPress={() => onDrawerOpen()}
             >
               FIND REGION OR PAX
             </Button>
           </NavbarItem>
         )}
-        <NavbarItem>
-          <ThemeSwitcher size="sm" iconSize="sm" />
-        </NavbarItem>
-        {!authLoading && (
-          <NavbarItem>
-            {isAuthed ? (
-              <Button
-                size="sm"
-                variant="light"
-                color="danger"
-                onPress={handleSignOut}
-                isIconOnly
-                aria-label="Sign out"
-              >
-                <SignOutIcon width={18} height={18} />
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="light"
-                color="primary"
-                onPress={handleSignIn}
-                isIconOnly
-                aria-label="Sign in"
-              >
-                <SignInIcon width={18} height={18} />
-              </Button>
-            )}
-          </NavbarItem>
-        )}
+        <NavbarItem>{renderActionMenu("sm")}</NavbarItem>
       </NavbarContent>
 
       {isAuthed && (
         <Drawer
-          isOpen={isOpen}
-          key={isOpen ? "mobile_open" : "mobile_closed"}
+          isOpen={isDrawerOpen}
+          key={isDrawerOpen ? "mobile_open" : "mobile_closed"}
           backdrop="blur"
           placement="top"
           classNames={{
             wrapper: "h-full",
           }}
-          onOpenChange={onOpenChange}
+          onOpenChange={onDrawerOpenChange}
           isDismissable={false}
           isKeyboardDismissDisabled={true}
         >
@@ -661,6 +849,29 @@ export default function NavbarClient() {
           </DrawerContent>
         </Drawer>
       )}
+      <Modal
+        isOpen={isInstallOpen}
+        onOpenChange={onInstallOpenChange}
+        backdrop="blur"
+        size="sm"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            Install PAX VAULT
+          </ModalHeader>
+          <ModalBody className="text-sm text-default-600">
+            <div>To install on iOS Safari:</div>
+            <ol className="list-decimal pl-5">
+              <li>Tap the Share button in the toolbar.</li>
+              <li>Select &quot;Add to Home Screen&quot;.</li>
+              <li>Tap &quot;Add&quot; to confirm.</li>
+            </ol>
+            <Button size="sm" variant="flat" onPress={onInstallOpenChange}>
+              Got it
+            </Button>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Navbar>
   );
 }
