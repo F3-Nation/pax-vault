@@ -73,7 +73,10 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(manifest, {
     headers: {
       "Content-Type": "application/manifest+json",
-      // Cache for a short time to allow updates
+      // Cache for a short time (60s) since the manifest is dynamic and changes
+      // based on the page the user is on when installing the PWA. This ensures
+      // that if users navigate to different pages before installing, they get
+      // the correct start_url.
       "Cache-Control": "public, max-age=60",
     },
   });
