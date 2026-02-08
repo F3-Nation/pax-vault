@@ -67,7 +67,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
         {/* PWA / iOS web app settings. */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="manifest" href="/api/manifest" />
 
         {/* App icons. */}
         <link
