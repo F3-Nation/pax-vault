@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Dynamic PWA manifest endpoint.
- * 
+ *
  * Returns a manifest.json with a dynamic `start_url` that matches the page
  * where the user is adding the PWA to their home screen. This allows users
  * to bookmark specific regions or AOs with filter parameters.
@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest) {
   // Get the referer to determine what page the user is on
   const referer = request.headers.get("referer");
-  
+
   // Parse the URL to extract the path and query params
   let startUrl = "/";
   if (referer) {
@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
   const manifest = {
     name: "F3 PAX Vault",
     short_name: "PAX Vault",
-    description: "PAX Vault is a web application that provides real-time statistics and information about the F3 PAX (Fitness, Fellowship, Faith) community.",
+    description:
+      "PAX Vault is a web application that provides real-time statistics and information about the F3 PAX (Fitness, Fellowship, Faith) community.",
     start_url: startUrl,
     display: "standalone",
     background_color: "#2E2E2E",
