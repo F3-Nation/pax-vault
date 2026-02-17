@@ -35,7 +35,7 @@ User clicks "Sign in" → router.push("/#signin") → landing page "Sign in with
 
 ## OAuth Env Vars
 
-| Var                   | Local (`.env.local`)                       | Prod (`.env.firebase`)                             |
+| Var                   | Local (`.env.local`)                       | Prod (`.env.firebase.production`)                  |
 | --------------------- | ------------------------------------------ | -------------------------------------------------- |
 | `OAUTH_CLIENT_ID`     | `local-client`                             | `pax-vault-prod`                                   |
 | `OAUTH_CLIENT_SECRET` | (local-client secret)                      | (pax-vault-prod secret)                            |

@@ -10,7 +10,10 @@ fi
 
 # Configuration constants
 SECRET_VARS=("NEXT_PUBLIC_SITE_URL" "SAMPLE_PAX" "SAMPLE_AO" "SAMPLE_REGION" "ENVIRONMENT" "BIGQUERY_PROJECT_ID" "BIGQUERY_DATASET" "BIGQUERY_CLIENT_EMAIL" "BIGQUERY_PRIVATE_KEY" "OAUTH_CLIENT_ID" "OAUTH_CLIENT_SECRET" "OAUTH_REDIRECT_URI" "AUTH_PROVIDER_URL" "SESSION_SECRET")
-SECRET_IDS=("next-public-site-url" "sample-pax" "sample-ao" "sample-region" "environment" "bigquery-project-id" "bigquery-dataset" "bigquery-client-email" "bigquery-private-key" "oauth-client-id" "oauth-client-secret" "oauth-redirect-uri" "auth-provider-url" "session-secret")
+SECRET_IDS_PROD=("next-public-site-url" "sample-pax" "sample-ao" "sample-region" "environment" "bigquery-project-id" "bigquery-dataset" "bigquery-client-email" "bigquery-private-key" "oauth-client-id" "oauth-client-secret" "oauth-redirect-uri" "auth-provider-url" "session-secret")
+
+# BQ secrets are shared between prod and staging (no prefix)
+BQ_SECRET_IDS=("bigquery-project-id" "bigquery-dataset" "bigquery-client-email" "bigquery-private-key")
 
 #####################################
 # MAIN EXECUTION FUNCTION
@@ -18,6 +21,21 @@ SECRET_IDS=("next-public-site-url" "sample-pax" "sample-ao" "sample-region" "env
 
 main() {
   set -euo pipefail
+
+  # Parse --env argument
+  local target_env="prod"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --env)
+        target_env="$2"
+        shift 2
+        ;;
+      *)
+        log_error "Unknown argument: $1"
+        exit 1
+        ;;
+    esac
+  done
 
   # Verify required CLI tools are available
   if ! command -v gcloud &>/dev/null; then
@@ -29,42 +47,79 @@ main() {
 
   # Get project root and file paths
   local project_root=$(get_project_root)
-  local env_file="$project_root/.env.firebase"
-  
+
+  # Set env file and backend ID based on target environment
+  local env_file
+  local backend_id
+  if [[ "$target_env" == "staging" ]]; then
+    env_file="$project_root/.env.firebase.staging"
+    backend_id="pax-vault-staging"
+    log_info "Targeting staging environment"
+  else
+    env_file="$project_root/.env.firebase.production"
+  fi
+
+  # Build SECRET_IDS array based on target environment
+  SECRET_IDS=()
+  for id in "${SECRET_IDS_PROD[@]}"; do
+    if [[ "$target_env" == "staging" ]]; then
+      # Check if this is a BQ secret (shared, no prefix)
+      local is_bq=false
+      for bq_id in "${BQ_SECRET_IDS[@]}"; do
+        if [[ "$id" == "$bq_id" ]]; then
+          is_bq=true
+          break
+        fi
+      done
+      if [[ "$is_bq" == true ]]; then
+        SECRET_IDS+=("$id")
+      else
+        SECRET_IDS+=("staging-$id")
+      fi
+    else
+      SECRET_IDS+=("$id")
+    fi
+  done
+
   # Load configuration
   log_step "Loading configuration from Firebase files..."
-  local config=$(load_configuration "$project_root")
-  if [[ $? -ne 0 ]]; then
+  local project_id=$(read_project_id "$project_root")
+  if [[ -z "$project_id" ]]; then
     exit 1
   fi
-  
-  local project_id=$(echo "$config" | cut -d'|' -f1)
-  local backend_id=$(echo "$config" | cut -d'|' -f2)
-  
+
+  # Read backend ID from firebase.json if not already set (prod)
+  if [[ -z "${backend_id:-}" ]]; then
+    backend_id=$(read_backend_id "$project_root")
+    if [[ -z "$backend_id" ]]; then
+      exit 1
+    fi
+  fi
+
   log_info "Using project ID: $project_id"
   log_info "Using backend ID: $backend_id"
-  
+
   # Set GCP project
   log_step "Setting GCP project to '$project_id'..."
   gcloud config set project "$project_id" --quiet >/dev/null
-  
+
   # Validate and load environment
   validate_env_file "$env_file" || exit 1
   load_environment_variables "$env_file"
   validate_environment_variables || exit 1
-  
+
   # Create temporary directory
   local temp_dir=$(mktemp -d)
-  
+
   # Create secrets
   create_temp_secret_files "$temp_dir"
   create_or_update_secrets "$project_id" "$temp_dir"
   grant_iam_permissions "$project_id"
-  grant_firebase_access "$backend_id"
-  
+  grant_firebase_access "$project_id" "$backend_id"
+
   # Cleanup
   cleanup_temp_files "$temp_dir"
-  
+
   log_success "All done! Your App Hosting backend can now build & run with these secrets."
 }
 
@@ -103,20 +158,6 @@ log_step() {
 # CONFIGURATION FUNCTIONS (used by main)
 #####################################
 
-# Load configuration from files
-load_configuration() {
-  local project_root="$1"
-  
-  local project_id=$(read_project_id "$project_root")
-  local backend_id=$(read_backend_id "$project_root")
-  
-  if [[ -z "$project_id" ]] || [[ -z "$backend_id" ]]; then
-    return 1
-  fi
-  
-  echo "$project_id|$backend_id"
-}
-
 # Read project ID from .firebaserc
 read_project_id() {
   local project_root="$1"
@@ -146,7 +187,7 @@ read_backend_id() {
     return 1
   fi
   
-  local backend_id=$(grep -o '"backendId": *"[^"]*"' "$firebase_json_file" | cut -d'"' -f4)
+  local backend_id=$(grep -o '"backendId": *"[^"]*"' "$firebase_json_file" | head -1 | cut -d'"' -f4)
   if [[ -z "$backend_id" ]]; then
     log_error "Could not find backendId in firebase.json"
     return 1
@@ -159,25 +200,24 @@ read_backend_id() {
 # ENVIRONMENT VALIDATION FUNCTIONS (used by main)
 #####################################
 
-# Validate .env.firebase file exists
+# Validate env file exists
 validate_env_file() {
   local env_file="$1"
 
   if [[ ! -f "$env_file" ]]; then
-    log_error ".env.firebase file not found at $env_file"
+    log_error "Env file not found at $env_file"
     log_error "Please create this file with your environment variables."
-    log_error "Required variables: POSTGRES_URL, BIGQUERY_CREDS"
     return 1
   fi
 
-  log_success "Found .env.firebase file: $env_file"
+  log_success "Found env file: $env_file"
 }
 
-# Load environment variables from .env.firebase
+# Load environment variables from env file
 load_environment_variables() {
   local env_file="$1"
 
-  log_step "Loading environment variables from .env.firebase..."
+  log_step "Loading environment variables from $(basename "$env_file")..."
 
   # Read file and handle multi-line values properly
   local current_var=""
@@ -236,8 +276,8 @@ validate_environment_variables() {
     local envvar="${SECRET_VARS[$i]}"
     
     if [[ -z "${!envvar:-}" ]]; then
-      log_error "$envvar is not set in .env.firebase"
-      log_error "Please add $envvar=your_value to your .env.firebase file"
+      log_error "$envvar is not set in env file"
+      log_error "Please add $envvar=your_value to your env file"
       return 1
     fi
 
@@ -375,10 +415,11 @@ grant_iam_permissions() {
 
 # Grant Firebase App Hosting access to secrets
 grant_firebase_access() {
-  local backend_id="$1"
-  
+  local project_id="$1"
+  local backend_id="$2"
+
   log_step "Granting Firebase App Hosting access to secrets..."
-  
+
   for i in "${!SECRET_VARS[@]}"; do
     local secret_id="${SECRET_IDS[$i]}"
     log_info "Granting Firebase App Hosting access to '$secret_id' on backend '$backend_id'…"
@@ -405,5 +446,5 @@ cleanup_temp_files() {
 # SCRIPT EXECUTION
 #####################################
 
-# Run main function
-main
+# Run main function with all script arguments
+main "$@"

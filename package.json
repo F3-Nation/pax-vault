@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "firebase:env": "bash scripts/firebase-env.sh",
-    "firebase:deploy": "firebase apphosting:rollouts:create pax-vault"
+    "firebase:env:staging": "bash scripts/firebase-env.sh --env staging",
+    "firebase:deploy": "firebase apphosting:rollouts:create pax-vault",
+    "firebase:deploy:staging": "npx -y -p firebase-tools firebase apphosting:rollouts:create pax-vault-staging"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",

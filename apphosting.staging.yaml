@@ -1,0 +1,90 @@
+# Staging overrides for pax-vault-staging backend.
+# Merged on top of apphosting.yaml when backend environment = "staging".
+# See: https://firebase.google.com/docs/app-hosting/configure
+
+runConfig:
+  minInstances: 0
+  memoryMiB: 1024
+
+env:
+  - variable: NEXT_PUBLIC_SITE_URL
+    secret: staging-next-public-site-url
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: SAMPLE_PAX
+    secret: staging-sample-pax
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: SAMPLE_AO
+    secret: staging-sample-ao
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: SAMPLE_REGION
+    secret: staging-sample-region
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: ENVIRONMENT
+    secret: staging-environment
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: BIGQUERY_PROJECT_ID
+    secret: bigquery-project-id
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: BIGQUERY_DATASET
+    secret: bigquery-dataset
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: BIGQUERY_CLIENT_EMAIL
+    secret: bigquery-client-email
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: BIGQUERY_PRIVATE_KEY
+    secret: bigquery-private-key
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: OAUTH_CLIENT_ID
+    secret: staging-oauth-client-id
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: OAUTH_CLIENT_SECRET
+    secret: staging-oauth-client-secret
+    availability:
+      - RUNTIME
+
+  - variable: OAUTH_REDIRECT_URI
+    secret: staging-oauth-redirect-uri
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: AUTH_PROVIDER_URL
+    secret: staging-auth-provider-url
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: SESSION_SECRET
+    secret: staging-session-secret
+    availability:
+      - RUNTIME
