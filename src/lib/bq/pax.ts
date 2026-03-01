@@ -357,7 +357,8 @@ export async function getPageData(
           e.ao_name,
           a.user_id,
           a.f3_name,
-          a.q_ind
+          a.q_ind,
+          a.coq_ind
         FROM events e
         JOIN UNNEST(e.attendance) a
       ),
@@ -369,7 +370,7 @@ export async function getPageData(
       q_events AS (
         SELECT *
         FROM self_attendance
-        WHERE q_ind = 1
+        WHERE q_ind = 1 OR coq_ind = 1
       ),
 
       -- -----------------------
@@ -594,6 +595,7 @@ export async function getPageData(
                 e.ao_org_id,
                 e.ao_name,
                 e.region_org_id,
+                e.region_name,
                 e.first_f_ind,
                 e.second_f_ind,
                 e.third_f_ind,

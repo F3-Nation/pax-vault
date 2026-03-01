@@ -306,7 +306,9 @@ export function EventsCard({
                               {cleanEventName(event.event_name)}
                             </div>
                             <div className="text-default-400">
-                              {formatDate(event.event_date)} @{" "}
+                              {formatDate(event.event_date)}
+                              {event.ao_org_id != thisAOId && (
+                                <><span className="text-default-400"> @ </span>
                               <Link
                                 href={
                                   event.ao_org_id
@@ -320,7 +322,21 @@ export function EventsCard({
                                     "Unknown AO"}
                                 </span>
                               </Link>
+                              </>
+                              )}
+                              
+                              {event.region_org_id != thisRegionId && (
+                              <><span className="text-default-400 text-sm italic"> • </span><Link
+                                  href={`/stats/region/${event.region_org_id}${filters ? `?${filters}` : ""}`}
+                                >
+                                  <span className="text-default-400 text-sm italic">
+                                    {"F3 " + (event.region_name ?? "Unknown Region")}
+                                  </span>
+                                </Link></>
+                                )
+                            }
                             </div>
+                            
                             <div className="gap-2t">
                               <span className="text-warning text-sm">
                                 {event.tags?.map((tag) => tag.name).join(" • ")}
