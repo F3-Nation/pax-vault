@@ -164,7 +164,7 @@ export function KotterCard({ kotters, filters }: KotterCardProps) {
 
               return (
                 <Tooltip placement="left-start" content={helpContent}>
-                  <span className="inline-flexv cursor-help">
+                  <span className="inline-flex cursor-help">
                     <HelpIcon
                       className="inline-block text-default"
                       height={28}
@@ -255,19 +255,103 @@ export function KotterCard({ kotters, filters }: KotterCardProps) {
                         </span>
                       </div>
                       <div className="text-xs text-secondary">
+                        {(() => {
+                          if (isMobile) {
+                            return (
+                              <Popover placement="bottom-start">
+                                <PopoverTrigger>
+                                  <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="light"
+                                    aria-label="Kotter status help"
+                                  >
+                                    <HelpIcon
+                                      className="inline-block text-default"
+                                      height={13}
+                                      width={13}
+                                    />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="max-w-[320px] p-3">
+                                  {
+                                    "Besties are PAX who have attended multiple events together."
+                                  }
+                                </PopoverContent>
+                              </Popover>
+                            );
+                          }
+
+                          return (
+                            <Tooltip
+                              placement="left-start"
+                              content={
+                                "Besties are PAX who have attended multiple events together. Hover over a name to see event co-attendance count."
+                              }
+                            >
+                              <span className="mt-1inline-flex cursor-help">
+                                <HelpIcon
+                                  className="inline-block text-default"
+                                  height={13}
+                                  width={13}
+                                />
+                                &nbsp;&nbsp;&nbsp;
+                              </span>
+                            </Tooltip>
+                          );
+                        })()}
                         {kotter.bestie_list.map((bestie, idx) => {
                           return (
                             <div
                               key={`${kotter.user_id}-${bestie.user_id}-${idx}`}
                               className="inline-flex items-center"
                             >
-                              <Link
-                                key={`${kotter.user_id}-${bestie.user_id}-${idx}`}
-                                href={`/stats/pax/${bestie.user_id}${filters ? `?${filters}` : ""}`}
-                                className="text-secondary text-xs"
-                              >
-                                {bestie.f3_name ?? bestie.user_id.toString()}
-                              </Link>
+                              {(() => {
+                                if (isMobile) {
+                                  return (
+                                    <Popover placement="bottom-start">
+                                      <PopoverTrigger>
+                                        <Button
+                                          isIconOnly
+                                          size="sm"
+                                          variant="light"
+                                          aria-label="Kotter status help"
+                                        >
+                                          <Link
+                                            key={`${kotter.user_id}-${bestie.user_id}-${idx}`}
+                                            href={`/stats/pax/${bestie.user_id}${filters ? `?${filters}` : ""}`}
+                                            className="text-secondary text-xs"
+                                          >
+                                            {bestie.f3_name ??
+                                              bestie.user_id.toString()}
+                                          </Link>
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="max-w-[320px] p-3">
+                                        {"Popover content"}
+                                      </PopoverContent>
+                                    </Popover>
+                                  );
+                                }
+
+                                return (
+                                  <Tooltip
+                                    content={`Attended ${bestie.co_attendance_count} events together`}
+                                  >
+                                    <span className="inline-flexv cursor-help">
+                                      <Link
+                                        key={`${kotter.user_id}-${bestie.user_id}-${idx}`}
+                                        href={`/stats/pax/${bestie.user_id}${filters ? `?${filters}` : ""}`}
+                                        className="text-secondary text-xs"
+                                      >
+                                        {bestie.f3_name ??
+                                          bestie.user_id.toString()}
+                                      </Link>
+                                    </span>
+                                  </Tooltip>
+                                );
+                              })()}
+
                               {idx !== kotter.bestie_list.length - 1 && (
                                 <span className="mx-1">•</span>
                               )}

@@ -16,6 +16,14 @@ import Script from "next/script";
 import { GaPageView } from "@/components/gaPageView";
 import { Suspense } from "react";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: {
+    default: "PAX Vault",
+    template: "%s | PAX Vault",
+  },
+};
 
 type RootLayoutProps = {
   children: ReactNode;
