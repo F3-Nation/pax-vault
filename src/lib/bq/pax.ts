@@ -370,7 +370,7 @@ export async function getPageData(
       q_events AS (
         SELECT *
         FROM self_attendance
-        WHERE q_ind = 1 OR coq_ind = 1
+        WHERE q_ind = 1
       ),
 
       -- -----------------------

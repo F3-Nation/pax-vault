@@ -362,6 +362,7 @@ export async function getPageData(
           a.user_id,
           a.f3_name,
           a.q_ind,
+          a.coq_ind,
           a.avatar_url
         FROM events e
         LEFT JOIN UNNEST(e.attendance) a
