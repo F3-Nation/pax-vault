@@ -13,6 +13,17 @@ import { AOPageWrapper } from "@/components/ao/PageWrapper";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/server";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ aoId: string }>;
+}): Promise<Metadata> {
+  const { aoId } = await params;
+  const data = await loadAOData(Number(aoId));
+  return { title: data?.info?.ao_name ?? "AO Stats" };
+}
 
 interface PageProps {
   params: Promise<{ aoId: string }>;
