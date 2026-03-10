@@ -182,6 +182,9 @@ export function EventsCard({
   const getQList = (event: EventData) =>
     sortAttendance(event.attendance.filter((att) => att.q_ind));
 
+  const getcoQList = (event: EventData) =>
+    sortAttendance(event.attendance.filter((att) => att.coq_ind));
+
   const getPaxList = (event: EventData) => sortAttendance(event.attendance);
 
   // Client-side search across event, AO, region, PAX, and Q names
@@ -289,6 +292,7 @@ export function EventsCard({
               paginatedEvents.map((event, index) => {
                 const pax_list = getPaxList(event);
                 const q_list = getQList(event);
+                const coq_list = getcoQList(event);
 
                 return (
                   <div key={event.event_instance_id || index}>
@@ -306,21 +310,44 @@ export function EventsCard({
                               {cleanEventName(event.event_name)}
                             </div>
                             <div className="text-default-400">
-                              {formatDate(event.event_date)} @{" "}
-                              <Link
-                                href={
-                                  event.ao_org_id
-                                    ? `/stats/ao/${event.ao_org_id}${filters ? `?${filters}` : ""}`
-                                    : `/stats/region/${event.region_org_id}${filters ? `?${filters}` : ""}`
-                                }
-                              >
-                                <span className="text-default-400 text-sm italic">
-                                  {event.ao_name ??
-                                    event.region_name ??
-                                    "Unknown AO"}
-                                </span>
-                              </Link>
+                              {formatDate(event.event_date)}
+                              {event.ao_org_id != thisAOId && (
+                                <>
+                                  <span className="text-default-400"> @ </span>
+                                  <Link
+                                    href={
+                                      event.ao_org_id
+                                        ? `/stats/ao/${event.ao_org_id}${filters ? `?${filters}` : ""}`
+                                        : `/stats/region/${event.region_org_id}${filters ? `?${filters}` : ""}`
+                                    }
+                                  >
+                                    <span className="text-default-400 text-sm italic">
+                                      {event.ao_name ??
+                                        event.region_name ??
+                                        "Unknown AO"}
+                                    </span>
+                                  </Link>
+                                </>
+                              )}
+
+                              {event.region_org_id != thisRegionId && (
+                                <>
+                                  <span className="text-default-400 text-sm italic">
+                                    {" "}
+                                    •{" "}
+                                  </span>
+                                  <Link
+                                    href={`/stats/region/${event.region_org_id}${filters ? `?${filters}` : ""}`}
+                                  >
+                                    <span className="text-default-400 text-sm italic">
+                                      {"F3 " +
+                                        (event.region_name ?? "Unknown Region")}
+                                    </span>
+                                  </Link>
+                                </>
+                              )}
                             </div>
+
                             <div className="gap-2t">
                               <span className="text-warning text-sm">
                                 {event.tags?.map((tag) => tag.name).join(" • ")}
@@ -354,7 +381,7 @@ export function EventsCard({
                           </div>
                         </div>
 
-                        <div className="flex justify-between gap-2 pb-2">
+                        <div className="flex gap-2 pb-2">
                           <div className="flex flex-wrap gap-1">
                             {q_list.length === 0 ? (
                               <Chip
@@ -381,7 +408,7 @@ export function EventsCard({
                                       />
                                     }
                                     variant="bordered"
-                                    color="secondary"
+                                    color="primary"
                                     size="sm"
                                   >
                                     {q.f3_name}
@@ -389,10 +416,31 @@ export function EventsCard({
                                 </Link>
                               ))
                             )}
+                            {coq_list.length > 0
+                              ? coq_list.map((q, i) => (
+                                  <Link
+                                    key={`q-${event.event_instance_id}-${i}`}
+                                    href={`/stats/pax/${q.user_id}${filters ? `?${filters}` : ""}`}
+                                    className="text-default-100"
+                                  >
+                                    <Chip
+                                      avatar={
+                                        <Avatar
+                                          showFallback
+                                          src={q.avatar_url || undefined}
+                                        />
+                                      }
+                                      variant="bordered"
+                                      color="secondary"
+                                      size="sm"
+                                    >
+                                      {q.f3_name}
+                                    </Chip>
+                                  </Link>
+                                ))
+                              : null}
                           </div>
-                          <div className="text-sm justify-end" />
                         </div>
-
                         <div className="flex justify-between pb-2">
                           <div className="flex flex-wrap gap-1">
                             {pax_list.length === 0 ? (

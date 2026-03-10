@@ -13,6 +13,17 @@ import { RegionalPageWrapper } from "@/components/region/PageWrapper";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/server";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ regionId: string }>;
+}): Promise<Metadata> {
+  const { regionId } = await params;
+  const data = await loadRegionData(Number(regionId));
+  return { title: `F3 ${data?.info?.region_name ?? "Region Stats"}` };
+}
 
 interface PageProps {
   params: Promise<{ regionId: string }>;

@@ -345,6 +345,7 @@ export async function getPageData(
           ao_org_id,
           ao_name,
           region_org_id,
+          region_name,
           first_f_ind,
           second_f_ind,
           third_f_ind,
@@ -361,6 +362,7 @@ export async function getPageData(
           a.user_id,
           a.f3_name,
           a.q_ind,
+          a.coq_ind,
           a.avatar_url
         FROM events e
         LEFT JOIN UNNEST(e.attendance) a
@@ -424,6 +426,7 @@ export async function getPageData(
               ao_org_id,
               ao_name,
               region_org_id,
+              region_name,
               first_f_ind,
               second_f_ind,
               third_f_ind,
