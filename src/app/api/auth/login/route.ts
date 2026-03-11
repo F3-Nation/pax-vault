@@ -7,6 +7,15 @@ function isValidReturnTo(path: string): boolean {
   return path.startsWith("/") && !path.startsWith("//");
 }
 
+/** Derive the public origin from forwarded headers (Cloud Run / Firebase). */
+function getPublicOrigin(request: NextRequest): string {
+  const proto = request.headers.get("x-forwarded-proto") || "https";
+  const host =
+    request.headers.get("x-forwarded-host") || request.headers.get("host");
+  if (host) return `${proto}://${host}`;
+  return request.nextUrl.origin;
+}
+
 export async function GET(request: NextRequest) {
   const returnTo =
     request.nextUrl.searchParams.get("returnTo") ?? "/stats/nation";
@@ -17,7 +26,11 @@ export async function GET(request: NextRequest) {
   const codeChallenge = createHash("sha256")
     .update(codeVerifier)
     .digest("base64url");
-  const { CLIENT_ID, AUTH_SERVER_URL, REDIRECT_URI } = getOAuthConfig();
+  const { CLIENT_ID, AUTH_SERVER_URL } = getOAuthConfig();
+
+  // Derive redirect URI from the actual request origin so staging/prod
+  // each redirect back to themselves without needing separate env vars.
+  const redirectUri = `${getPublicOrigin(request)}/api/auth/callback`;
 
   const state = Buffer.from(
     JSON.stringify({
@@ -31,7 +44,7 @@ export async function GET(request: NextRequest) {
   const authorizeUrl = new URL(`${AUTH_SERVER_URL}/api/oauth/authorize`);
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("client_id", CLIENT_ID);
-  authorizeUrl.searchParams.set("redirect_uri", REDIRECT_URI);
+  authorizeUrl.searchParams.set("redirect_uri", redirectUri);
   authorizeUrl.searchParams.set("scope", "openid profile email");
   authorizeUrl.searchParams.set("state", state);
   authorizeUrl.searchParams.set("code_challenge", codeChallenge);

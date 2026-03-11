@@ -32,6 +32,7 @@ export function getOAuthConfig() {
 export async function exchangeCodeForToken(params: {
   code: string;
   codeVerifier: string;
+  redirectUri: string;
 }) {
   const config = getAuthClient().getOAuthConfig();
   const clientSecret = getRequiredEnv("OAUTH_CLIENT_SECRET");
@@ -39,7 +40,7 @@ export async function exchangeCodeForToken(params: {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: params.code,
-    redirect_uri: config.REDIRECT_URI,
+    redirect_uri: params.redirectUri,
     client_id: config.CLIENT_ID,
     client_secret: clientSecret,
     code_verifier: params.codeVerifier,

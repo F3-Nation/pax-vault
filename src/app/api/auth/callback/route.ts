@@ -74,10 +74,14 @@ export async function GET(request: NextRequest) {
     return errorRedirect(baseUrl, "missing_code_verifier", returnTo);
   }
 
+  // Derive redirect URI from the actual request origin so it matches
+  // what the login route sent to the auth server.
+  const redirectUri = `${baseUrl}/api/auth/callback`;
+
   // Exchange code for tokens
   let accessToken: string;
   try {
-    const tokens = await exchangeCodeForToken({ code, codeVerifier });
+    const tokens = await exchangeCodeForToken({ code, codeVerifier, redirectUri });
     accessToken = (tokens.access_token ?? tokens.accessToken) as string;
     if (!accessToken) {
       return errorRedirect(baseUrl, "token_exchange_failed", returnTo);

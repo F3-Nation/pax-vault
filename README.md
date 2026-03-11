@@ -181,3 +181,21 @@ Leadership still requires wisdom, context, and courage.
 This just removes the fog.
 
 📡 **PAX Vault removes the fog so leaders can do the hard human work—better informed.**
+
+# Setting up a development environment
+
+1. Clone the repo
+2. Install dependencies
+
+```bash
+npm install
+```
+
+1. Run the app
+
+```bash
+npm run dev
+```
+
+> You will be asked to accept a self-signed certificate so the app can run as https locally. Accept.
+> Logs will show you a URL you can connect to to see the app. Should be https://localhost:3001
