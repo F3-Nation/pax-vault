@@ -11,7 +11,9 @@ function buildAuthConfig(): AuthClientConfig {
     client: {
       CLIENT_ID: getRequiredEnv("OAUTH_CLIENT_ID"),
       CLIENT_SECRET: getRequiredEnv("OAUTH_CLIENT_SECRET"),
-      REDIRECT_URI: getRequiredEnv("OAUTH_REDIRECT_URI"),
+      // OAUTH_REDIRECT_URI is no longer used for token exchange (redirect URI is
+      // derived at request time), but some SDK versions require a non-empty value.
+      REDIRECT_URI: process.env.OAUTH_REDIRECT_URI ?? "",
       AUTH_SERVER_URL: getRequiredEnv("AUTH_PROVIDER_URL"),
     },
   };

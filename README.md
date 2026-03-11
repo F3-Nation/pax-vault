@@ -182,7 +182,7 @@ This just removes the fog.
 
 📡 **PAX Vault removes the fog so leaders can do the hard human work—better informed.**
 
-# Setting up a development environment
+## Setting up a development environment
 
 1. Clone the repo
 2. Install dependencies
@@ -191,11 +191,11 @@ This just removes the fog.
 npm install
 ```
 
-1. Run the app
+3. Run the app
 
 ```bash
 npm run dev
 ```
 
 > You will be asked to accept a self-signed certificate so the app can run as https locally. Accept.
-> Logs will show you a URL you can connect to to see the app. Should be https://localhost:3001
+> Logs will show you a URL you can connect to see the app. Should be https://localhost:3001

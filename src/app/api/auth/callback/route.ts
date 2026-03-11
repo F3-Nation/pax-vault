@@ -7,20 +7,13 @@ import {
   SESSION_COOKIE_MAX_AGE,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth/constants";
+import { getPublicOrigin } from "@/lib/auth/origin";
 
 interface StatePayload {
   csrfToken: string;
   clientId: string;
   returnTo: string;
   timestamp: number;
-}
-
-function getPublicOrigin(request: NextRequest): string {
-  const proto = request.headers.get("x-forwarded-proto") || "https";
-  const host =
-    request.headers.get("x-forwarded-host") || request.headers.get("host");
-  if (host) return `${proto}://${host}`;
-  return request.nextUrl.origin;
 }
 
 function errorRedirect(baseUrl: string, error: string, returnTo?: string) {

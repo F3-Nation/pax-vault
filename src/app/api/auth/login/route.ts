@@ -2,18 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { randomBytes, randomUUID, createHash } from "crypto";
 import { getOAuthConfig } from "@/lib/auth/oauth";
+import { getPublicOrigin } from "@/lib/auth/origin";
 
 function isValidReturnTo(path: string): boolean {
   return path.startsWith("/") && !path.startsWith("//");
-}
-
-/** Derive the public origin from forwarded headers (Cloud Run / Firebase). */
-function getPublicOrigin(request: NextRequest): string {
-  const proto = request.headers.get("x-forwarded-proto") || "https";
-  const host =
-    request.headers.get("x-forwarded-host") || request.headers.get("host");
-  if (host) return `${proto}://${host}`;
-  return request.nextUrl.origin;
 }
 
 export async function GET(request: NextRequest) {
