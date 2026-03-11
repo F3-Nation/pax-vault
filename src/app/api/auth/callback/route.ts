@@ -81,7 +81,11 @@ export async function GET(request: NextRequest) {
   // Exchange code for tokens
   let accessToken: string;
   try {
-    const tokens = await exchangeCodeForToken({ code, codeVerifier, redirectUri });
+    const tokens = await exchangeCodeForToken({
+      code,
+      codeVerifier,
+      redirectUri,
+    });
     accessToken = (tokens.access_token ?? tokens.accessToken) as string;
     if (!accessToken) {
       return errorRedirect(baseUrl, "token_exchange_failed", returnTo);
