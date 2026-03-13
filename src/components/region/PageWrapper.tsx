@@ -17,6 +17,7 @@ import {
   RegionKotterList,
   EventUpcoming,
   RegionInfo,
+  ChartData,
 } from "@/lib/types";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "../leaders";
@@ -25,6 +26,7 @@ import { UpcomingEventsCard } from "../upcomingEvents";
 import { EventsCard } from "../events";
 import { Filter } from "../pageFilter";
 import { useMemo } from "react";
+import { ChartCard } from "./ChartsCard";
 
 type RegionalPageWrapperProps = {
   region_id: number;
@@ -34,6 +36,7 @@ type RegionalPageWrapperProps = {
   region_leaders: Leaders[] | null;
   region_upcoming: EventUpcoming[] | null;
   region_events: EventData[];
+  region_charts: ChartData[];
   searchParams: {
     categoryIds?: string | string[];
     categoryMode?: string;
@@ -96,6 +99,7 @@ export function RegionalPageWrapper({
   region_leaders,
   region_upcoming,
   region_events,
+  region_charts,
   searchParams,
 }: RegionalPageWrapperProps) {
   // Memoized query-string passed to events + filter components.
@@ -130,6 +134,10 @@ export function RegionalPageWrapper({
           page="region"
           filters={eventsFiltersQuery}
         />
+      </div>
+      {/* Charting */}
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
+        <ChartCard charts={region_charts || []} />
       </div>
       {/* Kotters + upcoming events */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">

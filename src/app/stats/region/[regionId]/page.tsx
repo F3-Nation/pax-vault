@@ -191,6 +191,7 @@ export default async function RegionDetailPage({
           region_kotter={regionData.kotter || []}
           region_upcoming={regionData.upcoming || []}
           region_events={regionData.events || []}
+          region_charts={regionData.charts || []}
           searchParams={{
             categoryIds,
             categoryMode,

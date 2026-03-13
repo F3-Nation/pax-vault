@@ -90,6 +90,16 @@ export interface Leaders {
   avatar_url?: string; // Optional URL to the user's avatar image
 }
 
+/* USED FOR CHARTS */
+export interface ChartData {
+  date: string; // Date for the chart data point
+  pax_count: number; // Number of participants (pax) for the chart data point
+  fng_count: number; // Number of first-time participants (FNGs) for the chart data point
+  q_count: number; // Number of Qs (leaders) for the chart data point
+  unique_pax_count: number; // Number of unique participants (pax) for the chart data point
+  unique_q_count: number; // Number of unique Qs (leaders) for the chart data point
+}
+
 /* =========================================================== */
 /*                REGION-SPECIFIC TYPES BELOW                  */
 /* =========================================================== */
@@ -102,6 +112,7 @@ export interface RegionData {
   events: EventData[] | null; // List of events held in the region
   upcoming: EventUpcoming[] | null; // List of upcoming events in the region
   kotter: RegionKotterList[] | null; // List of Kotter events in the region
+  charts: ChartData[] | null; // List of chart data points for the region
 }
 
 /* USED ONLY FOR REGION INFO */
