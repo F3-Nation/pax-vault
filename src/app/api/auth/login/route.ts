@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { randomBytes, randomUUID, createHash } from "crypto";
 import { getOAuthConfig } from "@/lib/auth/oauth";
+import { getPublicOrigin } from "@/lib/auth/origin";
 
 function isValidReturnTo(path: string): boolean {
   return path.startsWith("/") && !path.startsWith("//");
@@ -17,7 +18,11 @@ export async function GET(request: NextRequest) {
   const codeChallenge = createHash("sha256")
     .update(codeVerifier)
     .digest("base64url");
-  const { CLIENT_ID, AUTH_SERVER_URL, REDIRECT_URI } = getOAuthConfig();
+  const { CLIENT_ID, AUTH_SERVER_URL } = getOAuthConfig();
+
+  // Derive redirect URI from the actual request origin so staging/prod
+  // each redirect back to themselves without needing separate env vars.
+  const redirectUri = `${getPublicOrigin(request)}/api/auth/callback`;
 
   const state = Buffer.from(
     JSON.stringify({
@@ -31,7 +36,7 @@ export async function GET(request: NextRequest) {
   const authorizeUrl = new URL(`${AUTH_SERVER_URL}/api/oauth/authorize`);
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("client_id", CLIENT_ID);
-  authorizeUrl.searchParams.set("redirect_uri", REDIRECT_URI);
+  authorizeUrl.searchParams.set("redirect_uri", redirectUri);
   authorizeUrl.searchParams.set("scope", "openid profile email");
   authorizeUrl.searchParams.set("state", state);
   authorizeUrl.searchParams.set("code_challenge", codeChallenge);

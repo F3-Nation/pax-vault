@@ -11,7 +11,9 @@ function buildAuthConfig(): AuthClientConfig {
     client: {
       CLIENT_ID: getRequiredEnv("OAUTH_CLIENT_ID"),
       CLIENT_SECRET: getRequiredEnv("OAUTH_CLIENT_SECRET"),
-      REDIRECT_URI: getRequiredEnv("OAUTH_REDIRECT_URI"),
+      // OAUTH_REDIRECT_URI is no longer used for token exchange (redirect URI is
+      // derived at request time), but some SDK versions require a non-empty value.
+      REDIRECT_URI: process.env.OAUTH_REDIRECT_URI ?? "",
       AUTH_SERVER_URL: getRequiredEnv("AUTH_PROVIDER_URL"),
     },
   };
@@ -32,6 +34,7 @@ export function getOAuthConfig() {
 export async function exchangeCodeForToken(params: {
   code: string;
   codeVerifier: string;
+  redirectUri: string;
 }) {
   const config = getAuthClient().getOAuthConfig();
   const clientSecret = getRequiredEnv("OAUTH_CLIENT_SECRET");
@@ -39,7 +42,7 @@ export async function exchangeCodeForToken(params: {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: params.code,
-    redirect_uri: config.REDIRECT_URI,
+    redirect_uri: params.redirectUri,
     client_id: config.CLIENT_ID,
     client_secret: clientSecret,
     code_verifier: params.codeVerifier,

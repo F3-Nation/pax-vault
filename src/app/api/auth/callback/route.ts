@@ -7,20 +7,13 @@ import {
   SESSION_COOKIE_MAX_AGE,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth/constants";
+import { getPublicOrigin } from "@/lib/auth/origin";
 
 interface StatePayload {
   csrfToken: string;
   clientId: string;
   returnTo: string;
   timestamp: number;
-}
-
-function getPublicOrigin(request: NextRequest): string {
-  const proto = request.headers.get("x-forwarded-proto") || "https";
-  const host =
-    request.headers.get("x-forwarded-host") || request.headers.get("host");
-  if (host) return `${proto}://${host}`;
-  return request.nextUrl.origin;
 }
 
 function errorRedirect(baseUrl: string, error: string, returnTo?: string) {
@@ -74,10 +67,18 @@ export async function GET(request: NextRequest) {
     return errorRedirect(baseUrl, "missing_code_verifier", returnTo);
   }
 
+  // Derive redirect URI from the actual request origin so it matches
+  // what the login route sent to the auth server.
+  const redirectUri = `${baseUrl}/api/auth/callback`;
+
   // Exchange code for tokens
   let accessToken: string;
   try {
-    const tokens = await exchangeCodeForToken({ code, codeVerifier });
+    const tokens = await exchangeCodeForToken({
+      code,
+      codeVerifier,
+      redirectUri,
+    });
     accessToken = (tokens.access_token ?? tokens.accessToken) as string;
     if (!accessToken) {
       return errorRedirect(baseUrl, "token_exchange_failed", returnTo);
