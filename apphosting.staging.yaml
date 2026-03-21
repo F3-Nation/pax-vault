@@ -12,7 +12,7 @@ env:
   - variable: "OAUTH_REDIRECT_URI"
     value: "https://staging.pax-vault.f3nation.com/api/auth/callback"
 
-# Staging Secrets (Make sure these exist in Staging Secret Manager!)
+  # Staging Secrets (Make sure these exist in Staging Secret Manager!)
   - variable: OAUTH_CLIENT_ID
     secret: OAUTH_CLIENT_ID-staging
   - variable: OAUTH_CLIENT_SECRET
