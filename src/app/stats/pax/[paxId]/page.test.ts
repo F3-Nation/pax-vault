@@ -12,6 +12,7 @@ vi.mock("@/lib/auth/server", () => ({
 import { getSessionUser } from "@/lib/auth/server";
 import { loadPaxData } from "./loader";
 import { generateMetadata } from "./page";
+import type { PaxData } from "@/lib/types";
 
 describe("pax page metadata auth gating", () => {
   beforeEach(() => {
@@ -37,7 +38,7 @@ describe("pax page metadata auth gating", () => {
     });
     vi.mocked(loadPaxData).mockResolvedValue({
       info: { f3_name: "Alpha" },
-    } as never);
+    } as PaxData);
 
     const metadata = await generateMetadata({
       params: Promise.resolve({ paxId: "123" }),
@@ -45,5 +46,21 @@ describe("pax page metadata auth gating", () => {
 
     expect(loadPaxData).toHaveBeenCalledWith(123);
     expect(metadata.title).toBe("Alpha");
+  });
+
+  it("falls back to default title when pax data is missing", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue({
+      sub: "user-1",
+      email: "u@example.com",
+      iat: 1,
+    });
+    vi.mocked(loadPaxData).mockResolvedValue(null);
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ paxId: "123" }),
+    });
+
+    expect(loadPaxData).toHaveBeenCalledWith(123);
+    expect(metadata.title).toBe("PAX Stats");
   });
 });
