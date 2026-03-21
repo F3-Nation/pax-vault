@@ -1,0 +1,21 @@
+# Overrides just for Staging
+runConfig:
+  minInstances: 0 # Let staging scale to zero to save money
+  memoryMiB: 512
+
+env:
+  # Staging Clear Text
+  - variable: ENVIRONMENT
+    value: "staging"
+  - variable: NEXT_PUBLIC_SITE_URL
+    value: "https://staging.pax-vault.f3nation.com"
+  - variable: "OAUTH_REDIRECT_URI"
+    value: "https://staging.pax-vault.f3nation.com/api/auth/callback"
+
+  # Staging Secrets (Make sure these exist in Staging Secret Manager!)
+  - variable: OAUTH_CLIENT_ID
+    secret: OAUTH_CLIENT_ID-staging
+  - variable: OAUTH_CLIENT_SECRET
+    secret: OAUTH_CLIENT_SECRET-staging
+  - variable: SESSION_SECRET
+    secret: SESSION_SECRET-staging
