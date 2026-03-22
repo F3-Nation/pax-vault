@@ -42,10 +42,11 @@ type RegionFilterOpts = {
  */
 export async function loadRegionData(
   regionId: number,
+  userIdentifier?: string,
   filters?: RegionFilterOpts,
 ): Promise<RegionData | null> {
   try {
-    const regionData = await getPageData(regionId, filters);
+    const regionData = await getPageData(regionId, userIdentifier, filters);
 
     // Next.js can only pass plain JSON-serializable data from Server -> Client components.
     // BigQuery libraries sometimes return objects with custom / null prototypes (e.g., DATE wrappers).

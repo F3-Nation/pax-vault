@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const users = await searchUsersByName(q);
+    const users = await searchUsersByName(q, user.email);
     return NextResponse.json(users, { status: 200 });
   } catch (err) {
     console.error("Pax search failed:", err);

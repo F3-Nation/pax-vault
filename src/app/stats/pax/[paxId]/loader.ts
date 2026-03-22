@@ -42,10 +42,11 @@ type PaxFilterOpts = {
  */
 export async function loadPaxData(
   paxId: number,
+  userIdentifier?: string,
   filters?: PaxFilterOpts,
 ): Promise<PaxData | null> {
   try {
-    const paxData = await getPageData(paxId, filters);
+    const paxData = await getPageData(paxId, userIdentifier, filters);
 
     // Next.js can only pass plain JSON-serializable data from Server -> Client components.
     // BigQuery libraries sometimes return objects with custom / null prototypes (e.g., DATE wrappers).

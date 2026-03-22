@@ -24,7 +24,7 @@ export async function generateMetadata({
   if (!user) return { title: "F3 Region Stats" };
 
   const { regionId } = await params;
-  const data = await loadRegionData(Number(regionId));
+  const data = await loadRegionData(Number(regionId), user.email);
   return { title: `F3 ${data?.info?.region_name ?? "Region Stats"}` };
 }
 
@@ -62,6 +62,8 @@ export default async function RegionDetailPage({
   searchParams,
 }: PageProps) {
   await requireAuth();
+  const user = await getSessionUser();
+  if (!user) return { title: "F3 Region Stats" };
 
   const { regionId } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;
@@ -100,7 +102,9 @@ export default async function RegionDetailPage({
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
   const persist = searchParamsResolved?.persist;
-  const regionData = await loadRegionData(Number(regionId), { ...filters });
+  const regionData = await loadRegionData(Number(regionId), user.email, {
+    ...filters,
+  });
 
   const hasRegionData = !!regionData && Object.keys(regionData).length > 0;
 

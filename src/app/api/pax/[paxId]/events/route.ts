@@ -77,7 +77,7 @@ export async function GET(
       (searchParams.get("categoryMode") as "include" | "exclude") || undefined,
   };
 
-  const events = await getEvents(paxId, opts);
+  const events = await getEvents(paxId, user.email, opts);
 
   if (!events) {
     return NextResponse.json({ error: "Pax not found" }, { status: 404 });
