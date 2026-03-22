@@ -184,6 +184,7 @@ function buildRangeDates(range: string | undefined): {
  */
 export async function getEvents(
   aoId: number,
+  userIdentifier?: string,
   opts?: EventFilterOpts & {
     limit?: number;
   },
@@ -214,12 +215,17 @@ export async function getEvents(
     ${limitSql};
   `;
 
-  const results = await queryBigQuery<EventData>(query);
+  const results = await queryBigQuery<EventData>(
+    query,
+    userIdentifier,
+    `fetch events for AO ${aoId}`,
+  );
   return results || null;
 }
 
 export async function getPageData(
   aoId: number,
+  userIdentifier?: string,
   opts?: EventFilterOpts,
 ): Promise<{
   info: AOInfo | null;
@@ -386,7 +392,7 @@ export async function getPageData(
     summary: AOSummary;
     leaders: Leaders[];
     upcoming: EventUpcoming[];
-  }>(query);
+  }>(query, userIdentifier, `fetch page data for AO ${aoId}`);
 
   return {
     info: results?.[0]?.info || null,

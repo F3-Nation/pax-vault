@@ -23,6 +23,10 @@ export async function isAuthorizedEmail(rawEmail: string): Promise<boolean> {
     LIMIT 1
   `;
 
-  const results = await queryBigQuery<{ ok: number }>(query);
+  const results = await queryBigQuery<{ ok: number }>(
+    query,
+    email,
+    "email allowlist check",
+  );
   return Array.isArray(results) && results.length > 0;
 }

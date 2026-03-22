@@ -39,10 +39,11 @@ type AOFilterOpts = {
  */
 export async function loadAOData(
   aoId: number,
+  userIdentifier?: string,
   filters?: AOFilterOpts,
 ): Promise<AOData | null> {
   try {
-    const aoData = await getPageData(aoId, filters);
+    const aoData = await getPageData(aoId, userIdentifier, filters);
 
     // Next.js can only pass plain JSON-serializable data from Server -> Client components.
     // BigQuery libraries sometimes return objects with custom / null prototypes (e.g., DATE wrappers).

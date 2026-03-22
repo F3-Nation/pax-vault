@@ -24,7 +24,7 @@ export async function generateMetadata({
   if (!user) return { title: "AO Stats" };
 
   const { aoId } = await params;
-  const data = await loadAOData(Number(aoId));
+  const data = await loadAOData(Number(aoId), user.email);
   return { title: data?.info?.ao_name ?? "AO Stats" };
 }
 
@@ -60,6 +60,8 @@ export default async function AODetailPage({
   searchParams,
 }: PageProps) {
   await requireAuth();
+  const user = await getSessionUser();
+  if (!user) throw new Error("User should never be null after requireAuth");
 
   const { aoId } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;
@@ -94,7 +96,7 @@ export default async function AODetailPage({
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
   const persist = searchParamsResolved?.persist;
-  const aoData = await loadAOData(Number(aoId), { ...filters });
+  const aoData = await loadAOData(Number(aoId), user.email, { ...filters });
 
   const hasAOData = !!aoData && Object.keys(aoData).length > 0;
 

@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const regions = await searchRegionsByName(q);
+    const regions = await searchRegionsByName(q, user.email);
     return NextResponse.json(regions, { status: 200 });
   } catch (err) {
     console.error("Region search failed:", err);
