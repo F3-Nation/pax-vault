@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/pageHeader";
 import { RegionalPageWrapper } from "@/components/region/PageWrapper";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
-import { requireAuth } from "@/lib/auth/server";
+import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import type { Metadata } from "next";
 
 export async function generateMetadata({
@@ -20,6 +20,9 @@ export async function generateMetadata({
 }: {
   params: Promise<{ regionId: string }>;
 }): Promise<Metadata> {
+  const user = await getSessionUser();
+  if (!user) return { title: "F3 Region Stats" };
+
   const { regionId } = await params;
   const data = await loadRegionData(Number(regionId));
   return { title: `F3 ${data?.info?.region_name ?? "Region Stats"}` };

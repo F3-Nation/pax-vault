@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/pageHeader";
 import { AOPageWrapper } from "@/components/ao/PageWrapper";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
-import { requireAuth } from "@/lib/auth/server";
+import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import type { Metadata } from "next";
 
 export async function generateMetadata({
@@ -20,6 +20,9 @@ export async function generateMetadata({
 }: {
   params: Promise<{ aoId: string }>;
 }): Promise<Metadata> {
+  const user = await getSessionUser();
+  if (!user) return { title: "AO Stats" };
+
   const { aoId } = await params;
   const data = await loadAOData(Number(aoId));
   return { title: data?.info?.ao_name ?? "AO Stats" };
