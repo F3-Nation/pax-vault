@@ -44,7 +44,7 @@ describe("pax page metadata auth gating", () => {
       params: Promise.resolve({ paxId: "123" }),
     });
 
-    expect(loadPaxData).toHaveBeenCalledWith(123);
+    expect(loadPaxData).toHaveBeenCalledWith(123, "u@example.com");
     expect(metadata.title).toBe("Alpha");
   });
 
@@ -60,7 +60,7 @@ describe("pax page metadata auth gating", () => {
       params: Promise.resolve({ paxId: "123" }),
     });
 
-    expect(loadPaxData).toHaveBeenCalledWith(123);
+    expect(loadPaxData).toHaveBeenCalledWith(123, "u@example.com");
     expect(metadata.title).toBe("PAX Stats");
   });
 });

@@ -63,7 +63,7 @@ export default async function RegionDetailPage({
 }: PageProps) {
   await requireAuth();
   const user = await getSessionUser();
-  if (!user) return { title: "F3 Region Stats" };
+  if (!user) throw new Error("User should never be null after requireAuth");
 
   const { regionId } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;

@@ -65,7 +65,7 @@ export default async function PaxDetailPage({
 }: PageProps) {
   await requireAuth();
   const user = await getSessionUser();
-  if (!user) return { title: "PAX Stats" };
+  if (!user) throw new Error("User should never be null after requireAuth");
 
   const { paxId } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;

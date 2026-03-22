@@ -6,7 +6,6 @@ import {
   Leaders,
   EventUpcoming,
 } from "@/lib/types";
-import { getSessionUser } from "@/lib/auth/server";
 
 /**
  * Common filter options for AO event-based queries.
