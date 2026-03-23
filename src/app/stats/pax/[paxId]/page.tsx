@@ -24,7 +24,7 @@ export async function generateMetadata({
   if (!user) return { title: "PAX Stats" };
 
   const { paxId } = await params;
-  const data = await loadPaxData(Number(paxId));
+  const data = await loadPaxData(Number(paxId), user.email);
   return { title: data?.info?.f3_name ?? "PAX Stats" };
 }
 
@@ -64,6 +64,8 @@ export default async function PaxDetailPage({
   searchParams,
 }: PageProps) {
   await requireAuth();
+  const user = await getSessionUser();
+  if (!user) throw new Error("User should never be null after requireAuth");
 
   const { paxId } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;
@@ -109,7 +111,7 @@ export default async function PaxDetailPage({
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
   const persist = searchParamsResolved?.persist;
-  const paxData = await loadPaxData(Number(paxId), { ...filters });
+  const paxData = await loadPaxData(Number(paxId), user.email, { ...filters });
 
   const hasPaxData = !!paxData && Object.keys(paxData).length > 0;
 

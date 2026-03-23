@@ -73,7 +73,7 @@ export async function GET(
       (searchParams.get("categoryMode") as "include" | "exclude") || undefined,
   };
 
-  const events = await getEvents(aoId, opts);
+  const events = await getEvents(aoId, user?.email, opts);
 
   if (!events) {
     return NextResponse.json({ error: "AO not found" }, { status: 404 });

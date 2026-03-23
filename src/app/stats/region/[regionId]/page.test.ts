@@ -44,7 +44,7 @@ describe("region page metadata auth gating", () => {
       params: Promise.resolve({ regionId: "370" }),
     });
 
-    expect(loadRegionData).toHaveBeenCalledWith(370);
+    expect(loadRegionData).toHaveBeenCalledWith(370, "u@example.com");
     expect(metadata.title).toBe("F3 Nation");
   });
 });

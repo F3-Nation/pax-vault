@@ -5,6 +5,7 @@ const datasetId = process.env.BIGQUERY_DATASET!;
 const clientEmail = process.env.BIGQUERY_CLIENT_EMAIL!;
 const privateKey = process.env.BIGQUERY_PRIVATE_KEY?.replace(/\\n/g, "\n");
 const location = process.env.BIGQUERY_LOCATION || "us-central1";
+const env = process.env.ENVIRONMENT || "unknown";
 
 // Create a single BigQuery client per Lambda/Node process
 const bigquery = new BigQuery({
@@ -36,14 +37,43 @@ function normalizeRow(row: BigQueryRow): BigQueryRow {
 
   return plain;
 }
+const sanitize = (str: string) =>
+  str
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "_")
+    .substring(0, 63);
 
 export async function queryBigQuery<T = BigQueryRow>(
   sql: string,
+  userIdentifier?: string,
+  reason?: string,
 ): Promise<T[]> {
+  // Obfuscate and sanitize email for BigQuery label in one step
+  const userLabel = (userIdentifier ?? "unknown")
+    .replace(/^(.{1,3}).*(@.*)$/, (_, a, b) => a + "..." + b)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-");
+
+  console.log(
+    JSON.stringify({
+      env: env.toLowerCase(),
+      app: "pax-vault",
+      user: userLabel,
+      reason: reason || "unspecified",
+      message: "BigQuery fetch initiated",
+    }),
+  );
+
   const [rawRows] = await bigquery.query({
     query: sql,
     defaultDataset: { datasetId, projectId },
     location,
+    labels: {
+      env: sanitize(env),
+      app: "pax-vault",
+      user: sanitize(userLabel),
+      reason: sanitize(reason || "unspecified"),
+    },
   });
 
   const rows = (rawRows as BigQueryRow[]).map((row) =>

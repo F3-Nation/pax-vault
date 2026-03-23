@@ -44,7 +44,7 @@ describe("ao page metadata auth gating", () => {
       params: Promise.resolve({ aoId: "321" }),
     });
 
-    expect(loadAOData).toHaveBeenCalledWith(321);
+    expect(loadAOData).toHaveBeenCalledWith(321, "u@example.com");
     expect(metadata.title).toBe("The Pit");
   });
 });

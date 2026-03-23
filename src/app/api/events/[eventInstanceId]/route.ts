@@ -33,7 +33,7 @@ export async function GET(
   }
 
   // Fetch event details from the BigQuery data layer.
-  const event = await getEventDetails(eventId);
+  const event = await getEventDetails(eventId, user.email);
 
   // Valid id, but no matching event exists.
   if (!event) {

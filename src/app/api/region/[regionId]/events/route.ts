@@ -73,7 +73,7 @@ export async function GET(
       (searchParams.get("categoryMode") as "include" | "exclude") || undefined,
   };
 
-  const events = await getEvents(regionId, opts);
+  const events = await getEvents(regionId, user.email, opts);
 
   if (!events) {
     return NextResponse.json({ error: "Region not found" }, { status: 404 });
