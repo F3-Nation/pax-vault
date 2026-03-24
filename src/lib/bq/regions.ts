@@ -6,6 +6,7 @@ import {
   Leaders,
   EventUpcoming,
   RegionKotterList,
+  ChartData,
 } from "@/lib/types";
 
 /**
@@ -340,11 +341,47 @@ export async function getPageData(
   leaders: Leaders[] | null;
   upcoming: EventUpcoming[] | null;
   kotter: RegionKotterList[] | null;
+  charts:
+    | {
+        date: string;
+        pax_count: number;
+        fng_count: number;
+        q_count: number;
+        unique_pax_count: number;
+        unique_q_count: number;
+      }[]
+    | null;
 }> {
   // Build WHERE clause from common filters (region-scoped).
   const whereSql = buildEventsWhereSql(regionId, opts);
   // Build non-region filters for re-use against aliased pv_events scans.
   const eventsFilterAndSql = buildEventsAndSql(opts, "e");
+
+  // Determine chart granularity based on date range.
+  const rangeDates = buildRangeDates(opts?.range);
+  const effectiveStart = opts?.startDate ?? rangeDates.startDate;
+  const effectiveEnd =
+    opts?.endDate ??
+    rangeDates.endDate ??
+    new Date().toISOString().split("T")[0];
+  const daysDiff = effectiveStart
+    ? (new Date(effectiveEnd).getTime() - new Date(effectiveStart).getTime()) /
+      86_400_000
+    : Infinity;
+  const chartGranularity =
+    daysDiff > 365 ? "monthly" : daysDiff > 180 ? "weekly" : "daily";
+  const truncUnit =
+    chartGranularity === "monthly"
+      ? "MONTH"
+      : chartGranularity === "weekly"
+        ? "WEEK(MONDAY)"
+        : "DAY";
+  const spineInterval =
+    chartGranularity === "monthly"
+      ? "INTERVAL 1 MONTH"
+      : chartGranularity === "weekly"
+        ? "INTERVAL 1 WEEK"
+        : "INTERVAL 1 DAY";
 
   const query = `-- REGION PAGE LOAD
     WITH
@@ -547,7 +584,64 @@ export async function getPageData(
             ORDER BY days_since_last_event ASC, last_event_date ASC, f3_name ASC)
         FROM pv_kotter
         WHERE home_region_id = ${regionId}
-      ) AS kotter;
+      ) AS kotter,
+
+      -- Charting: ${chartGranularity} aggregation with gap-filling
+      (
+        WITH
+          period_event_agg AS (
+            SELECT
+              DATE_TRUNC(event_date, ${truncUnit}) AS period,
+              SUM(pax_count) AS pax_count,
+              SUM(fng_count) AS fng_count,
+              SUM((SELECT COUNTIF(a.q_ind = 1) FROM UNNEST(attendance) a)) AS q_count
+            FROM events
+            GROUP BY period
+          ),
+          period_attendance_agg AS (
+            SELECT
+              DATE_TRUNC(event_date, ${truncUnit}) AS period,
+              COUNT(DISTINCT user_id) AS unique_pax_count,
+              COUNT(DISTINCT IF(q_ind = 1, user_id, NULL)) AS unique_q_count
+            FROM attendance_flat
+            GROUP BY period
+          ),
+          period_agg AS (
+            SELECT
+              ea.period,
+              ea.pax_count,
+              ea.fng_count,
+              ea.q_count,
+              COALESCE(aa.unique_pax_count, 0) AS unique_pax_count,
+              COALESCE(aa.unique_q_count, 0) AS unique_q_count
+            FROM period_event_agg ea
+            LEFT JOIN period_attendance_agg aa USING (period)
+          ),
+          date_spine AS (
+            SELECT d AS date
+            FROM UNNEST(
+              GENERATE_DATE_ARRAY(
+                (SELECT MIN(period) FROM period_agg),
+                (SELECT MAX(period) FROM period_agg),
+                ${spineInterval}
+              )
+            ) AS d
+          )
+        SELECT
+          ARRAY_AGG(
+            STRUCT(
+              ds.date AS date,
+              COALESCE(pa.pax_count, 0) AS pax_count,
+              COALESCE(pa.fng_count, 0) AS fng_count,
+              COALESCE(pa.q_count, 0) AS q_count,
+              COALESCE(pa.unique_pax_count, 0) AS unique_pax_count,
+              COALESCE(pa.unique_q_count, 0) AS unique_q_count
+            )
+            ORDER BY ds.date ASC
+          )
+        FROM date_spine ds
+        LEFT JOIN period_agg pa ON pa.period = ds.date
+      ) AS charts;
     `;
 
   const results = await queryBigQuery<{
@@ -557,6 +651,7 @@ export async function getPageData(
     leaders: Leaders[];
     upcoming: EventUpcoming[];
     kotter: RegionKotterList[];
+    charts: ChartData[];
   }>(query, userIdentifier, `fetch region data for region ${regionId}`);
 
   return {
@@ -566,5 +661,6 @@ export async function getPageData(
     leaders: results?.[0]?.leaders || null,
     upcoming: results?.[0]?.upcoming || null,
     kotter: results?.[0]?.kotter || null,
+    charts: results?.[0]?.charts || null,
   };
 }

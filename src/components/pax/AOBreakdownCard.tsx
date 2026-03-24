@@ -52,7 +52,7 @@ export function AOBreakdownCard({
       </CardHeader>
       <Divider />
       <CardBody className="px-6">
-        <ScrollShadow className="h-[360px]">
+        <ScrollShadow className="h-[400px]">
           <div className="space-y-1 text-sm">
             {hasData ? (
               sortedData.map((ao, idx) => {
