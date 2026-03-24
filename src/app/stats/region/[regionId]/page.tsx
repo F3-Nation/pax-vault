@@ -13,20 +13,6 @@ import { RegionalPageWrapper } from "@/components/region/PageWrapper";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
-import type { Metadata } from "next";
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ regionId: string }>;
-}): Promise<Metadata> {
-  const user = await getSessionUser();
-  if (!user) return { title: "F3 Region Stats" };
-
-  const { regionId } = await params;
-  const data = await loadRegionData(Number(regionId), user.email);
-  return { title: `F3 ${data?.info?.region_name ?? "Region Stats"}` };
-}
 
 interface PageProps {
   params: Promise<{ regionId: string }>;
@@ -186,7 +172,7 @@ export default async function RegionDetailPage({
         {/* Page Header */}
         <PageHeader
           image={regionData.info?.logo_url ?? undefined}
-          name={regionData.info?.region_name}
+          name={`F3 ${regionData.info?.region_name}`}
           link={undefined}
           linkName={regionData.info?.sector_name ?? undefined}
         />
