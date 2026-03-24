@@ -191,6 +191,7 @@ export interface PAXInfo {
 export interface PaxSummary {
   event_count: number; // Total number of events held in the region
   q_count: number; // Total number of Qs (leaders) across all events
+  fng_date: string | null; // Optional override for the user's start date, can be null
   first_event_date: string | null; // Date of the first event in the region
   first_event_ao_id: number | null; // ID of the first event in the region
   first_event_ao_name: string | null; // Name of the AO (Area of Operation) for the first event

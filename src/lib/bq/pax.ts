@@ -326,6 +326,7 @@ export async function getPageData(
           home_region_name,
           avatar_url,
           status,
+          start_date_override,
           aos,
           regions,
           types,
@@ -482,6 +483,7 @@ export async function getPageData(
         SELECT
           m.event_count,
           m.q_count,
+          pi.start_date_override,
           eb.first_event_date,
           ebao.first_event_ao_id,
           ebao.first_event_ao_name,
@@ -515,6 +517,8 @@ export async function getPageData(
         LEFT JOIN unique_users u
           ON TRUE
         LEFT JOIN unique_q_users uq
+          ON TRUE
+        LEFT JOIN pax_info pi
           ON TRUE
       ),
 
@@ -575,6 +579,7 @@ export async function getPageData(
         SELECT AS STRUCT
           event_count,
           q_count,
+          IFNULL(CAST(start_date_override AS STRING), CAST(first_event_date AS STRING)) AS fng_date,
           CAST(first_event_date AS STRING) AS first_event_date,
           first_event_ao_id,
           first_event_ao_name,
