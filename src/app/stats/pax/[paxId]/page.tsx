@@ -13,20 +13,6 @@ import { PAXPageWrapper } from "@/components/pax/PageWrapper";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
-import type { Metadata } from "next";
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ paxId: string }>;
-}): Promise<Metadata> {
-  const user = await getSessionUser();
-  if (!user) return { title: "PAX Stats" };
-
-  const { paxId } = await params;
-  const data = await loadPaxData(Number(paxId), user.email);
-  return { title: data?.info?.f3_name ?? "PAX Stats" };
-}
 
 interface PageProps {
   params: Promise<{ paxId: string }>;

@@ -25,6 +25,10 @@ type PageHeaderProps = {
 export function PageHeader({ image, name, link, linkName }: PageHeaderProps) {
   const [avatarSrc, setAvatarSrc] = useState<string>(image ?? "");
 
+  useEffect(() => {
+    if (name) document.title = name + " | PAX Vault";
+  }, [name]);
+
   // Generate and keep a fallback logo in sync with the active color theme.
   useEffect(() => {
     if (!image) {
