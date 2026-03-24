@@ -222,6 +222,7 @@ function buildRangeDates(range: string | undefined): {
  */
 export async function getEvents(
   paxId: number,
+  userIdentifier?: string,
   opts?: EventFilterOpts & {
     limit?: number;
   },
@@ -256,11 +257,18 @@ export async function getEvents(
     ${limitSql};
   `;
 
-  const results = await queryBigQuery<EventData>(query);
+  const results = await queryBigQuery<EventData>(
+    query,
+    userIdentifier,
+    `fetch events for PAX ${paxId}`,
+  );
   return results || null;
 }
 
-export async function searchUsersByName(q: string): Promise<PAXInfo[]> {
+export async function searchUsersByName(
+  q: string,
+  userIdentifier?: string,
+): Promise<PAXInfo[]> {
   // Normalize and guard against overly-broad queries.
   const term = (q || "").trim();
   if (term.length < 2) return [];
@@ -284,12 +292,17 @@ export async function searchUsersByName(q: string): Promise<PAXInfo[]> {
     LIMIT 50
   `;
 
-  const results = await queryBigQuery<PAXInfo>(query);
+  const results = await queryBigQuery<PAXInfo>(
+    query,
+    userIdentifier,
+    `search users by name: ${q}`,
+  );
   return results ?? [];
 }
 
 export async function getPageData(
   paxId: number,
+  userIdentifier?: string,
   opts?: EventFilterOpts,
 ): Promise<{
   info: PAXInfo | null;
@@ -629,7 +642,7 @@ export async function getPageData(
     events: EventData[];
     summary: PaxSummary;
     ao_breakdown: PaxAOBreakdown[];
-  }>(query);
+  }>(query, userIdentifier, `fetch page data for PAX ${paxId}`);
 
   return {
     info: results?.[0]?.info || null,

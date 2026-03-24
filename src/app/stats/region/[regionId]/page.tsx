@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/pageHeader";
 import { RegionalPageWrapper } from "@/components/region/PageWrapper";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
-import { requireAuth } from "@/lib/auth/server";
+import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import type { Metadata } from "next";
 
 export async function generateMetadata({
@@ -20,8 +20,11 @@ export async function generateMetadata({
 }: {
   params: Promise<{ regionId: string }>;
 }): Promise<Metadata> {
+  const user = await getSessionUser();
+  if (!user) return { title: "F3 Region Stats" };
+
   const { regionId } = await params;
-  const data = await loadRegionData(Number(regionId));
+  const data = await loadRegionData(Number(regionId), user.email);
   return { title: `F3 ${data?.info?.region_name ?? "Region Stats"}` };
 }
 
@@ -59,6 +62,8 @@ export default async function RegionDetailPage({
   searchParams,
 }: PageProps) {
   await requireAuth();
+  const user = await getSessionUser();
+  if (!user) throw new Error("User should never be null after requireAuth");
 
   const { regionId } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;
@@ -97,7 +102,9 @@ export default async function RegionDetailPage({
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
   const persist = searchParamsResolved?.persist;
-  const regionData = await loadRegionData(Number(regionId), { ...filters });
+  const regionData = await loadRegionData(Number(regionId), user.email, {
+    ...filters,
+  });
 
   const hasRegionData = !!regionData && Object.keys(regionData).length > 0;
 

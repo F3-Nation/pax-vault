@@ -256,6 +256,7 @@ function buildRangeDates(range: string | undefined): {
  */
 export async function getEvents(
   regionId: number,
+  userIdentifier?: string,
   opts?: EventFilterOpts & {
     limit?: number;
   },
@@ -288,11 +289,18 @@ export async function getEvents(
     ${limitSql};
   `;
 
-  const results = await queryBigQuery<EventData>(query);
+  const results = await queryBigQuery<EventData>(
+    query,
+    userIdentifier,
+    `fetch events for region ${regionId}`,
+  );
   return results || null;
 }
 
-export async function searchRegionsByName(q: string): Promise<RegionInfo[]> {
+export async function searchRegionsByName(
+  q: string,
+  userIdentifier?: string,
+): Promise<RegionInfo[]> {
   // Normalize and guard against overly-broad queries.
   const term = (q || "").trim();
   if (term.length < 2) return [];
@@ -314,12 +322,17 @@ export async function searchRegionsByName(q: string): Promise<RegionInfo[]> {
     LIMIT 50
   `;
 
-  const results = await queryBigQuery<RegionInfo>(query);
+  const results = await queryBigQuery<RegionInfo>(
+    query,
+    userIdentifier,
+    `search regions by name: ${q}`,
+  );
   return results ?? [];
 }
 
 export async function getPageData(
   regionId: number,
+  userIdentifier?: string,
   opts?: EventFilterOpts,
 ): Promise<{
   info: RegionInfo | null;
@@ -639,7 +652,7 @@ export async function getPageData(
     upcoming: EventUpcoming[];
     kotter: RegionKotterList[];
     charts: ChartData[];
-  }>(query);
+  }>(query, userIdentifier, `fetch region data for region ${regionId}`);
 
   return {
     info: results?.[0]?.regionInfo || null,

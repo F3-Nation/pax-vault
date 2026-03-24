@@ -10,6 +10,7 @@ import { EventDetails } from "@/lib/types";
  */
 export async function getEventDetails(
   eventInstanceId: number,
+  userIdentifier?: string,
 ): Promise<EventDetails | null> {
   // Intentionally selecting rich + plain text variants; consumers decide which to render.
   const query = `-- EVENT DETAILS
@@ -26,7 +27,11 @@ export async function getEventDetails(
     LIMIT 1
   `;
 
-  const results = await queryBigQuery<EventDetails>(query);
+  const results = await queryBigQuery<EventDetails>(
+    query,
+    userIdentifier,
+    `fetch details for event instance ${eventInstanceId}`,
+  );
 
   // Parse JSON meta safely if present.
   if (results?.[0]?.meta) {
