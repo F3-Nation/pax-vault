@@ -136,9 +136,9 @@ export function RegionalPageWrapper({
         />
       </div>
       {/* Charting */}
-      {/* <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl hidden">
         <ChartCard charts={region_charts || []} />
-      </div> */}
+      </div>
       {/* Kotters + upcoming events */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
         <KotterCard
