@@ -1,13 +1,13 @@
 /****
- * User list search API route.
+ * AO list search API route.
  *
  * Responsibilities:
  * - Parse and validate the search query parameter.
  * - Guard against overly-broad searches.
- * - Delegate user search to the BigQuery layer.
+ * - Delegate AO search to the BigQuery layer.
  */
 import { NextResponse } from "next/server";
-import { searchUsersByName } from "@/lib/bq/pax";
+import { searchAOsByName } from "@/lib/bq/aos";
 import { getSessionUser } from "@/lib/auth/server";
 
 export async function GET(request: Request) {
@@ -25,16 +25,13 @@ export async function GET(request: Request) {
     return NextResponse.json([], { status: 200 });
   }
 
-  const rawRegionId = searchParams.get("region_id");
-  const regionId = rawRegionId !== null ? parseInt(rawRegionId, 10) : undefined;
-
   try {
-    const users = await searchUsersByName(q, user.email, regionId);
-    return NextResponse.json(users, { status: 200 });
+    const aos = await searchAOsByName(q, user.email);
+    return NextResponse.json(aos, { status: 200 });
   } catch (err) {
-    console.error("Pax search failed:", err);
+    console.error("AO search failed:", err);
     return NextResponse.json(
-      { error: "Pax search failed. Please try again." },
+      { error: "AO search failed. Please try again." },
       { status: 500 },
     );
   }
