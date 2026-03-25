@@ -371,8 +371,8 @@ export default function NavbarClient() {
           <NavbarItem>
             <Button
               variant="bordered"
-              color="primary"
-              size="sm"
+              color="default"
+              size="md"
               onPress={onSearchOpen}
             >
               SEARCH
@@ -388,7 +388,7 @@ export default function NavbarClient() {
           <NavbarItem>
             <Button
               variant="bordered"
-              color="primary"
+              color="default"
               size="sm"
               onPress={onSearchOpen}
             >

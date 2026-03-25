@@ -236,7 +236,7 @@ export default function SearchModal({
                 autoFocus
                 value={query}
                 onValueChange={setQuery}
-                placeholder="Search for PAX, regions, AOs..."
+                placeholder="Search for PAX, Regions, AOs..."
                 variant="bordered"
                 size="lg"
                 isClearable

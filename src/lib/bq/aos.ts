@@ -423,6 +423,7 @@ export async function searchAOsByName(
     FROM pv_aos
     WHERE ao_name IS NOT NULL
       AND LOWER(ao_name) LIKE '%${escapedTerm}%'
+      AND is_active = TRUE
     ORDER BY ao_name
     LIMIT 50
   `;
