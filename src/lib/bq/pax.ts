@@ -265,6 +265,26 @@ export async function getEvents(
   return results || null;
 }
 
+export async function getPaxIdByEmail(
+  email: string,
+  userIdentifier?: string,
+): Promise<number | null> {
+  const escaped = email.trim().toLowerCase().replace(/'/g, "''");
+  const query = `-- PAX ID BY EMAIL
+    SELECT id AS user_id
+    FROM \`f3data.public.users\`
+    WHERE email IS NOT NULL
+      AND LOWER(email) = '${escaped}'
+    LIMIT 1
+  `;
+  const results = await queryBigQuery<{ user_id: number }>(
+    query,
+    userIdentifier,
+    "lookup pax id by email",
+  );
+  return results?.[0]?.user_id ?? null;
+}
+
 export async function searchUsersByName(
   q: string,
   userIdentifier?: string,

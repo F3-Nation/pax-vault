@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { exchangeCodeForToken, getUserInfo } from "@/lib/auth/oauth";
 import { isAuthorizedEmail } from "@/lib/auth/allowlist";
+import { getPaxIdByEmail } from "@/lib/bq/pax";
 import { createSessionValue } from "@/lib/auth/session";
 import {
   SESSION_COOKIE_MAX_AGE,
@@ -108,6 +109,19 @@ export async function GET(request: NextRequest) {
     return errorRedirect(baseUrl, "allowlist_error", returnTo);
   }
 
+  // If no explicit returnTo was requested, redirect to the user's own PAX page
+  let effectiveReturnTo = returnTo;
+  if (returnTo === "/stats/nation") {
+    try {
+      const paxId = await getPaxIdByEmail(userInfo.email, userInfo.email);
+      if (paxId != null) {
+        effectiveReturnTo = `/stats/pax/${paxId}`;
+      }
+    } catch (err) {
+      console.error("PAX id lookup failed, falling back to default", err);
+    }
+  }
+
   // Create HMAC session cookie
   const sessionValue = createSessionValue({
     sub: userInfo.sub,
@@ -115,7 +129,9 @@ export async function GET(request: NextRequest) {
     name: userInfo.name,
   });
 
-  const response = NextResponse.redirect(new URL(returnTo, baseUrl).toString());
+  const response = NextResponse.redirect(
+    new URL(effectiveReturnTo, baseUrl).toString(),
+  );
 
   response.cookies.set(SESSION_COOKIE_NAME, sessionValue, {
     httpOnly: true,
