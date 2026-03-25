@@ -402,3 +402,35 @@ export async function getPageData(
     upcoming: results?.[0]?.upcoming || null,
   };
 }
+
+export async function searchAOsByName(
+  q: string,
+  userIdentifier?: string,
+): Promise<AOInfo[]> {
+  const term = (q || "").trim();
+  if (term.length < 2) return [];
+
+  const escapedTerm = term.replace(/'/g, "''").toLowerCase();
+
+  const query = `-- AO SEARCH
+    SELECT
+      ao_id,
+      ao_name,
+      region_id,
+      region_name,
+      logo_url,
+      is_active
+    FROM pv_aos
+    WHERE ao_name IS NOT NULL
+      AND LOWER(ao_name) LIKE '%${escapedTerm}%'
+    ORDER BY ao_name
+    LIMIT 50
+  `;
+
+  const results = await queryBigQuery<AOInfo>(
+    query,
+    userIdentifier,
+    `search AOs by name: ${q}`,
+  );
+  return results ?? [];
+}

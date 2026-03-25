@@ -268,6 +268,7 @@ export async function getEvents(
 export async function searchUsersByName(
   q: string,
   userIdentifier?: string,
+  regionId?: number,
 ): Promise<PAXInfo[]> {
   // Normalize and guard against overly-broad queries.
   const term = (q || "").trim();
@@ -275,6 +276,12 @@ export async function searchUsersByName(
 
   // Escape single quotes to prevent SQL injection via LIKE.
   const escapedTerm = term.replace(/'/g, "''").toLowerCase();
+
+  // Optional region filter: only include PAX whose home region matches.
+  const regionFilter =
+    Number.isFinite(regionId) && regionId !== undefined
+      ? `AND home_region_id = ${Number(regionId)}`
+      : "";
 
   // Simple prefix/contains search; ranking is handled client-side if needed.
   const query = `-- PAX SEARCH
@@ -288,6 +295,7 @@ export async function searchUsersByName(
     FROM pv_pax
     WHERE f3_name IS NOT NULL
       AND LOWER(f3_name) LIKE '%${escapedTerm}%'
+      ${regionFilter}
     ORDER BY f3_name
     LIMIT 50
   `;
