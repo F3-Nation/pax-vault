@@ -7,6 +7,7 @@ import {
   EventUpcoming,
   RegionKotterList,
   ChartData,
+  RegionAchievementPax,
 } from "@/lib/types";
 
 /**
@@ -352,6 +353,7 @@ export async function getPageData(
         unique_q_count: number;
       }[]
     | null;
+  achievements: RegionAchievementPax[] | null;
 }> {
   // Build WHERE clause from common filters (region-scoped).
   const whereSql = buildEventsWhereSql(regionId, opts);
@@ -453,6 +455,85 @@ export async function getPageData(
           ON li.user_id = a.user_id
         WHERE a.user_id IS NOT NULL${eventsFilterAndSql}
         GROUP BY a.user_id
+      ),
+
+      -- ── Achievements ────────────────────────────────────────────────────────
+      -- Milestone thresholds shared across posts and Qs
+      achievement_thresholds AS (
+        SELECT t FROM UNNEST([25, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]) AS t
+      ),
+
+      -- All home-region PAX from pv_pax (source of truth for membership + FNG override)
+      achievement_pax_base AS (
+        SELECT user_id, f3_name, avatar_url, start_date_override
+        FROM pv_pax
+        WHERE home_region_id = ${regionId}
+      ),
+
+      -- Single pass over pv_events for all four count dimensions + first_event_date
+      -- (all-time, no date filter so milestones reflect career totals)
+      achievement_event_counts AS (
+        SELECT
+          a.user_id,
+          COUNT(DISTINCT IF(e.region_org_id = ${regionId}, e.event_id, NULL)) AS region_posts,
+          COUNT(DISTINCT IF(e.region_org_id = ${regionId} AND a.q_ind = 1, e.event_id, NULL)) AS region_qs,
+          COUNT(DISTINCT e.event_id) AS all_posts,
+          COUNT(DISTINCT IF(a.q_ind = 1, e.event_id, NULL)) AS all_qs,
+          MIN(e.event_date) AS first_event_date
+        FROM pv_events e
+        JOIN UNNEST(e.attendance) a ON TRUE
+        JOIN achievement_pax_base pb ON pb.user_id = a.user_id
+        GROUP BY a.user_id
+      ),
+
+      -- Combine pv_pax fields with computed counts; resolve fng_date using override.
+      -- Mirrors pax.ts: IFNULL(CAST(start_date_override AS STRING), CAST(first_event_date AS STRING))
+      -- fng_date is kept as STRING so DATE(fng_date) can be used for anniversary math.
+      achievement_pax AS (
+        SELECT
+          pb.user_id,
+          pb.f3_name,
+          pb.avatar_url,
+          COALESCE(ec.region_posts, 0) AS region_posts,
+          COALESCE(ec.region_qs, 0) AS region_qs,
+          COALESCE(ec.all_posts, 0) AS all_posts,
+          COALESCE(ec.all_qs, 0) AS all_qs,
+          IFNULL(
+            CAST(pb.start_date_override AS STRING),
+            CAST(ec.first_event_date AS STRING)
+          ) AS fng_date
+        FROM achievement_pax_base pb
+        LEFT JOIN achievement_event_counts ec ON ec.user_id = pb.user_id
+      ),
+
+      -- Cross with thresholds to find next milestone per count dimension.
+      -- Also computes next_anniversary_date correctly:
+      --   use this year's month/day; if already past, use next year.
+      -- This avoids DATE_DIFF(YEAR) which counts calendar boundaries, not completed anniversaries.
+      achievement_pax_milestones AS (
+        SELECT
+          p.user_id, p.f3_name, p.avatar_url,
+          p.region_posts, p.region_qs, p.all_posts, p.all_qs, p.fng_date,
+          MIN(CASE WHEN t.t > p.region_posts THEN t.t END) AS next_region_post_milestone,
+          MIN(CASE WHEN t.t > p.all_posts    THEN t.t END) AS next_nation_post_milestone,
+          MIN(CASE WHEN t.t > p.region_qs   THEN t.t END) AS next_region_q_milestone,
+          MIN(CASE WHEN t.t > p.all_qs      THEN t.t END) AS next_nation_q_milestone,
+          -- Use DATE_ADD (not EXTRACT) so leap-year FNG dates (Feb 29) roll safely to Feb 28.
+          -- year_diff = calendar years between FNG year and today's year.
+          -- "this year's anniversary" = DATE_ADD(fng_date, INTERVAL year_diff YEAR).
+          -- If that date has already passed, add one more year.
+          IF(p.fng_date IS NOT NULL,
+            CASE
+              WHEN DATE_ADD(DATE(p.fng_date), INTERVAL (EXTRACT(YEAR FROM CURRENT_DATE()) - EXTRACT(YEAR FROM DATE(p.fng_date))) YEAR) >= CURRENT_DATE()
+              THEN DATE_ADD(DATE(p.fng_date), INTERVAL (EXTRACT(YEAR FROM CURRENT_DATE()) - EXTRACT(YEAR FROM DATE(p.fng_date))) YEAR)
+              ELSE DATE_ADD(DATE(p.fng_date), INTERVAL (EXTRACT(YEAR FROM CURRENT_DATE()) - EXTRACT(YEAR FROM DATE(p.fng_date)) + 1) YEAR)
+            END,
+            NULL
+          ) AS next_anniversary_date
+        FROM achievement_pax p
+        CROSS JOIN achievement_thresholds t
+        GROUP BY p.user_id, p.f3_name, p.avatar_url,
+                 p.region_posts, p.region_qs, p.all_posts, p.all_qs, p.fng_date
       )
     SELECT
       -- Region info as a STRUCT
@@ -587,6 +668,35 @@ export async function getPageData(
         WHERE home_region_id = ${regionId}
       ) AS kotter,
 
+      -- Achievements: PAX approaching post/Q milestones or with upcoming anniversaries
+      (
+        SELECT ARRAY_AGG(
+          STRUCT(
+            user_id, f3_name, avatar_url,
+            region_posts, region_qs, all_posts, all_qs,
+            next_region_post_milestone,
+            next_nation_post_milestone,
+            next_region_q_milestone,
+            next_nation_q_milestone,
+            fng_date,
+            CAST(next_anniversary_date AS STRING) AS next_anniversary_date,
+            IF(next_anniversary_date IS NOT NULL,
+              DATE_DIFF(next_anniversary_date, CURRENT_DATE(), DAY),
+              NULL
+            ) AS days_until_anniversary
+          )
+          ORDER BY f3_name ASC
+        )
+        FROM achievement_pax_milestones
+        WHERE
+          ((next_region_post_milestone IS NOT NULL AND next_region_post_milestone - region_posts <= 5)
+          OR (next_nation_post_milestone IS NOT NULL AND next_nation_post_milestone - all_posts <= 5)
+          OR (next_region_q_milestone IS NOT NULL AND next_region_q_milestone - region_qs <= 3)
+          OR (next_nation_q_milestone IS NOT NULL AND next_nation_q_milestone - all_qs <= 3)
+          OR (next_anniversary_date IS NOT NULL AND DATE_DIFF(next_anniversary_date, CURRENT_DATE(), DAY) BETWEEN 0 AND 14))
+          AND (region_posts > 10) -- Filter out very new PAX with no significant activity (adjust threshold as needed)
+      ) AS achievements,
+
       -- Charting: ${chartGranularity} aggregation with gap-filling
       (
         WITH
@@ -653,6 +763,7 @@ export async function getPageData(
     upcoming: EventUpcoming[];
     kotter: RegionKotterList[];
     charts: ChartData[];
+    achievements: RegionAchievementPax[];
   }>(query, userIdentifier, `fetch region data for region ${regionId}`);
 
   return {
@@ -663,5 +774,6 @@ export async function getPageData(
     upcoming: results?.[0]?.upcoming || null,
     kotter: results?.[0]?.kotter || null,
     charts: results?.[0]?.charts || null,
+    achievements: results?.[0]?.achievements || null,
   };
 }

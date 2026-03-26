@@ -113,6 +113,7 @@ export interface RegionData {
   upcoming: EventUpcoming[] | null; // List of upcoming events in the region
   kotter: RegionKotterList[] | null; // List of Kotter events in the region
   charts: ChartData[] | null; // List of chart data points for the region
+  achievements: RegionAchievementPax[] | null; // PAX approaching milestones or with upcoming anniversaries
 }
 
 /* USED ONLY FOR REGION INFO */
@@ -136,6 +137,24 @@ export interface RegionSummary {
   unique_qs: number; // Number of unique Qs (leaders) who have led events in the region
   fng_count: number; // Total number of first-time participants (FNGs) in the region
   pax_count_average: number; // Average number of participants (pax) per event in the region
+}
+
+/* USED FOR REGION UPCOMING ACHIEVEMENTS */
+export interface RegionAchievementPax {
+  user_id: number; // Unique identifier for the user
+  f3_name: string; // F3 name (nickname) of the user
+  avatar_url?: string; // Optional URL to the user's avatar image
+  region_posts: number; // Total posts (events attended) in this region
+  region_qs: number; // Total Qs led in this region
+  all_posts: number; // Total posts across all regions
+  all_qs: number; // Total Qs across all regions
+  next_region_post_milestone: number | null; // Next post milestone in this region
+  next_nation_post_milestone: number | null; // Next post milestone across all regions
+  next_region_q_milestone: number | null; // Next Q milestone in this region
+  next_nation_q_milestone: number | null; // Next Q milestone across all regions
+  fng_date: string | null; // FNG/first-event date (ISO string)
+  next_anniversary_date: string | null; // Date of next FNG anniversary (ISO string)
+  days_until_anniversary: number | null; // Days until the next FNG anniversary
 }
 
 /* USED ONLY FOR REGION KOTTER LISTING */

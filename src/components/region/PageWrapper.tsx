@@ -18,6 +18,7 @@ import {
   EventUpcoming,
   RegionInfo,
   ChartData,
+  RegionAchievementPax,
 } from "@/lib/types";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "../leaders";
@@ -27,6 +28,7 @@ import { EventsCard } from "../events";
 import { Filter } from "../pageFilter";
 import { useMemo } from "react";
 import { ChartCard } from "./ChartsCard";
+import { AchievementsCard } from "./AchievementsCard";
 
 type RegionalPageWrapperProps = {
   region_id: number;
@@ -37,6 +39,7 @@ type RegionalPageWrapperProps = {
   region_upcoming: EventUpcoming[] | null;
   region_events: EventData[];
   region_charts: ChartData[];
+  region_achievements: RegionAchievementPax[];
   searchParams: {
     categoryIds?: string | string[];
     categoryMode?: string;
@@ -100,6 +103,7 @@ export function RegionalPageWrapper({
   region_upcoming,
   region_events,
   region_charts,
+  region_achievements,
   searchParams,
 }: RegionalPageWrapperProps) {
   // Memoized query-string passed to events + filter components.
@@ -139,16 +143,23 @@ export function RegionalPageWrapper({
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl hidden">
         <ChartCard charts={region_charts || []} />
       </div>
-      {/* Kotters + upcoming events */}
+      {/* Upcoming achievements */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
-        <KotterCard
-          kotters={region_kotter || []}
+        <AchievementsCard
+          achievements={region_achievements || []}
           filters={eventsFiltersQuery}
         />
-        <UpcomingEventsCard
-          events={region_upcoming || []}
-          filters={eventsFiltersQuery}
-        />
+        {/* Kotters + upcoming events */}
+        <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
+          <KotterCard
+            kotters={region_kotter || []}
+            filters={eventsFiltersQuery}
+          />
+          <UpcomingEventsCard
+            events={region_upcoming || []}
+            filters={eventsFiltersQuery}
+          />
+        </div>
       </div>
       {/* Event list */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">

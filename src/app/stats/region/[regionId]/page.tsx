@@ -185,6 +185,7 @@ export default async function RegionDetailPage({
           region_upcoming={regionData.upcoming || []}
           region_events={regionData.events || []}
           region_charts={regionData.charts || []}
+          region_achievements={regionData.achievements || []}
           searchParams={{
             categoryIds,
             categoryMode,
