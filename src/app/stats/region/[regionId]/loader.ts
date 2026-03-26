@@ -16,6 +16,7 @@ import {
   Leaders,
   RegionKotterList,
   ChartData,
+  RegionAchievementPax,
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/regions";
 
@@ -72,6 +73,7 @@ export async function loadRegionData(
       upcoming: (mergedPlain.upcoming ?? []) as EventUpcoming[],
       kotter: (mergedPlain.kotter ?? []) as RegionKotterList[],
       charts: (mergedPlain.charts ?? []) as ChartData[],
+      achievements: (mergedPlain.achievements ?? []) as RegionAchievementPax[],
     };
 
     mergedSafe.events = (mergedSafe.events ?? []).map((e: EventData) => ({
