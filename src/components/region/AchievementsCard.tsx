@@ -50,6 +50,10 @@ interface AchievementRow {
   days_until: number | null;
   /** Lower = more urgent; used for sorting */
   urgency: number;
+  /** Scope-based post count — used for Q and anniversary rows */
+  total_posts?: number;
+  /** FNG date string — used for post rows to compute longevity */
+  fng_date?: string;
 }
 
 const POST_THRESHOLD = 5;
@@ -75,49 +79,63 @@ function computeAchievements(
         ? pax.next_nation_q_milestone
         : pax.next_region_q_milestone;
 
+    const recentlyActive =
+      pax.last_region_event_date !== null &&
+      (new Date().getTime() - new Date(pax.last_region_event_date).getTime()) /
+        (1000 * 60 * 60 * 24) <=
+        30;
+
     // Post milestone
     if (
       nextPostMilestone !== null &&
       nextPostMilestone - posts <= POST_THRESHOLD
     ) {
       const remaining = nextPostMilestone - posts;
-      rows.push({
-        user_id: pax.user_id,
-        f3_name: pax.f3_name,
-        avatar_url: pax.avatar_url,
-        type: "posts",
-        milestone: nextPostMilestone,
-        current: posts,
-        remaining,
-        anniversary_date: null,
-        days_until: null,
-        urgency: remaining,
-      });
+      if (remaining <= 1 || recentlyActive) {
+        rows.push({
+          user_id: pax.user_id,
+          f3_name: pax.f3_name,
+          avatar_url: pax.avatar_url,
+          type: "posts",
+          milestone: nextPostMilestone,
+          current: posts,
+          remaining,
+          anniversary_date: null,
+          days_until: null,
+          urgency: remaining,
+          fng_date: pax.fng_date ?? undefined,
+        });
+      }
     }
 
     // Q milestone
     if (nextQMilestone !== null && nextQMilestone - qs <= Q_THRESHOLD) {
       const remaining = nextQMilestone - qs;
-      rows.push({
-        user_id: pax.user_id,
-        f3_name: pax.f3_name,
-        avatar_url: pax.avatar_url,
-        type: "qs",
-        milestone: nextQMilestone,
-        current: qs,
-        remaining,
-        anniversary_date: null,
-        days_until: null,
-        urgency: remaining,
-      });
+      if (remaining <= 1 || recentlyActive) {
+        rows.push({
+          user_id: pax.user_id,
+          f3_name: pax.f3_name,
+          avatar_url: pax.avatar_url,
+          type: "qs",
+          milestone: nextQMilestone,
+          current: qs,
+          remaining,
+          anniversary_date: null,
+          days_until: null,
+          urgency: remaining,
+          total_posts: posts,
+        });
+      }
     }
 
     // Anniversary (scope-independent; shown exactly once per PAX regardless of scope)
+    // Require at least 25 region posts so very new PAX don't trigger anniversary notifications.
     if (
       pax.next_anniversary_date &&
       pax.days_until_anniversary !== null &&
       pax.days_until_anniversary >= 0 &&
-      pax.days_until_anniversary <= ANNIVERSARY_DAYS
+      pax.days_until_anniversary <= ANNIVERSARY_DAYS &&
+      pax.region_posts >= 25
     ) {
       rows.push({
         user_id: pax.user_id,
@@ -130,11 +148,39 @@ function computeAchievements(
         anniversary_date: pax.next_anniversary_date,
         days_until: pax.days_until_anniversary,
         urgency: pax.days_until_anniversary,
+        total_posts: posts,
       });
     }
   }
 
   return rows;
+}
+
+/** Format PAX longevity from fng_date to today as "X weeks", "X months", or "X years, Y months". */
+function formatLongevity(fngDate: string): string {
+  const fng = new Date(fngDate);
+  const now = new Date();
+  const totalDays = Math.floor(
+    (now.getTime() - fng.getTime()) / (1000 * 60 * 60 * 24),
+  );
+  const totalWeeks = Math.floor(totalDays / 7);
+
+  if (totalWeeks < 8) {
+    return `${totalWeeks} week${totalWeeks !== 1 ? "s" : ""}`;
+  }
+
+  const years = Math.floor(totalDays / 365.25);
+  const remainingMonths = Math.round(((totalDays % 365.25) / 365.25) * 12);
+
+  if (years < 1) {
+    const totalMonths = Math.round(totalDays / 30.44);
+    return `${totalMonths} month${totalMonths !== 1 ? "s" : ""}`;
+  }
+
+  if (remainingMonths === 0) {
+    return `${years} year${years !== 1 ? "s" : ""}`;
+  }
+  return `${years} year${years !== 1 ? "s" : ""}, ${remainingMonths} month${remainingMonths !== 1 ? "s" : ""}`;
 }
 
 /** Chip color and label by achievement type. */
@@ -170,16 +216,35 @@ function milestoneDescription(row: AchievementRow): string {
           : `in ${row.days_until} days`;
 
     const year = row.current > 0 ? row.current : undefined;
-    const yearLabel =
-      year !== undefined ? `${year}-year anniversary` : `FNG anniversary`;
+    const yearLabel = year !== undefined ? `${year}-years` : `FNG anniversary`;
 
-    return `${yearLabel} — ${dateStr} (${daysStr})`;
+    const eventsStr =
+      row.total_posts !== undefined ? ` · ${row.total_posts} events` : "";
+
+    return `${yearLabel} — ${dateStr} (${daysStr})${eventsStr}`;
   }
 
-  if (row.remaining === 1) {
-    return `1 ${row.type === "posts" ? "post" : "Q"} away from ${row.milestone}`;
+  if (row.type === "qs") {
+    const base =
+      row.remaining === 1
+        ? `1 Q away from ${row.milestone}`
+        : `${row.remaining} Qs away from ${row.milestone}`;
+    if (row.total_posts !== undefined && row.total_posts > 0) {
+      const qRate = Math.round((row.current / row.total_posts) * 100);
+      return `${base} · ${row.total_posts} posts, ${qRate}% Q rate`;
+    }
+    return base;
   }
-  return `${row.remaining} ${row.type === "posts" ? "posts" : "Qs"} away from ${row.milestone}`;
+
+  // posts
+  const base =
+    row.remaining === 1
+      ? `1 post away from ${row.milestone}`
+      : `${row.remaining} posts away from ${row.milestone}`;
+  if (row.fng_date) {
+    return `${base} · PAX for ${formatLongevity(row.fng_date)}`;
+  }
+  return base;
 }
 
 export function AchievementsCard({

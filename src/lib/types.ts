@@ -155,6 +155,7 @@ export interface RegionAchievementPax {
   fng_date: string | null; // FNG/first-event date (ISO string)
   next_anniversary_date: string | null; // Date of next FNG anniversary (ISO string)
   days_until_anniversary: number | null; // Days until the next FNG anniversary
+  last_region_event_date: string | null; // Date of most recent event attended in this region (ISO string)
 }
 
 /* USED ONLY FOR REGION KOTTER LISTING */
