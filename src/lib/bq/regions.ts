@@ -479,7 +479,8 @@ export async function getPageData(
           COUNT(DISTINCT IF(e.region_org_id = ${regionId} AND a.q_ind = 1, e.event_id, NULL)) AS region_qs,
           COUNT(DISTINCT e.event_id) AS all_posts,
           COUNT(DISTINCT IF(a.q_ind = 1, e.event_id, NULL)) AS all_qs,
-          MIN(e.event_date) AS first_event_date
+          MIN(e.event_date) AS first_event_date,
+          MAX(IF(e.region_org_id = ${regionId}, e.event_date, NULL)) AS last_region_event_date
         FROM pv_events e
         JOIN UNNEST(e.attendance) a ON TRUE
         JOIN achievement_pax_base pb ON pb.user_id = a.user_id
@@ -501,7 +502,8 @@ export async function getPageData(
           IFNULL(
             CAST(pb.start_date_override AS STRING),
             CAST(ec.first_event_date AS STRING)
-          ) AS fng_date
+          ) AS fng_date,
+          ec.last_region_event_date
         FROM achievement_pax_base pb
         LEFT JOIN achievement_event_counts ec ON ec.user_id = pb.user_id
       ),
@@ -513,7 +515,7 @@ export async function getPageData(
       achievement_pax_milestones AS (
         SELECT
           p.user_id, p.f3_name, p.avatar_url,
-          p.region_posts, p.region_qs, p.all_posts, p.all_qs, p.fng_date,
+          p.region_posts, p.region_qs, p.all_posts, p.all_qs, p.fng_date, p.last_region_event_date,
           MIN(CASE WHEN t.t > p.region_posts THEN t.t END) AS next_region_post_milestone,
           MIN(CASE WHEN t.t > p.all_posts    THEN t.t END) AS next_nation_post_milestone,
           MIN(CASE WHEN t.t > p.region_qs   THEN t.t END) AS next_region_q_milestone,
@@ -533,7 +535,7 @@ export async function getPageData(
         FROM achievement_pax p
         CROSS JOIN achievement_thresholds t
         GROUP BY p.user_id, p.f3_name, p.avatar_url,
-                 p.region_posts, p.region_qs, p.all_posts, p.all_qs, p.fng_date
+                 p.region_posts, p.region_qs, p.all_posts, p.all_qs, p.fng_date, p.last_region_event_date
       )
     SELECT
       -- Region info as a STRUCT
@@ -679,6 +681,7 @@ export async function getPageData(
             next_region_q_milestone,
             next_nation_q_milestone,
             fng_date,
+            CAST(last_region_event_date AS STRING) AS last_region_event_date,
             CAST(next_anniversary_date AS STRING) AS next_anniversary_date,
             IF(next_anniversary_date IS NOT NULL,
               DATE_DIFF(next_anniversary_date, CURRENT_DATE(), DAY),
@@ -689,12 +692,26 @@ export async function getPageData(
         )
         FROM achievement_pax_milestones
         WHERE
-          ((next_region_post_milestone IS NOT NULL AND next_region_post_milestone - region_posts <= 5)
-          OR (next_nation_post_milestone IS NOT NULL AND next_nation_post_milestone - all_posts <= 5)
-          OR (next_region_q_milestone IS NOT NULL AND next_region_q_milestone - region_qs <= 3)
-          OR (next_nation_q_milestone IS NOT NULL AND next_nation_q_milestone - all_qs <= 3)
-          OR (next_anniversary_date IS NOT NULL AND DATE_DIFF(next_anniversary_date, CURRENT_DATE(), DAY) BETWEEN 0 AND 14))
-          AND (region_posts > 10) -- Filter out very new PAX with no significant activity (adjust threshold as needed)
+          (
+            -- 1 away from any milestone — always show regardless of recent activity
+            (next_region_post_milestone IS NOT NULL AND next_region_post_milestone - region_posts = 1)
+            OR (next_nation_post_milestone IS NOT NULL AND next_nation_post_milestone - all_posts = 1)
+            OR (next_region_q_milestone IS NOT NULL AND next_region_q_milestone - region_qs = 1)
+            OR (next_nation_q_milestone IS NOT NULL AND next_nation_q_milestone - all_qs = 1)
+            -- Within milestone range and active in the last 30 days
+            OR (
+              last_region_event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+              AND (
+                (next_region_post_milestone IS NOT NULL AND next_region_post_milestone - region_posts <= 5)
+                OR (next_nation_post_milestone IS NOT NULL AND next_nation_post_milestone - all_posts <= 5)
+                OR (next_region_q_milestone IS NOT NULL AND next_region_q_milestone - region_qs <= 3)
+                OR (next_nation_q_milestone IS NOT NULL AND next_nation_q_milestone - all_qs <= 3)
+              )
+            )
+            -- Upcoming anniversary (no activity gate, but min 25 region posts)
+            OR (next_anniversary_date IS NOT NULL AND DATE_DIFF(next_anniversary_date, CURRENT_DATE(), DAY) BETWEEN 0 AND 14 AND region_posts >= 25)
+          )
+          AND (region_posts > 10) -- Filter out very new PAX with no significant activity
       ) AS achievements,
 
       -- Charting: ${chartGranularity} aggregation with gap-filling
