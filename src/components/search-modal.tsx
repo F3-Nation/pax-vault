@@ -18,6 +18,12 @@ type SearchResult =
   | { kind: "region"; item: RegionInfo }
   | { kind: "ao"; item: AOInfo };
 
+type SearchPayload = {
+  regions: RegionInfo[];
+  aos: AOInfo[];
+  pax: PAXInfo[];
+};
+
 function routeForResult(result: SearchResult): string {
   switch (result.kind) {
     case "pax":
@@ -29,7 +35,7 @@ function routeForResult(result: SearchResult): string {
   }
 }
 
-async function fetchJson<T>(url: string): Promise<T[]> {
+async function fetchSearchResults(url: string): Promise<SearchPayload> {
   const res = await fetch(url, {
     method: "GET",
     headers: { Accept: "application/json" },
@@ -40,9 +46,7 @@ async function fetchJson<T>(url: string): Promise<T[]> {
       (body as { error?: string }).error || `Request failed: ${res.status}`,
     );
   }
-  const data = await res.json();
-  if (!Array.isArray(data)) throw new Error("Unexpected response format");
-  return data as T[];
+  return res.json() as Promise<SearchPayload>;
 }
 
 const SECTION_IDS = {
@@ -61,12 +65,8 @@ export default function SearchModal({
   const [paxResults, setPaxResults] = useState<PAXInfo[]>([]);
   const [regionResults, setRegionResults] = useState<RegionInfo[]>([]);
   const [aoResults, setAoResults] = useState<AOInfo[]>([]);
-  const [paxLoading, setPaxLoading] = useState(false);
-  const [regionLoading, setRegionLoading] = useState(false);
-  const [aoLoading, setAoLoading] = useState(false);
-  const [paxError, setPaxError] = useState<string | null>(null);
-  const [regionError, setRegionError] = useState<string | null>(null);
-  const [aoError, setAoError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -81,7 +81,6 @@ export default function SearchModal({
     return items;
   }, [regionResults, aoResults, paxResults]);
 
-  const isLoading = paxLoading || regionLoading || aoLoading;
   const hasQuery = query.trim().length >= 2;
   const hasResults = allResults.length > 0;
 
@@ -111,33 +110,26 @@ export default function SearchModal({
       setPaxResults([]);
       setRegionResults([]);
       setAoResults([]);
-      setPaxError(null);
-      setRegionError(null);
-      setAoError(null);
+      setSearchError(null);
       setFocusedIndex(-1);
     }
   }, [isOpen]);
 
-  // Debounced search — fires 3 parallel fetches.
+  // Debounced unified search — single API call.
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
       setPaxResults([]);
       setRegionResults([]);
       setAoResults([]);
-      setPaxLoading(false);
-      setRegionLoading(false);
-      setAoLoading(false);
-      setPaxError(null);
-      setRegionError(null);
-      setAoError(null);
+      setLoading(false);
+      setSearchError(null);
       setFocusedIndex(-1);
       return;
     }
 
-    setPaxLoading(true);
-    setRegionLoading(true);
-    setAoLoading(true);
+    setLoading(true);
+    setSearchError(null);
     setFocusedIndex(-1);
 
     let cancelled = false;
@@ -145,42 +137,22 @@ export default function SearchModal({
     const inactiveParam = includeInactive ? "&includeInactive=true" : "";
 
     const t = setTimeout(() => {
-      fetchJson<PAXInfo>(`/api/pax/list?q=${encoded}`)
+      fetchSearchResults(`/api/search?q=${encoded}${inactiveParam}`)
         .then((data) => {
-          if (!cancelled) setPaxResults(data);
+          if (!cancelled) {
+            setRegionResults(data.regions);
+            setAoResults(data.aos);
+            setPaxResults(data.pax);
+          }
         })
         .catch((err: unknown) => {
           if (!cancelled)
-            setPaxError(err instanceof Error ? err.message : "Search failed");
-        })
-        .finally(() => {
-          if (!cancelled) setPaxLoading(false);
-        });
-
-      fetchJson<RegionInfo>(`/api/region/list?q=${encoded}${inactiveParam}`)
-        .then((data) => {
-          if (!cancelled) setRegionResults(data);
-        })
-        .catch((err: unknown) => {
-          if (!cancelled)
-            setRegionError(
+            setSearchError(
               err instanceof Error ? err.message : "Search failed",
             );
         })
         .finally(() => {
-          if (!cancelled) setRegionLoading(false);
-        });
-
-      fetchJson<AOInfo>(`/api/ao/list?q=${encoded}${inactiveParam}`)
-        .then((data) => {
-          if (!cancelled) setAoResults(data);
-        })
-        .catch((err: unknown) => {
-          if (!cancelled)
-            setAoError(err instanceof Error ? err.message : "Search failed");
-        })
-        .finally(() => {
-          if (!cancelled) setAoLoading(false);
+          if (!cancelled) setLoading(false);
         });
     }, 600);
 
@@ -245,7 +217,7 @@ export default function SearchModal({
                 isClearable
                 onClear={() => setQuery("")}
                 startContent={
-                  isLoading ? (
+                  loading ? (
                     <Spinner size="sm" color="primary" />
                   ) : (
                     <SearchIcon className="h-4 w-4 text-default-400" />
@@ -303,9 +275,15 @@ export default function SearchModal({
                 </div>
               )}
 
-              {hasQuery && !isLoading && !hasResults && (
+              {hasQuery && !loading && !hasResults && !searchError && (
                 <div className="px-4 py-8 text-center text-sm text-default-400">
                   No results found
+                </div>
+              )}
+
+              {hasQuery && searchError && (
+                <div className="px-4 py-4 text-center text-sm text-danger-500">
+                  {searchError}
                 </div>
               )}
 
@@ -313,9 +291,8 @@ export default function SearchModal({
               <ResultSection
                 id={SECTION_IDS.regions}
                 title="REGIONS"
-                loading={regionLoading}
-                error={regionError}
-                empty={hasQuery && !regionLoading && regionResults.length === 0}
+                loading={loading}
+                empty={hasQuery && !loading && regionResults.length === 0}
               >
                 {regionResults.map((region) => {
                   const idx = allResults.findIndex(
@@ -357,9 +334,8 @@ export default function SearchModal({
               <ResultSection
                 id={SECTION_IDS.aos}
                 title="AOs"
-                loading={aoLoading}
-                error={aoError}
-                empty={hasQuery && !aoLoading && aoResults.length === 0}
+                loading={loading}
+                empty={hasQuery && !loading && aoResults.length === 0}
                 showDivider
               >
                 {aoResults.map((ao) => {
@@ -403,9 +379,8 @@ export default function SearchModal({
               <ResultSection
                 id={SECTION_IDS.pax}
                 title="PAX"
-                loading={paxLoading}
-                error={paxError}
-                empty={hasQuery && !paxLoading && paxResults.length === 0}
+                loading={loading}
+                empty={hasQuery && !loading && paxResults.length === 0}
                 showDivider
               >
                 {paxResults.map((pax) => {
@@ -486,7 +461,6 @@ function ResultSection({
   id,
   title,
   loading,
-  error,
   empty,
   showDivider = false,
   children,
@@ -494,7 +468,6 @@ function ResultSection({
   id: string;
   title: string;
   loading: boolean;
-  error: string | null;
   empty: boolean;
   showDivider?: boolean;
   children: React.ReactNode;
@@ -503,8 +476,8 @@ function ResultSection({
     ? children.length > 0
     : !!children;
 
-  if (!loading && !error && empty) return null;
-  if (!loading && !error && !hasChildren) return null;
+  if (!loading && empty) return null;
+  if (!loading && !hasChildren) return null;
 
   return (
     <div
@@ -514,9 +487,6 @@ function ResultSection({
       <div className="px-4 py-1 text-xs font-semibold tracking-widest text-default-400 uppercase">
         {title}
       </div>
-      {error && (
-        <div className="px-4 py-2 text-xs text-danger-500">{error}</div>
-      )}
       {loading && !hasChildren && (
         <div className="flex items-center gap-2 px-4 py-3 text-xs text-default-400">
           <Spinner size="sm" /> Searching...
