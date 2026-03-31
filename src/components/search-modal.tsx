@@ -57,6 +57,7 @@ export default function SearchModal({
 }: SearchModalProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [includeInactive, setIncludeInactive] = useState(false);
   const [paxResults, setPaxResults] = useState<PAXInfo[]>([]);
   const [regionResults, setRegionResults] = useState<RegionInfo[]>([]);
   const [aoResults, setAoResults] = useState<AOInfo[]>([]);
@@ -106,6 +107,7 @@ export default function SearchModal({
   useEffect(() => {
     if (!isOpen) {
       setQuery("");
+      setIncludeInactive(false);
       setPaxResults([]);
       setRegionResults([]);
       setAoResults([]);
@@ -140,13 +142,14 @@ export default function SearchModal({
 
     let cancelled = false;
     const encoded = encodeURIComponent(q);
+    const inactiveParam = includeInactive ? "&includeInactive=true" : "";
 
     const t = setTimeout(() => {
       fetchJson<PAXInfo>(`/api/pax/list?q=${encoded}`)
         .then((data) => {
           if (!cancelled) setPaxResults(data);
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           if (!cancelled)
             setPaxError(err instanceof Error ? err.message : "Search failed");
         })
@@ -154,11 +157,11 @@ export default function SearchModal({
           if (!cancelled) setPaxLoading(false);
         });
 
-      fetchJson<RegionInfo>(`/api/region/list?q=${encoded}`)
+      fetchJson<RegionInfo>(`/api/region/list?q=${encoded}${inactiveParam}`)
         .then((data) => {
           if (!cancelled) setRegionResults(data);
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           if (!cancelled)
             setRegionError(
               err instanceof Error ? err.message : "Search failed",
@@ -168,11 +171,11 @@ export default function SearchModal({
           if (!cancelled) setRegionLoading(false);
         });
 
-      fetchJson<AOInfo>(`/api/ao/list?q=${encoded}`)
+      fetchJson<AOInfo>(`/api/ao/list?q=${encoded}${inactiveParam}`)
         .then((data) => {
           if (!cancelled) setAoResults(data);
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           if (!cancelled)
             setAoError(err instanceof Error ? err.message : "Search failed");
         })
@@ -185,7 +188,7 @@ export default function SearchModal({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query]);
+  }, [query, includeInactive]);
 
   const navigate = useCallback(
     (result: SearchResult) => {
@@ -251,6 +254,23 @@ export default function SearchModal({
               />
             </div>
 
+            {/* Include inactive checkbox */}
+            <div className="flex items-center gap-2 px-4 pb-2">
+              <input
+                id="include-inactive"
+                type="checkbox"
+                checked={includeInactive}
+                onChange={(e) => setIncludeInactive(e.target.checked)}
+                className="h-3.5 w-3.5 cursor-pointer accent-primary"
+              />
+              <label
+                htmlFor="include-inactive"
+                className="text-xs text-default-400 cursor-pointer select-none"
+              >
+                Include inactive search results
+              </label>
+            </div>
+
             {/* Jump-to-section bar — only when multiple sections have results */}
             {jumpLinks.length > 1 && (
               <div className="flex items-center gap-1 px-4 pb-2 text-xs text-default-400">
@@ -314,12 +334,19 @@ export default function SearchModal({
                         alt={region.region_name}
                         size="sm"
                         src={region.logo_url ?? undefined}
-                        className="flex-shrink-0"
+                        className={`flex-shrink-0 ${!region.is_active ? "opacity-50" : ""}`}
                       />
                       <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-medium truncate">
-                          {region.region_name}
-                        </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`text-sm font-medium truncate ${!region.is_active ? "text-default-400" : ""}`}>
+                            {region.region_name}
+                          </span>
+                          {!region.is_active && (
+                            <span className="flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-default-100 text-default-400 uppercase tracking-wide">
+                              Inactive
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </ResultItem>
                   );
@@ -350,12 +377,19 @@ export default function SearchModal({
                         alt={ao.ao_name}
                         size="sm"
                         src={ao.logo_url ?? undefined}
-                        className="flex-shrink-0"
+                        className={`flex-shrink-0 ${!ao.is_active ? "opacity-50" : ""}`}
                       />
                       <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-medium truncate">
-                          {ao.ao_name}
-                        </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`text-sm font-medium truncate ${!ao.is_active ? "text-default-400" : ""}`}>
+                            {ao.ao_name}
+                          </span>
+                          {!ao.is_active && (
+                            <span className="flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-default-100 text-default-400 uppercase tracking-wide">
+                              Inactive
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xs text-default-400 truncate">
                           {ao.region_name}
                         </span>

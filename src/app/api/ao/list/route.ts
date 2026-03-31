@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const rawQuery = searchParams.get("q") || "";
   const q = rawQuery.trim();
+  const includeInactive = searchParams.get("includeInactive") === "true";
 
   // Guardrail: do not allow overly-broad or empty searches.
   if (q.length < 2) {
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const aos = await searchAOsByName(q, user.email);
+    const aos = await searchAOsByName(q, user.email, includeInactive);
     return NextResponse.json(aos, { status: 200 });
   } catch (err) {
     console.error("AO search failed:", err);

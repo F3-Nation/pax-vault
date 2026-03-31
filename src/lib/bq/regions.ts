@@ -301,6 +301,7 @@ export async function getEvents(
 export async function searchRegionsByName(
   q: string,
   userIdentifier?: string,
+  includeInactive = false,
 ): Promise<RegionInfo[]> {
   // Normalize and guard against overly-broad queries.
   const term = (q || "").trim();
@@ -319,7 +320,7 @@ export async function searchRegionsByName(
     FROM pv_regions
     WHERE region_name IS NOT NULL
       AND LOWER(region_name) LIKE '%${escapedTerm}%'
-      AND is_active = TRUE
+      ${includeInactive ? "" : "AND is_active = TRUE"}
     ORDER BY region_name
     LIMIT 50
   `;
