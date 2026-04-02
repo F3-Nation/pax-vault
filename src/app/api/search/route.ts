@@ -14,7 +14,10 @@ export async function GET(request: Request) {
   const includeInactive = searchParams.get("includeInactive") === "true";
 
   if (q.length < 2) {
-    return NextResponse.json({ regions: [], aos: [], pax: [] }, { status: 200 });
+    return NextResponse.json(
+      { regions: [], aos: [], pax: [] },
+      { status: 200 },
+    );
   }
 
   try {

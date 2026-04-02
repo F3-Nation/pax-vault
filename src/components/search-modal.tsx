@@ -315,7 +315,9 @@ export default function SearchModal({
                       />
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className={`text-sm font-medium truncate ${!region.is_active ? "text-default-400" : ""}`}>
+                          <span
+                            className={`text-sm font-medium truncate ${!region.is_active ? "text-default-400" : ""}`}
+                          >
                             {region.region_name}
                           </span>
                           {!region.is_active && (
@@ -357,7 +359,9 @@ export default function SearchModal({
                       />
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className={`text-sm font-medium truncate ${!ao.is_active ? "text-default-400" : ""}`}>
+                          <span
+                            className={`text-sm font-medium truncate ${!ao.is_active ? "text-default-400" : ""}`}
+                          >
                             {ao.ao_name}
                           </span>
                           {!ao.is_active && (
