@@ -1,13 +1,5 @@
-/****
- * AO list search API route.
- *
- * Responsibilities:
- * - Parse and validate the search query parameter.
- * - Guard against overly-broad searches.
- * - Delegate AO search to the BigQuery layer.
- */
 import { NextResponse } from "next/server";
-import { searchAOsByName } from "@/lib/bq/aos";
+import { searchAll } from "@/lib/bq/search";
 import { getSessionUser } from "@/lib/auth/server";
 
 export async function GET(request: Request) {
@@ -21,18 +13,20 @@ export async function GET(request: Request) {
   const q = rawQuery.trim();
   const includeInactive = searchParams.get("includeInactive") === "true";
 
-  // Guardrail: do not allow overly-broad or empty searches.
   if (q.length < 2) {
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json(
+      { regions: [], aos: [], pax: [] },
+      { status: 200 },
+    );
   }
 
   try {
-    const aos = await searchAOsByName(q, user.email, includeInactive);
-    return NextResponse.json(aos, { status: 200 });
+    const results = await searchAll(q, user.email, includeInactive);
+    return NextResponse.json(results, { status: 200 });
   } catch (err) {
-    console.error("AO search failed:", err);
+    console.error("Search failed:", err);
     return NextResponse.json(
-      { error: "AO search failed. Please try again." },
+      { error: "Search failed. Please try again." },
       { status: 500 },
     );
   }
