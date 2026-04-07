@@ -173,8 +173,12 @@ export default async function RegionDetailPage({
         <PageHeader
           image={regionData.info?.logo_url ?? undefined}
           name={`F3 ${regionData.info?.region_name}`}
-          link={undefined}
-          linkName={regionData.info?.sector_name ?? undefined}
+          link={
+            regionData.info?.area_id
+              ? `/stats/area/${regionData.info.area_id}`
+              : undefined
+          }
+          linkName={regionData.info?.area_name ?? undefined}
         />
         <RegionalPageWrapper
           region_id={Number(regionId)}

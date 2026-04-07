@@ -542,7 +542,7 @@ export async function getPageData(
       -- Region info as a STRUCT
       (
         SELECT AS STRUCT
-          region_id, region_name, sector_name, logo_url, is_active, aos, types, tags
+          region_id, region_name, area_id, area_name, logo_url, is_active, aos, types, tags
         FROM pv_regions
         WHERE region_id = ${regionId}
         LIMIT 1

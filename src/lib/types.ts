@@ -120,7 +120,8 @@ export interface RegionData {
 export interface RegionInfo {
   region_id: number; // Unique identifier for the region
   region_name: string; // Name of the region
-  sector_name: string; // Name of the sector
+  area_id: number; // Unique identifier for the area, can be null
+  area_name: string; // Name of the area
   logo_url: string | null; // URL to the region's logo, can be null
   is_active: boolean; // Indicates if the region is active
   aos: { ao_org_id: number; ao_name: string }[];
