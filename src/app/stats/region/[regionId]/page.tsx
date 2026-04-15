@@ -10,6 +10,7 @@
 import { loadRegionData } from "./loader";
 import { PageHeader } from "@/components/pageHeader";
 import { RegionalPageWrapper } from "@/components/region/PageWrapper";
+import { Breadcrumb } from "@/components/breadcrumb";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
@@ -169,6 +170,23 @@ export default async function RegionDetailPage({
   return (
     <main className="flex min-h-screen flex-col items-center justify-start pt-10 pb-10">
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
+        {/* Breadcrumb */}
+        <Breadcrumb
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Nation", href: "/stats/nation" },
+            ...(regionData.info?.area_id && regionData.info?.area_name
+              ? [
+                  {
+                    label: regionData.info.area_name,
+                    href: `/stats/area/${regionData.info.area_id}`,
+                  },
+                ]
+              : []),
+            { label: regionData.info?.region_name ?? "Region" },
+          ]}
+        />
+
         {/* Page Header */}
         <PageHeader
           image={regionData.info?.logo_url ?? undefined}

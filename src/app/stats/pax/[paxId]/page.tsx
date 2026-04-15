@@ -10,6 +10,7 @@
 import { loadPaxData } from "./loader";
 import { PageHeader } from "@/components/pageHeader";
 import { PAXPageWrapper } from "@/components/pax/PageWrapper";
+import { Breadcrumb } from "@/components/breadcrumb";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
@@ -176,6 +177,22 @@ export default async function PaxDetailPage({
   return (
     <main className="flex min-h-screen flex-col items-center justify-start pt-10 pb-10">
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
+        {/* Breadcrumb */}
+        <Breadcrumb
+          items={[
+            { label: "Home", href: "/" },
+            ...(paxData.info?.home_region_id && paxData.info?.home_region_name
+              ? [
+                  {
+                    label: paxData.info.home_region_name,
+                    href: `/stats/region/${paxData.info.home_region_id}`,
+                  },
+                ]
+              : []),
+            { label: paxData.info?.f3_name ?? "PAX" },
+          ]}
+        />
+
         {/* Page Header */}
         <PageHeader
           image={paxData.info?.avatar_url ?? undefined}

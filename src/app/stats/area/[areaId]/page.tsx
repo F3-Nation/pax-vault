@@ -14,6 +14,7 @@ import { RegionBreakdownCard } from "@/components/area/RegionBreakdownCard";
 import { AreaChartsCard } from "@/components/area/ChartsCard";
 import { Card, CardHeader, CardBody } from "@heroui/card";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
+import { Breadcrumb } from "@/components/breadcrumb";
 
 interface PageProps {
   params: Promise<{ areaId: string }>;
@@ -56,6 +57,23 @@ export default async function AreaDetailPage({ params }: PageProps) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-start pt-10 pb-10">
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
+        {/* Breadcrumb */}
+        <Breadcrumb
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Nation", href: "/stats/nation" },
+            ...(areaData.info.sector_id && areaData.info.sector_name
+              ? [
+                  {
+                    label: areaData.info.sector_name,
+                    href: `/stats/sector/${areaData.info.sector_id}`,
+                  },
+                ]
+              : []),
+            { label: areaData.info.area_name },
+          ]}
+        />
+
         {/* Page Header */}
         <PageHeader
           image={areaData.info.logo_url ?? undefined}
