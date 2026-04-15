@@ -10,6 +10,7 @@
 import { loadAOData } from "./loader";
 import { PageHeader } from "@/components/pageHeader";
 import { AOPageWrapper } from "@/components/ao/PageWrapper";
+import { Breadcrumb } from "@/components/breadcrumb";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
@@ -161,6 +162,23 @@ export default async function AODetailPage({
   return (
     <main className="flex min-h-screen flex-col items-center justify-start pt-10 pb-10">
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
+        {/* Breadcrumb */}
+        <Breadcrumb
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Nation", href: "/stats/nation" },
+            ...(aoData.info?.region_id && aoData.info?.region_name
+              ? [
+                  {
+                    label: aoData.info.region_name,
+                    href: `/stats/region/${aoData.info.region_id}`,
+                  },
+                ]
+              : []),
+            { label: aoData.info?.ao_name ?? "AO" },
+          ]}
+        />
+
         {/* Page Header */}
         <PageHeader
           image={aoData.info?.logo_url ?? undefined}

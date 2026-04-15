@@ -4,11 +4,15 @@ import { Card, CardHeader, CardBody } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { Progress } from "@heroui/progress";
 import { Skeleton } from "@heroui/skeleton";
+import { Breadcrumb } from "@/components/breadcrumb";
 
 export default function PlaceholderPage() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-default-50 px-4">
       <div className="w-full max-w-4xl space-y-6">
+        <Breadcrumb
+          items={[{ label: "Home", href: "/" }, { label: "Nation" }]}
+        />
         <Card className="shadow-lg">
           <CardHeader>
             <div className="w-full flex flex-col gap-3">

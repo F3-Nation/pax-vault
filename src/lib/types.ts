@@ -243,6 +243,100 @@ export interface PaxAOBreakdown {
   total_q_count: number; // Number of Qs (leaders) held by the AO
 }
 
+/* =========================================================== */
+/*               AREA-SPECIFIC TYPES BELOW                     */
+/* =========================================================== */
+
+// AREA DATA MODEL
+export interface AreaData {
+  info: AreaInfo | null;
+  summary: AreaSummary | null;
+  regionBreakdown: AreaRegionBreakdown[] | null;
+  charts: ChartData[] | null;
+}
+
+/* USED ONLY FOR AREA INFO */
+export interface AreaInfo {
+  area_id: number;
+  area_name: string;
+  sector_id: number | null;
+  sector_name: string | null;
+  logo_url: string | null;
+  is_active: boolean;
+  regions: { region_id: number; region_name: string; is_active: boolean }[];
+}
+
+/* USED ONLY FOR AREA SUMMARY STATS */
+export interface AreaSummary {
+  event_count: number;
+  region_count: number;
+  ao_count: number;
+  active_pax: number;
+  unique_pax: number;
+  unique_qs: number;
+  fng_count: number;
+  pax_count_average: number;
+}
+
+/* USED FOR AREA REGION BREAKDOWN */
+export interface AreaRegionBreakdown {
+  region_id: number;
+  region_name: string;
+  event_count: number;
+  ao_count: number;
+  active_pax: number;
+  unique_pax: number;
+  unique_qs: number;
+  fng_count: number;
+  pax_count_average: number;
+}
+
+/* =========================================================== */
+/*              SECTOR-SPECIFIC TYPES BELOW                    */
+/* =========================================================== */
+
+// SECTOR DATA MODEL
+export interface SectorData {
+  info: SectorInfo | null;
+  summary: SectorSummary | null;
+  areaBreakdown: SectorAreaBreakdown[] | null;
+  charts: ChartData[] | null;
+}
+
+/* USED ONLY FOR SECTOR INFO */
+export interface SectorInfo {
+  sector_id: number;
+  sector_name: string;
+  logo_url: string | null;
+  is_active: boolean;
+  areas: { area_id: number; area_name: string; is_active: boolean }[];
+}
+
+/* USED ONLY FOR SECTOR SUMMARY STATS */
+export interface SectorSummary {
+  event_count: number;
+  area_count: number;
+  ao_count: number;
+  active_pax: number;
+  unique_pax: number;
+  unique_qs: number;
+  fng_count: number;
+  pax_count_average: number;
+}
+
+/* USED FOR SECTOR AREA BREAKDOWN */
+export interface SectorAreaBreakdown {
+  area_id: number;
+  area_name: string;
+  event_count: number;
+  ao_count: number;
+  active_pax: number;
+  unique_pax: number;
+  unique_qs: number;
+  fng_count: number;
+  pax_count_average: number;
+}
+
 /* ========================================================== */
 /*                  AO-SPECIFIC TYPES BELOW                    */
 /* =========================================================== */
