@@ -68,6 +68,12 @@ export default async function AreaDetailPage({ params }: PageProps) {
           linkName={areaData.info.sector_name ?? undefined}
         />
 
+        {/* WIP disclaimer */}
+        <div className="w-full rounded-lg border border-warning-300 bg-warning-50 dark:bg-warning-900/20 px-4 py-3 text-sm text-warning-800 dark:text-warning-300">
+          <strong>Work in progress:</strong> This page is not the final version.
+          Data and layout are subject to change.
+        </div>
+
         {/* Summary */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
           <AreaSummaryCard summary={areaData.summary!} />
