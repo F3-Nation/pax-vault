@@ -10,15 +10,15 @@
  * - Data is assumed to be validated upstream.
  */
 
-import { useState } from "react";
-import { Tabs, Tab } from "@heroui/tabs";
+import { Leaders } from "@/lib/types";
+import { formatNumber } from "@/lib/utils";
 import { Avatar } from "@heroui/avatar";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { ScrollShadow } from "@heroui/scroll-shadow";
 import { Link } from "@heroui/link";
-import { Leaders } from "@/lib/types";
-import { formatNumber } from "@/lib/utils";
+import { ScrollShadow } from "@heroui/scroll-shadow";
+import { Tab, Tabs } from "@heroui/tabs";
+import { useState } from "react";
 
 type LeadersCardProps = {
   leaders: Leaders[];
@@ -33,14 +33,15 @@ type LeadersCardProps = {
 function renderLeaderValue(
   leader: Leaders,
   scope: "region" | "nation",
-  mode: "posts" | "qs",
+  mode: "posts" | "qs" | "q-rate",
 ) {
   const posts = scope === "nation" ? leader.all_posts : leader.posts;
   const qs = scope === "nation" ? leader.all_qs : leader.qs;
+  const qRate = posts ? Math.round(((qs ?? 0) / posts) * 100) : 0;
 
-  return mode === "posts"
-    ? `${formatNumber(posts ?? 0)} Posts`
-    : `${formatNumber(qs ?? 0)} Qs`;
+  if (mode === "posts") return `${formatNumber(posts ?? 0)} Posts`;
+  if (mode === "qs") return `${formatNumber(qs ?? 0)} Qs`;
+  return `${formatNumber(qRate)}% Q Rate`;
 }
 
 export function LeadersCard({
@@ -50,7 +51,7 @@ export function LeadersCard({
   filters,
 }: LeadersCardProps) {
   // Current leaderboard mode (posts vs Qs)
-  const [mode, setMode] = useState<"posts" | "qs">("posts");
+  const [mode, setMode] = useState<"posts" | "qs" | "q-rate">("posts");
   // Scope: Region (this region only) vs Nation (all regions)
   const [scope, setScope] = useState<"region" | "nation">("region");
 
@@ -60,14 +61,17 @@ export function LeadersCard({
     const bPosts = scope === "nation" ? b.all_posts : b.posts;
     const aQs = scope === "nation" ? a.all_qs : a.qs;
     const bQs = scope === "nation" ? b.all_qs : b.qs;
+    const aQRate = aPosts ? ((aQs ?? 0) / aPosts) * 100 : 0;
+    const bQRate = bPosts ? ((bQs ?? 0) / bPosts) * 100 : 0;
 
     if (mode === "posts") return (bPosts ?? 0) - (aPosts ?? 0);
-    return (bQs ?? 0) - (aQs ?? 0);
+    if (mode === "qs") return (bQs ?? 0) - (aQs ?? 0);
+    return bQRate - aQRate;
   });
 
-  // Hide zero-Q leaders when viewing Qs
+  // Hide zero-Q leaders when viewing Q-based metrics
   const visibleLeaders =
-    mode === "qs"
+    mode === "qs" || mode === "q-rate"
       ? sortedLeaders.filter(
           (leader) =>
             (scope === "nation" ? (leader.all_qs ?? 0) : leader.qs) > 0,
@@ -100,7 +104,7 @@ export function LeadersCard({
             <Tabs
               aria-label={`Select Leaders View`}
               selectedKey={mode}
-              onSelectionChange={(key) => setMode(key as "posts" | "qs")}
+              onSelectionChange={(key) => setMode(key as "posts" | "qs" | "q-rate")}
               size="sm"
               radius="sm"
               variant="bordered"
@@ -109,6 +113,7 @@ export function LeadersCard({
             >
               <Tab key="posts" title="Posts" />
               <Tab key="qs" title="Qs" />
+              <Tab key="q-rate" title="Q Rate" />
             </Tabs>
           </div>
         </div>
