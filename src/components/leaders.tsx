@@ -104,7 +104,9 @@ export function LeadersCard({
             <Tabs
               aria-label={`Select Leaders View`}
               selectedKey={mode}
-              onSelectionChange={(key) => setMode(key as "posts" | "qs" | "q-rate")}
+              onSelectionChange={(key) =>
+                setMode(key as "posts" | "qs" | "q-rate")
+              }
               size="sm"
               radius="sm"
               variant="bordered"
