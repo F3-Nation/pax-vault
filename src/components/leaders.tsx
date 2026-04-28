@@ -33,15 +33,19 @@ type LeadersCardProps = {
 function renderLeaderValue(
   leader: Leaders,
   scope: "region" | "nation",
-  mode: "posts" | "qs" | "q-rate",
+  mode: "posts" | "qs",
 ) {
   const posts = scope === "nation" ? leader.all_posts : leader.posts;
   const qs = scope === "nation" ? leader.all_qs : leader.qs;
   const qRate = posts ? Math.round(((qs ?? 0) / posts) * 100) : 0;
 
   if (mode === "posts") return `${formatNumber(posts ?? 0)} Posts`;
-  if (mode === "qs") return `${formatNumber(qs ?? 0)} Qs`;
-  return `${formatNumber(qRate)}% Q Rate`;
+  return (
+    <div className="flex flex-col items-end">
+      <span>{formatNumber(qs ?? 0)} Qs</span>
+      <span className="text-xs text-default-400">{qRate}% Q Rate</span>
+    </div>
+  );
 }
 
 export function LeadersCard({
@@ -51,7 +55,7 @@ export function LeadersCard({
   filters,
 }: LeadersCardProps) {
   // Current leaderboard mode (posts vs Qs)
-  const [mode, setMode] = useState<"posts" | "qs" | "q-rate">("posts");
+  const [mode, setMode] = useState<"posts" | "qs">("posts");
   // Scope: Region (this region only) vs Nation (all regions)
   const [scope, setScope] = useState<"region" | "nation">("region");
 
@@ -61,17 +65,13 @@ export function LeadersCard({
     const bPosts = scope === "nation" ? b.all_posts : b.posts;
     const aQs = scope === "nation" ? a.all_qs : a.qs;
     const bQs = scope === "nation" ? b.all_qs : b.qs;
-    const aQRate = aPosts ? ((aQs ?? 0) / aPosts) * 100 : 0;
-    const bQRate = bPosts ? ((bQs ?? 0) / bPosts) * 100 : 0;
-
     if (mode === "posts") return (bPosts ?? 0) - (aPosts ?? 0);
-    if (mode === "qs") return (bQs ?? 0) - (aQs ?? 0);
-    return bQRate - aQRate;
+    return (bQs ?? 0) - (aQs ?? 0);
   });
 
   // Hide zero-Q leaders when viewing Q-based metrics
   const visibleLeaders =
-    mode === "qs" || mode === "q-rate"
+    mode === "qs"
       ? sortedLeaders.filter(
           (leader) =>
             (scope === "nation" ? (leader.all_qs ?? 0) : leader.qs) > 0,
@@ -104,9 +104,7 @@ export function LeadersCard({
             <Tabs
               aria-label={`Select Leaders View`}
               selectedKey={mode}
-              onSelectionChange={(key) =>
-                setMode(key as "posts" | "qs" | "q-rate")
-              }
+              onSelectionChange={(key) => setMode(key as "posts" | "qs")}
               size="sm"
               radius="sm"
               variant="bordered"
@@ -115,7 +113,6 @@ export function LeadersCard({
             >
               <Tab key="posts" title="Posts" />
               <Tab key="qs" title="Qs" />
-              <Tab key="q-rate" title="Q Rate" />
             </Tabs>
           </div>
         </div>
