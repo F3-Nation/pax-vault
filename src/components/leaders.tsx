@@ -81,9 +81,9 @@ export function LeadersCard({
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="flex justify-between items-center px-6">
-        <div className="flex items-center justify-between w-full">
+        <div className="flex items-center justify-between w-full gap-3">
           <div className="font-semibold text-xl">Leaders</div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {page === "region" && (
               <Tabs
                 aria-label={`Select Leaders Scope`}
