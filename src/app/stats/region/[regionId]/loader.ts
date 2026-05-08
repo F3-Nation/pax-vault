@@ -17,6 +17,9 @@ import {
   RegionKotterList,
   ChartData,
   RegionAchievementPax,
+  AOHeatmapData,
+  AOQDepthData,
+  AOPaxTrendData,
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/regions";
 
@@ -74,6 +77,9 @@ export async function loadRegionData(
       kotter: (mergedPlain.kotter ?? []) as RegionKotterList[],
       charts: (mergedPlain.charts ?? []) as ChartData[],
       achievements: (mergedPlain.achievements ?? []) as RegionAchievementPax[],
+      ao_heatmap: (mergedPlain.ao_heatmap ?? []) as AOHeatmapData[],
+      ao_q_depth: (mergedPlain.ao_q_depth ?? []) as AOQDepthData[],
+      ao_pax_trend: (mergedPlain.ao_pax_trend ?? []) as AOPaxTrendData[],
     };
 
     mergedSafe.events = (mergedSafe.events ?? []).map((e: EventData) => ({

@@ -8,6 +8,9 @@ import {
   RegionKotterList,
   ChartData,
   RegionAchievementPax,
+  AOHeatmapData,
+  AOQDepthData,
+  AOPaxTrendData,
 } from "@/lib/types";
 
 /**
@@ -344,17 +347,11 @@ export async function getPageData(
   leaders: Leaders[] | null;
   upcoming: EventUpcoming[] | null;
   kotter: RegionKotterList[] | null;
-  charts:
-    | {
-        date: string;
-        pax_count: number;
-        fng_count: number;
-        q_count: number;
-        unique_pax_count: number;
-        unique_q_count: number;
-      }[]
-    | null;
+  charts: ChartData[] | null;
   achievements: RegionAchievementPax[] | null;
+  ao_heatmap: AOHeatmapData[] | null;
+  ao_q_depth: AOQDepthData[] | null;
+  ao_pax_trend: AOPaxTrendData[] | null;
 }> {
   // Build WHERE clause from common filters (region-scoped).
   const whereSql = buildEventsWhereSql(regionId, opts);
@@ -721,6 +718,7 @@ export async function getPageData(
           period_event_agg AS (
             SELECT
               DATE_TRUNC(event_date, ${truncUnit}) AS period,
+              COUNT(*) AS event_count,
               SUM(pax_count) AS pax_count,
               SUM(fng_count) AS fng_count,
               SUM((SELECT COUNTIF(a.q_ind = 1) FROM UNNEST(attendance) a)) AS q_count
@@ -738,6 +736,7 @@ export async function getPageData(
           period_agg AS (
             SELECT
               ea.period,
+              ea.event_count,
               ea.pax_count,
               ea.fng_count,
               ea.q_count,
@@ -760,6 +759,7 @@ export async function getPageData(
           ARRAY_AGG(
             STRUCT(
               ds.date AS date,
+              COALESCE(pa.event_count, 0) AS event_count,
               COALESCE(pa.pax_count, 0) AS pax_count,
               COALESCE(pa.fng_count, 0) AS fng_count,
               COALESCE(pa.q_count, 0) AS q_count,
@@ -770,7 +770,83 @@ export async function getPageData(
           )
         FROM date_spine ds
         LEFT JOIN period_agg pa ON pa.period = ds.date
-      ) AS charts;
+      ) AS charts,
+
+      -- AO heatmap: avg PAX per AO per day-of-week, trailing 90 days (fixed window)
+      (
+        WITH
+          ao_90day AS (
+            SELECT ao_name, event_date, pax_count
+            FROM \`f3data.paxVault.pv_events\`
+            WHERE region_org_id = ${regionId}
+              AND event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
+              AND first_f_ind = 1
+          ),
+          ao_heatmap_agg AS (
+            SELECT
+              ao_name,
+              FORMAT_DATE('%a', event_date) AS day_of_week,
+              ROUND(AVG(pax_count), 1) AS avg_pax,
+              COUNT(*) AS workout_count
+            FROM ao_90day
+            GROUP BY ao_name, day_of_week
+          )
+        SELECT ARRAY_AGG(STRUCT(ao_name, day_of_week, avg_pax, workout_count))
+        FROM ao_heatmap_agg
+      ) AS aoHeatmap,
+
+      -- AO Q depth: unique Qs vs total workouts per AO, trailing 90 days (fixed window)
+      (
+        WITH
+          ao_90day AS (
+            SELECT ao_name, event_date, attendance
+            FROM \`f3data.paxVault.pv_events\`
+            WHERE region_org_id = ${regionId}
+              AND event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
+              AND first_f_ind = 1
+          ),
+          ao_event_counts AS (
+            SELECT ao_name, COUNT(*) AS total_workouts
+            FROM ao_90day
+            GROUP BY ao_name
+          ),
+          ao_q_counts AS (
+            SELECT e.ao_name, COUNT(DISTINCT IF(a.q_ind = 1, a.user_id, NULL)) AS unique_qs
+            FROM ao_90day e, UNNEST(e.attendance) a
+            GROUP BY e.ao_name
+          ),
+          ao_q_depth_agg AS (
+            SELECT
+              ec.ao_name,
+              ec.total_workouts,
+              COALESCE(qc.unique_qs, 0) AS unique_qs,
+              ROUND(SAFE_DIVIDE(COALESCE(qc.unique_qs, 0), ec.total_workouts) * 100, 1) AS q_depth_pct
+            FROM ao_event_counts ec
+            LEFT JOIN ao_q_counts qc USING (ao_name)
+          )
+        SELECT ARRAY_AGG(STRUCT(ao_name, unique_qs, total_workouts, q_depth_pct) ORDER BY q_depth_pct DESC)
+        FROM ao_q_depth_agg
+      ) AS aoQDepth,
+
+      -- AO avg PAX trend: avg PAX per AO per month, trailing 6 months (fixed window)
+      (
+        WITH
+          ao_pax_trend_agg AS (
+            SELECT
+              ao_name,
+              FORMAT_DATE('%b %Y', DATE_TRUNC(event_date, MONTH)) AS period,
+              DATE_TRUNC(event_date, MONTH) AS period_date,
+              ROUND(AVG(pax_count), 1) AS avg_pax,
+              COUNT(*) AS workout_count
+            FROM \`f3data.paxVault.pv_events\`
+            WHERE region_org_id = ${regionId}
+              AND event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)
+              AND first_f_ind = 1
+            GROUP BY ao_name, period, period_date
+          )
+        SELECT ARRAY_AGG(STRUCT(ao_name, period, avg_pax, workout_count) ORDER BY period_date, ao_name)
+        FROM ao_pax_trend_agg
+      ) AS aoPaxTrend;
     `;
 
   const results = await queryBigQuery<{
@@ -782,6 +858,9 @@ export async function getPageData(
     kotter: RegionKotterList[];
     charts: ChartData[];
     achievements: RegionAchievementPax[];
+    aoHeatmap: AOHeatmapData[];
+    aoQDepth: AOQDepthData[];
+    aoPaxTrend: AOPaxTrendData[];
   }>(query, userIdentifier, `fetch region data for region ${regionId}`);
 
   return {
@@ -793,5 +872,8 @@ export async function getPageData(
     kotter: results?.[0]?.kotter || null,
     charts: results?.[0]?.charts || null,
     achievements: results?.[0]?.achievements || null,
+    ao_heatmap: results?.[0]?.aoHeatmap || null,
+    ao_q_depth: results?.[0]?.aoQDepth || null,
+    ao_pax_trend: results?.[0]?.aoPaxTrend || null,
   };
 }
