@@ -98,11 +98,33 @@ export interface ChartData {
   q_count: number; // Number of Qs (leaders) for the chart data point
   unique_pax_count: number; // Number of unique participants (pax) for the chart data point
   unique_q_count: number; // Number of unique Qs (leaders) for the chart data point
+  event_count?: number; // Number of distinct workouts posted in the period
 }
 
 /* =========================================================== */
 /*                REGION-SPECIFIC TYPES BELOW                  */
 /* =========================================================== */
+
+export interface AOHeatmapData {
+  ao_name: string;
+  day_of_week: string;
+  avg_pax: number;
+  workout_count: number;
+}
+
+export interface AOQDepthData {
+  ao_name: string;
+  unique_qs: number;
+  total_workouts: number;
+  q_depth_pct: number;
+}
+
+export interface AOPaxTrendData {
+  ao_name: string;
+  period: string;
+  avg_pax: number;
+  workout_count: number;
+}
 
 // REGION DATA MODEL
 export interface RegionData {
@@ -114,6 +136,9 @@ export interface RegionData {
   kotter: RegionKotterList[] | null; // List of Kotter events in the region
   charts: ChartData[] | null; // List of chart data points for the region
   achievements: RegionAchievementPax[] | null; // PAX approaching milestones or with upcoming anniversaries
+  ao_heatmap: AOHeatmapData[] | null;
+  ao_q_depth: AOQDepthData[] | null;
+  ao_pax_trend: AOPaxTrendData[] | null;
 }
 
 /* USED ONLY FOR REGION INFO */

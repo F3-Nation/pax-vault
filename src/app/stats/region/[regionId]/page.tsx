@@ -208,6 +208,9 @@ export default async function RegionDetailPage({
           region_events={regionData.events || []}
           region_charts={regionData.charts || []}
           region_achievements={regionData.achievements || []}
+          region_ao_heatmap={regionData.ao_heatmap || []}
+          region_ao_q_depth={regionData.ao_q_depth || []}
+          region_ao_pax_trend={regionData.ao_pax_trend || []}
           searchParams={{
             categoryIds,
             categoryMode,

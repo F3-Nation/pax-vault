@@ -19,6 +19,8 @@ import {
   RegionInfo,
   ChartData,
   RegionAchievementPax,
+  AOHeatmapData,
+  AOQDepthData,
 } from "@/lib/types";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "../leaders";
@@ -28,6 +30,7 @@ import { EventsCard } from "../events";
 import { Filter } from "../pageFilter";
 import { useMemo } from "react";
 import { ChartCard } from "./ChartsCard";
+import { HeatmapChart, QDepthChart, UniqueQsPerAOChart } from "./AOChartsCard";
 import { AchievementsCard } from "./AchievementsCard";
 
 type RegionalPageWrapperProps = {
@@ -40,6 +43,9 @@ type RegionalPageWrapperProps = {
   region_events: EventData[];
   region_charts: ChartData[];
   region_achievements: RegionAchievementPax[];
+  region_ao_heatmap: AOHeatmapData[];
+  region_ao_q_depth: AOQDepthData[];
+  region_ao_pax_trend: unknown[];
   searchParams: {
     categoryIds?: string | string[];
     categoryMode?: string;
@@ -104,6 +110,8 @@ export function RegionalPageWrapper({
   region_events,
   region_charts,
   region_achievements,
+  region_ao_heatmap,
+  region_ao_q_depth,
   searchParams,
 }: RegionalPageWrapperProps) {
   // Memoized query-string passed to events + filter components.
@@ -140,26 +148,32 @@ export function RegionalPageWrapper({
         />
       </div>
       {/* Charting */}
-      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl hidden">
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
         <ChartCard charts={region_charts || []} />
       </div>
-      {/* Upcoming achievements */}
+      {/* Unique Qs + Q Depth */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
+        <UniqueQsPerAOChart data={region_ao_q_depth || []} />
+        <QDepthChart data={region_ao_q_depth || []} />
+      </div>
+      {/* Heatmap + Achievements */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
+        <HeatmapChart data={region_ao_heatmap || []} />
         <AchievementsCard
           achievements={region_achievements || []}
           filters={eventsFiltersQuery}
         />
-        {/* Kotters + upcoming events */}
-        <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
-          <KotterCard
-            kotters={region_kotter || []}
-            filters={eventsFiltersQuery}
-          />
-          <UpcomingEventsCard
-            events={region_upcoming || []}
-            filters={eventsFiltersQuery}
-          />
-        </div>
+      </div>
+      {/* Kotters + upcoming events */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
+        <KotterCard
+          kotters={region_kotter || []}
+          filters={eventsFiltersQuery}
+        />
+        <UpcomingEventsCard
+          events={region_upcoming || []}
+          filters={eventsFiltersQuery}
+        />
       </div>
       {/* Event list */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
