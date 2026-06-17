@@ -385,7 +385,7 @@ export async function searchAOsByName(
   const term = (q || "").trim();
   if (term.length < 2) return [];
 
-  const escapedTerm = term.replace(/'/g, "''").toLowerCase();
+  const likePattern = `%${term.toLowerCase()}%`;
 
   const query = `-- AO SEARCH
     SELECT
@@ -397,7 +397,7 @@ export async function searchAOsByName(
       is_active
     FROM pv_aos
     WHERE ao_name IS NOT NULL
-      AND LOWER(ao_name) LIKE '%${escapedTerm}%'
+      AND LOWER(ao_name) LIKE @term
       ${includeInactive ? "" : "AND is_active = TRUE"}
     ORDER BY ao_name
     LIMIT 50
@@ -407,6 +407,7 @@ export async function searchAOsByName(
     query,
     userIdentifier,
     `search AOs by name: ${q}`,
+    { term: likePattern },
   );
   return results ?? [];
 }

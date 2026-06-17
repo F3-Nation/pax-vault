@@ -99,7 +99,7 @@ export async function searchSectorsByName(
   const term = (q || "").trim();
   if (term.length < 2) return [];
 
-  const escapedTerm = term.replace(/'/g, "''").toLowerCase();
+  const likePattern = `%${term.toLowerCase()}%`;
 
   const query = `-- SECTOR SEARCH
     SELECT
@@ -109,7 +109,7 @@ export async function searchSectorsByName(
       is_active
     FROM pv_sectors
     WHERE sector_name IS NOT NULL
-      AND LOWER(sector_name) LIKE '%${escapedTerm}%'
+      AND LOWER(sector_name) LIKE @term
       ${includeInactive ? "" : "AND is_active = TRUE"}
     ORDER BY sector_name
     LIMIT 50
@@ -119,6 +119,7 @@ export async function searchSectorsByName(
     query,
     userIdentifier,
     `search sectors by name: ${q}`,
+    { term: likePattern },
   );
   return results ?? [];
 }

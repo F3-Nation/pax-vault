@@ -279,8 +279,8 @@ export async function searchRegionsByName(
   const term = (q || "").trim();
   if (term.length < 2) return [];
 
-  // Escape single quotes to prevent SQL injection via LIKE.
-  const escapedTerm = term.replace(/'/g, "''").toLowerCase();
+  // Bound as a query parameter (@term) — no manual escaping needed.
+  const likePattern = `%${term.toLowerCase()}%`;
 
   // Simple contains search; ordering is alphabetical for predictability.
   const query = `-- REGION SEARCH
@@ -291,7 +291,7 @@ export async function searchRegionsByName(
       is_active
     FROM pv_regions
     WHERE region_name IS NOT NULL
-      AND LOWER(region_name) LIKE '%${escapedTerm}%'
+      AND LOWER(region_name) LIKE @term
       ${includeInactive ? "" : "AND is_active = TRUE"}
     ORDER BY region_name
     LIMIT 50
@@ -301,6 +301,7 @@ export async function searchRegionsByName(
     query,
     userIdentifier,
     `search regions by name: ${q}`,
+    { term: likePattern },
   );
   return results ?? [];
 }

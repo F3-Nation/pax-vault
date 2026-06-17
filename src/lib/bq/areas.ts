@@ -100,7 +100,7 @@ export async function searchAreasByName(
   const term = (q || "").trim();
   if (term.length < 2) return [];
 
-  const escapedTerm = term.replace(/'/g, "''").toLowerCase();
+  const likePattern = `%${term.toLowerCase()}%`;
 
   const query = `-- AREA SEARCH
     SELECT
@@ -110,7 +110,7 @@ export async function searchAreasByName(
       is_active
     FROM pv_areas
     WHERE area_name IS NOT NULL
-      AND LOWER(area_name) LIKE '%${escapedTerm}%'
+      AND LOWER(area_name) LIKE @term
       ${includeInactive ? "" : "AND is_active = TRUE"}
     ORDER BY area_name
     LIMIT 50
@@ -120,6 +120,7 @@ export async function searchAreasByName(
     query,
     userIdentifier,
     `search areas by name: ${q}`,
+    { term: likePattern },
   );
   return results ?? [];
 }

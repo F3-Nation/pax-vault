@@ -239,18 +239,19 @@ export async function getPaxIdByEmail(
   email: string,
   userIdentifier?: string,
 ): Promise<number | null> {
-  const escaped = email.trim().toLowerCase().replace(/'/g, "''");
+  const normalizedEmail = email.trim().toLowerCase();
   const query = `-- PAX ID BY EMAIL
     SELECT id AS user_id
     FROM \`f3data.public.users\`
     WHERE email IS NOT NULL
-      AND LOWER(email) = '${escaped}'
+      AND LOWER(email) = @email
     LIMIT 1
   `;
   const results = await queryBigQuery<{ user_id: number }>(
     query,
     userIdentifier,
     "lookup pax id by email",
+    { email: normalizedEmail },
   );
   return results?.[0]?.user_id ?? null;
 }
@@ -264,8 +265,8 @@ export async function searchUsersByName(
   const term = (q || "").trim();
   if (term.length < 2) return [];
 
-  // Escape single quotes to prevent SQL injection via LIKE.
-  const escapedTerm = term.replace(/'/g, "''").toLowerCase();
+  // Bound as a query parameter (@term) — no manual escaping needed.
+  const likePattern = `%${term.toLowerCase()}%`;
 
   // Optional region filter: only include PAX whose home region matches.
   const regionFilter =
@@ -284,7 +285,7 @@ export async function searchUsersByName(
       status
     FROM pv_pax
     WHERE f3_name IS NOT NULL
-      AND LOWER(f3_name) LIKE '%${escapedTerm}%'
+      AND LOWER(f3_name) LIKE @term
       ${regionFilter}
     ORDER BY f3_name
     LIMIT 50
@@ -294,6 +295,7 @@ export async function searchUsersByName(
     query,
     userIdentifier,
     `search users by name: ${q}`,
+    { term: likePattern },
   );
   return results ?? [];
 }
