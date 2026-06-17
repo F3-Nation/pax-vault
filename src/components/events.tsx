@@ -54,13 +54,18 @@ import { Divider } from "@heroui/divider";
 import { EventData, EventDetails } from "@/lib/types";
 import { formatDate, cleanEventName } from "@/lib/utils";
 import { Link } from "@heroui/link";
+import NextLink from "next/link";
 import { Chip } from "@heroui/chip";
 import { Avatar } from "@heroui/avatar";
 import { Modal, ModalContent, ModalHeader, ModalBody } from "@heroui/modal";
 import { useDisclosure } from "@heroui/use-disclosure";
 import { Button } from "@heroui/button";
-import { Image } from "@heroui/image";
 import { Tab, Tabs } from "@heroui/tabs";
+import {
+  EventDetailsHeader,
+  EventDetailsBody,
+} from "@/components/EventDetailsContent";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 
 /**
  * True when `paxId` was a Q (q_ind) on this event. Single source of truth for
@@ -273,7 +278,6 @@ export function EventsCard({
     () => Array.from({ length: 6 }, (_, i) => i),
     [],
   );
-  const hasEventImages = (eventDetails?.meta?.files?.length ?? 0) > 0;
 
   return (
     <>
@@ -621,63 +625,21 @@ export function EventsCard({
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1">
             {selectedEvent ? (
-              <div className="flex flex-col gap-2">
-                <div className="text-xl font-semibold text-foreground">
-                  {cleanEventName(selectedEvent.event_name)}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 text-sm text-default-500">
-                  <span>{formatDate(selectedEvent.event_date)}</span>
-                  <span className="text-default-400">•</span>
-                  <Link
-                    href={
-                      selectedEvent.ao_org_id
-                        ? `/stats/ao/${selectedEvent.ao_org_id}${filters ? `?${filters}` : ""}`
-                        : `/stats/region/${selectedEvent.region_org_id}${filters ? `?${filters}` : ""}`
-                    }
-                    className="text-default-500 hover:text-default-700"
+              <div className="flex flex-col gap-3 w-full sm:flex-row sm:items-start sm:justify-between">
+                <EventDetailsHeader event={selectedEvent} filters={filters} />
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    as={NextLink}
+                    href={`/stats/events/${selectedEvent.event_instance_id}`}
+                    size="sm"
+                    variant="bordered"
+                    color="primary"
                   >
-                    {selectedEvent.ao_name ??
-                      selectedEvent.region_name ??
-                      "Unknown AO"}
-                  </Link>
-                  {selectedEvent.region_name && (
-                    <>
-                      <span className="text-default-400">•</span>
-                      <Link
-                        href={`/stats/region/${selectedEvent.region_org_id}${filters ? `?${filters}` : ""}`}
-                        className="text-default-500 hover:text-default-700"
-                      >
-                        {selectedEvent.region_name}
-                      </Link>
-                    </>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {(selectedEvent.types?.length ?? 0) > 0 &&
-                    selectedEvent.types?.map((t, i) => (
-                      <Chip
-                        key={`modal-type-${selectedEvent.event_instance_id}-${i}`}
-                        size="sm"
-                        variant="flat"
-                        color="default"
-                      >
-                        {t.name}
-                      </Chip>
-                    ))}
-
-                  {(selectedEvent.tags?.length ?? 0) > 0 &&
-                    selectedEvent.tags?.map((t, i) => (
-                      <Chip
-                        key={`modal-tag-${selectedEvent.event_instance_id}-${i}`}
-                        size="sm"
-                        variant="flat"
-                        color="warning"
-                      >
-                        {t.name}
-                      </Chip>
-                    ))}
+                    Event Page
+                  </Button>
+                  <CopyLinkButton
+                    path={`/stats/events/${selectedEvent.event_instance_id}`}
+                  />
                 </div>
               </div>
             ) : (
@@ -685,288 +647,13 @@ export function EventsCard({
             )}
           </ModalHeader>
           <ModalBody>
-            {isLoadingDetails && (
-              <div className="space-y-4">
-                <div className="text-sm italic text-default-400">
-                  Loading event details…
-                </div>
-                <div className="animate-pulse space-y-3">
-                  <div className="h-4 w-1/2 rounded bg-default-200 dark:bg-default-300" />
-                  <div className="h-4 w-5/6 rounded bg-default-100 dark:bg-default-200" />
-                  <div className="h-4 w-2/3 rounded bg-default-100 dark:bg-default-200" />
-                </div>
-              </div>
-            )}
-
-            {!isLoadingDetails && selectedEvent && (
-              <div className="space-y-6">
-                {/* Quick facts */}
-                {hasEventImages ? (
-                  <section className="flex flex-col md:flex-row gap-4 items-stretch">
-                    {/* Left: Q(s) + PAX (flexes to fill remaining width) */}
-                    <div className="flex-1 min-w-0 rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-4">
-                      <div className="space-y-5">
-                        {/* Qs */}
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
-                            Q
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {getQList(selectedEvent).length === 0 ? (
-                              <Chip
-                                key={`modal-q-unknown-${selectedEvent.event_instance_id}`}
-                                avatar={<Avatar showFallback src={undefined} />}
-                                variant="bordered"
-                                color="secondary"
-                                size="sm"
-                              >
-                                Unknown Q
-                              </Chip>
-                            ) : (
-                              getQList(selectedEvent).map((q, i) => (
-                                <Link
-                                  key={`modal-q-${selectedEvent.event_instance_id}-${i}`}
-                                  href={`/stats/pax/${q.user_id}${filters ? `?${filters}` : ""}`}
-                                  className="text-default-100"
-                                >
-                                  <Chip
-                                    avatar={
-                                      <Avatar
-                                        showFallback
-                                        src={q.avatar_url || undefined}
-                                      />
-                                    }
-                                    variant="bordered"
-                                    color="secondary"
-                                    size="sm"
-                                  >
-                                    {q.f3_name ?? q.user_id.toString()}
-                                  </Chip>
-                                </Link>
-                              ))
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Attendance */}
-                        <div>
-                          <div className="flex items-baseline justify-between">
-                            <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
-                              PAX
-                            </div>
-                            <div className="text-xs text-default-500">
-                              {getPaxList(selectedEvent).length} attendee(s)
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {getPaxList(selectedEvent).length === 0 ? (
-                              <span className="italic text-default-500">
-                                No attendees
-                              </span>
-                            ) : (
-                              getPaxList(selectedEvent).map((pax, i) => (
-                                <Link
-                                  key={`modal-pax-${selectedEvent.event_instance_id}-${i}`}
-                                  href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
-                                  className="text-default-100"
-                                >
-                                  <Chip
-                                    avatar={
-                                      <Avatar
-                                        showFallback
-                                        src={pax.avatar_url || undefined}
-                                      />
-                                    }
-                                    variant="bordered"
-                                    color="default"
-                                    size="sm"
-                                  >
-                                    {pax.f3_name ?? pax.user_id.toString()}
-                                  </Chip>
-                                </Link>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right: Image (stretches to match left panel height on md+) */}
-                    <div className="w-full md:w-[360px] lg:w-[420px] shrink-0 rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-3">
-                      <div className="h-full flex flex-col gap-3">
-                        <div className="flex items-baseline justify-between">
-                          <div className="text-xs uppercase tracking-wide text-default-500">
-                            Image
-                          </div>
-                          <div className="text-xs text-default-500">
-                            {(eventDetails?.meta?.files?.length ?? 0) > 1
-                              ? `${eventDetails?.meta?.files?.length ?? 0} files`
-                              : `${eventDetails?.meta?.files?.length ?? 0} file`}
-                          </div>
-                        </div>
-
-                        {/* Hero image fills available height */}
-                        <div className="flex-1 min-h-[220px]">
-                          <a
-                            href={(eventDetails?.meta?.files ?? [])[0]}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block h-full"
-                          >
-                            <Image
-                              src={(eventDetails?.meta?.files ?? [])[0]}
-                              alt="Event image"
-                              className="h-full w-full object-cover rounded-md border border-default-200 dark:border-default-300"
-                            />
-                          </a>
-                        </div>
-
-                        {/* Optional thumbnails when multiple images exist */}
-                        {(eventDetails?.meta?.files?.length ?? 0) > 1 && (
-                          <div className="flex flex-wrap gap-2">
-                            {(eventDetails?.meta?.files ?? [])
-                              .slice(1, 5)
-                              .map((file, index) => (
-                                <a
-                                  key={file}
-                                  href={file}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="block"
-                                >
-                                  <Image
-                                    src={file}
-                                    alt={`Event thumbnail ${index + 2}`}
-                                    className="h-16 w-20 object-cover rounded-md border border-default-200 dark:border-default-300"
-                                  />
-                                </a>
-                              ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </section>
-                ) : (
-                  <section className="rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Qs */}
-                      <div>
-                        <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
-                          Q
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {getQList(selectedEvent).length === 0 ? (
-                            <Chip
-                              key={`modal-q-unknown-${selectedEvent.event_instance_id}`}
-                              avatar={<Avatar showFallback src={undefined} />}
-                              variant="bordered"
-                              color="secondary"
-                              size="sm"
-                            >
-                              Unknown Q
-                            </Chip>
-                          ) : (
-                            getQList(selectedEvent).map((q, i) => (
-                              <Link
-                                key={`modal-q-${selectedEvent.event_instance_id}-${i}`}
-                                href={`/stats/pax/${q.user_id}${filters ? `?${filters}` : ""}`}
-                                className="text-default-100"
-                              >
-                                <Chip
-                                  avatar={
-                                    <Avatar
-                                      showFallback
-                                      src={q.avatar_url || undefined}
-                                    />
-                                  }
-                                  variant="bordered"
-                                  color="secondary"
-                                  size="sm"
-                                >
-                                  {q.f3_name ?? q.user_id.toString()}
-                                </Chip>
-                              </Link>
-                            ))
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Attendance */}
-                      <div>
-                        <div className="flex items-baseline justify-between">
-                          <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
-                            PAX
-                          </div>
-                          <div className="text-xs text-default-500">
-                            {getPaxList(selectedEvent).length} attendee(s)
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {getPaxList(selectedEvent).length === 0 ? (
-                            <span className="italic text-default-500">
-                              No attendees
-                            </span>
-                          ) : (
-                            getPaxList(selectedEvent).map((pax, i) => (
-                              <Link
-                                key={`modal-pax-${selectedEvent.event_instance_id}-${i}`}
-                                href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
-                                className="text-default-100"
-                              >
-                                <Chip
-                                  avatar={
-                                    <Avatar
-                                      showFallback
-                                      src={pax.avatar_url || undefined}
-                                    />
-                                  }
-                                  variant="bordered"
-                                  color="default"
-                                  size="sm"
-                                >
-                                  {pax.f3_name ?? pax.user_id.toString()}
-                                </Chip>
-                              </Link>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-                )}
-
-                {/* Preblast */}
-                <section>
-                  <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
-                    Preblast
-                  </div>
-                  <div className="rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-4 text-sm whitespace-pre-wrap">
-                    {eventDetails?.preblast ? (
-                      eventDetails.preblast
-                    ) : (
-                      <span className="italic text-default-500">
-                        No preblast provided.
-                      </span>
-                    )}
-                  </div>
-                </section>
-
-                {/* Backblast */}
-                <section>
-                  <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
-                    Backblast
-                  </div>
-                  <div className="rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-4 text-sm whitespace-pre-wrap">
-                    {eventDetails?.backblast ? (
-                      eventDetails.backblast
-                    ) : (
-                      <span className="italic text-default-500">
-                        No backblast provided.
-                      </span>
-                    )}
-                  </div>
-                </section>
-              </div>
+            {selectedEvent && (
+              <EventDetailsBody
+                event={selectedEvent}
+                details={eventDetails}
+                isLoadingDetails={isLoadingDetails}
+                filters={filters}
+              />
             )}
           </ModalBody>
         </ModalContent>
