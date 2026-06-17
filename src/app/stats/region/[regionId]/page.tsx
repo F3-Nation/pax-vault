@@ -11,6 +11,7 @@ import { loadRegionData } from "./loader";
 import { PageHeader } from "@/components/pageHeader";
 import { RegionalPageWrapper } from "@/components/region/PageWrapper";
 import { Breadcrumb } from "@/components/breadcrumb";
+import { buildBreadcrumb } from "@/lib/breadcrumb";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import { parseFilterParams } from "@/lib/filters";
 import { EntityDataUnavailable } from "@/components/EntityDataUnavailable";
@@ -75,19 +76,16 @@ export default async function RegionDetailPage({
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
         {/* Breadcrumb */}
         <Breadcrumb
-          items={[
-            { label: "Home", href: "/" },
-            { label: "Nation", href: "/stats/nation" },
-            ...(regionData.info?.area_id && regionData.info?.area_name
-              ? [
-                  {
+          items={buildBreadcrumb({
+            parent:
+              regionData.info?.area_id && regionData.info?.area_name
+                ? {
                     label: regionData.info.area_name,
                     href: `/stats/area/${regionData.info.area_id}`,
-                  },
-                ]
-              : []),
-            { label: regionData.info?.region_name ?? "Region" },
-          ]}
+                  }
+                : null,
+            current: regionData.info?.region_name ?? "Region",
+          })}
         />
 
         {/* Page Header */}

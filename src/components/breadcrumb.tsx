@@ -5,11 +5,9 @@ import {
   Breadcrumbs as HeroBreadcrumbs,
 } from "@heroui/breadcrumbs";
 import { useRouter } from "next/navigation";
+import type { BreadcrumbEntry } from "@/lib/breadcrumb";
 
-export type BreadcrumbEntry = {
-  label: string;
-  href?: string;
-};
+export type { BreadcrumbEntry };
 
 type Props = {
   items: BreadcrumbEntry[];

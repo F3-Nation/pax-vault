@@ -11,6 +11,7 @@ import { loadPaxData } from "./loader";
 import { PageHeader } from "@/components/pageHeader";
 import { PAXPageWrapper } from "@/components/pax/PageWrapper";
 import { Breadcrumb } from "@/components/breadcrumb";
+import { buildBreadcrumb } from "@/lib/breadcrumb";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import { parseFilterParams } from "@/lib/filters";
 import { EntityDataUnavailable } from "@/components/EntityDataUnavailable";
@@ -77,18 +78,17 @@ export default async function PaxDetailPage({
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
         {/* Breadcrumb */}
         <Breadcrumb
-          items={[
-            { label: "Home", href: "/" },
-            ...(paxData.info?.home_region_id && paxData.info?.home_region_name
-              ? [
-                  {
+          items={buildBreadcrumb({
+            includeNation: false,
+            parent:
+              paxData.info?.home_region_id && paxData.info?.home_region_name
+                ? {
                     label: paxData.info.home_region_name,
                     href: `/stats/region/${paxData.info.home_region_id}`,
-                  },
-                ]
-              : []),
-            { label: paxData.info?.f3_name ?? "PAX" },
-          ]}
+                  }
+                : null,
+            current: paxData.info?.f3_name ?? "PAX",
+          })}
         />
 
         {/* Page Header */}
