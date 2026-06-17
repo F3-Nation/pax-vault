@@ -144,7 +144,7 @@ export function RegionalPageWrapper({
         <ChartCard charts={region_charts || []} />
       </div>
       {/* Upcoming achievements */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start w-full max-w-6xl">
         <AchievementsCard
           achievements={region_achievements || []}
           filters={eventsFiltersQuery}
