@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { searchAll } from "@/lib/bq/search";
 import { getSessionUser } from "@/lib/auth/server";
+import { reportError } from "@/lib/observability";
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -24,9 +25,12 @@ export async function GET(request: Request) {
     const results = await searchAll(q, user.email, includeInactive);
     return NextResponse.json(results, { status: 200 });
   } catch (err) {
-    console.error("Search failed:", err);
+    const errorId = reportError(err, {
+      scope: "api/search",
+      user: user.email,
+    });
     return NextResponse.json(
-      { error: "Search failed. Please try again." },
+      { error: "Search failed. Please try again.", errorId },
       { status: 500 },
     );
   }

@@ -13,20 +13,11 @@
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { AOSummary } from "@/lib/types";
-import { formatNumber } from "@/lib/utils";
+import { renderStat } from "@/lib/utils";
 
 type SummaryCardProps = {
   summary: AOSummary;
 };
-
-/**
- * Format a numeric summary value or return a safe fallback.
- */
-function renderStat(value?: number, decimals?: number, suffix?: string) {
-  if (typeof value !== "number") return "Unknown";
-  const formatted = formatNumber(value, decimals);
-  return suffix ? `${formatted} ${suffix}` : formatted;
-}
 
 export function SummaryCard({ summary }: SummaryCardProps) {
   return (

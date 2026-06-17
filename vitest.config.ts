@@ -5,7 +5,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["**/*.{test,spec}.{ts,tsx}"],
-    exclude: ["node_modules", ".next"],
+    // e2e/ holds Playwright specs; they must not run under vitest.
+    exclude: ["node_modules", ".next", "e2e/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
@@ -19,6 +20,7 @@ export default defineConfig({
         "**/*.d.ts",
         "src/types/**",
         "src/lib/db.ts",
+        "src/lib/cache.ts", // thin env-gated wrapper over Next unstable_cache
         "src/lib/cache/**",
         "src/lib/types.ts",
         "src/lib/service-worker.tsx",

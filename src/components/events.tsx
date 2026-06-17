@@ -93,6 +93,17 @@ export function EventsCard({
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Per-event toggle for the attendee list, which is collapsed to a count on
+  // mobile (where 20+ chips become an unreadable wall) and tap-to-expand.
+  const [expandedPax, setExpandedPax] = useState<Set<number>>(new Set());
+  const togglePax = (id: number) =>
+    setExpandedPax((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   // Event details modal state
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [selectedEvent, setSelectedEvent] = useState<EventData | null>(null);
@@ -442,33 +453,69 @@ export function EventsCard({
                           </div>
                         </div>
                         <div className="flex justify-between pb-2">
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 w-full">
                             {pax_list.length === 0 ? (
                               <span className="italic text-default-500">
                                 No attendees
                               </span>
                             ) : (
-                              pax_list.map((pax, i) => (
-                                <Link
-                                  key={`pax-${event.event_instance_id}-${i}`}
-                                  href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
-                                  className="text-default-100"
+                              <>
+                                {/* Mobile: collapsed count, tap to expand */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    togglePax(event.event_instance_id)
+                                  }
+                                  className={`${
+                                    expandedPax.has(event.event_instance_id)
+                                      ? "hidden"
+                                      : "inline-flex"
+                                  } sm:hidden items-center gap-1 text-sm text-default-500`}
                                 >
-                                  <Chip
-                                    avatar={
-                                      <Avatar
-                                        showFallback
-                                        src={pax.avatar_url || undefined}
-                                      />
+                                  {pax_list.length} PAX
+                                  <span className="text-xs">▾</span>
+                                </button>
+                                {/* Chips: always on desktop; on mobile only when expanded */}
+                                <div
+                                  className={`${
+                                    expandedPax.has(event.event_instance_id)
+                                      ? "flex"
+                                      : "hidden"
+                                  } sm:flex flex-wrap gap-1 w-full`}
+                                >
+                                  {pax_list.map((pax, i) => (
+                                    <Link
+                                      key={`pax-${event.event_instance_id}-${i}`}
+                                      href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
+                                      className="text-default-100"
+                                    >
+                                      <Chip
+                                        avatar={
+                                          <Avatar
+                                            showFallback
+                                            src={pax.avatar_url || undefined}
+                                          />
+                                        }
+                                        variant="bordered"
+                                        color="default"
+                                        size="sm"
+                                      >
+                                        {pax.f3_name ?? pax.user_id.toString()}
+                                      </Chip>
+                                    </Link>
+                                  ))}
+                                  {/* Mobile: collapse back */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      togglePax(event.event_instance_id)
                                     }
-                                    variant="bordered"
-                                    color="default"
-                                    size="sm"
+                                    className="sm:hidden inline-flex items-center px-1 text-xs text-default-500"
                                   >
-                                    {pax.f3_name ?? pax.user_id.toString()}
-                                  </Chip>
-                                </Link>
-                              ))
+                                    Show less ▴
+                                  </button>
+                                </div>
+                              </>
                             )}
                           </div>
                         </div>

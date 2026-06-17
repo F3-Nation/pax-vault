@@ -10,23 +10,7 @@
 import { NextResponse } from "next/server";
 import { getEvents } from "@/lib/bq/aos";
 import { getSessionUser } from "@/lib/auth/server";
-
-/**
- * Parse a comma-separated query parameter into a finite number list.
- *
- * Invalid or non-numeric values are silently dropped.
- */
-const parseNumberList = (
-  key: string,
-  searchParams: URLSearchParams,
-): number[] | undefined => {
-  const raw = searchParams.get(key);
-  if (!raw) return undefined;
-  return raw
-    .split(",")
-    .map((v) => Number(v))
-    .filter((v) => Number.isFinite(v));
-};
+import { parseFilterSearchParams } from "@/lib/filters";
 
 export async function GET(
   request: Request,
@@ -50,27 +34,10 @@ export async function GET(
 
   // Normalize query-string filters into a single options object.
   const opts = {
+    ...parseFilterSearchParams(searchParams),
     limit: Number.isFinite(Number(searchParams.get("limit")))
       ? Number(searchParams.get("limit"))
       : undefined,
-    range: searchParams.get("range") || undefined,
-    startDate: searchParams.get("startDate") || undefined,
-    endDate: searchParams.get("endDate") || undefined,
-
-    aoIds: parseNumberList("aoIds", searchParams),
-    aoMode: (searchParams.get("aoMode") as "include" | "exclude") || undefined,
-
-    tagIds: parseNumberList("tagIds", searchParams),
-    tagMode:
-      (searchParams.get("tagMode") as "include" | "exclude") || undefined,
-
-    typeIds: parseNumberList("typeIds", searchParams),
-    typeMode:
-      (searchParams.get("typeMode") as "include" | "exclude") || undefined,
-
-    categoryIds: parseNumberList("categoryIds", searchParams),
-    categoryMode:
-      (searchParams.get("categoryMode") as "include" | "exclude") || undefined,
   };
 
   const events = await getEvents(aoId, user?.email, opts);

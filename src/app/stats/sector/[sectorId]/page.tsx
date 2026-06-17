@@ -15,6 +15,7 @@ import { SectorChartsCard } from "@/components/sector/ChartsCard";
 import { Card, CardHeader, CardBody } from "@heroui/card";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import { Breadcrumb } from "@/components/breadcrumb";
+import { buildBreadcrumb } from "@/lib/breadcrumb";
 
 interface PageProps {
   params: Promise<{ sectorId: string }>;
@@ -59,11 +60,7 @@ export default async function SectorDetailPage({ params }: PageProps) {
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
         {/* Breadcrumb */}
         <Breadcrumb
-          items={[
-            { label: "Home", href: "/" },
-            { label: "Nation", href: "/stats/nation" },
-            { label: sectorData.info.sector_name },
-          ]}
+          items={buildBreadcrumb({ current: sectorData.info.sector_name })}
         />
 
         {/* Page Header — links up to Nation */}

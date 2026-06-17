@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { searchAOsByName } from "@/lib/bq/aos";
 import { getSessionUser } from "@/lib/auth/server";
+import { reportError } from "@/lib/observability";
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -30,9 +31,12 @@ export async function GET(request: Request) {
     const aos = await searchAOsByName(q, user.email, includeInactive);
     return NextResponse.json(aos, { status: 200 });
   } catch (err) {
-    console.error("AO search failed:", err);
+    const errorId = reportError(err, {
+      scope: "api/ao/list",
+      user: user.email,
+    });
     return NextResponse.json(
-      { error: "AO search failed. Please try again." },
+      { error: "AO search failed. Please try again.", errorId },
       { status: 500 },
     );
   }

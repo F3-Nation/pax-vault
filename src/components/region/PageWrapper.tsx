@@ -143,23 +143,24 @@ export function RegionalPageWrapper({
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl hidden">
         <ChartCard charts={region_charts || []} />
       </div>
-      {/* Upcoming achievements */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
+      {/* Drill-down: who to celebrate (Achievements) and who's drifting (Kotter).
+          Balanced 2-col peers so neither stretches to leave dead space. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start w-full max-w-6xl">
         <AchievementsCard
           achievements={region_achievements || []}
           filters={eventsFiltersQuery}
         />
-        {/* Kotters + upcoming events */}
-        <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
-          <KotterCard
-            kotters={region_kotter || []}
-            filters={eventsFiltersQuery}
-          />
-          <UpcomingEventsCard
-            events={region_upcoming || []}
-            filters={eventsFiltersQuery}
-          />
-        </div>
+        <KotterCard
+          kotters={region_kotter || []}
+          filters={eventsFiltersQuery}
+        />
+      </div>
+      {/* Upcoming events (full width, above the past-events log) */}
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
+        <UpcomingEventsCard
+          events={region_upcoming || []}
+          filters={eventsFiltersQuery}
+        />
       </div>
       {/* Event list */}
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">

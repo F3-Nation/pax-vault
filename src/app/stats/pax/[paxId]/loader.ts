@@ -15,25 +15,9 @@ import {
   PaxAOBreakdown,
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/pax";
-
-/**
- * Shared filter options passed through to pax API endpoints.
- */
-type PaxFilterOpts = {
-  range?: string;
-  startDate?: string;
-  endDate?: string;
-  aoIds?: number[];
-  aoMode?: "include" | "exclude";
-  regionIds?: number[];
-  regionMode?: "include" | "exclude";
-  tagIds?: number[];
-  tagMode?: "include" | "exclude";
-  typeIds?: number[];
-  typeMode?: "include" | "exclude";
-  categoryIds?: number[];
-  categoryMode?: "include" | "exclude";
-};
+import { cacheStatsData } from "@/lib/cache";
+import { StatsFilters } from "@/lib/filters";
+import { normalizeDeep } from "@/lib/normalize";
 
 /**
  * Load all data required for the pax stats page.
@@ -43,44 +27,42 @@ type PaxFilterOpts = {
 export async function loadPaxData(
   paxId: number,
   userIdentifier?: string,
-  filters?: PaxFilterOpts,
+  filters?: StatsFilters,
 ): Promise<PaxData | null> {
   try {
-    const paxData = await getPageData(paxId, userIdentifier, filters);
+    // Cache key is entity-scoped (PAX + filters), NOT user-scoped — the
+    // normalization runs inside the cache so the cached value is plain JSON.
+    return await cacheStatsData<PaxData>(
+      async () => {
+        const paxData = await getPageData(paxId, userIdentifier, filters);
 
-    // Next.js can only pass plain JSON-serializable data from Server -> Client components.
-    // BigQuery libraries sometimes return objects with custom / null prototypes (e.g., DATE wrappers).
-    // Normalize to plain objects here to avoid: "Only plain objects ... can be passed to Client Components".
+        // Normalize BigQuery output into plain, serializable data so it can
+        // be passed from this Server Component to Client Components.
+        const mergedPlain = normalizeDeep<PaxData>(paxData);
 
-    const mergedPlain = JSON.parse(
-      JSON.stringify(paxData, (_k, v) => {
-        // Unwrap common BigQuery wrappers: { value: ... }
-        if (v && typeof v === "object" && "value" in v) return v.value;
-        if (typeof v === "bigint") return Number(v);
-        return v;
-      }),
-    ) as PaxData;
+        // Defensive: many UI components assume list fields are arrays and call `.map`.
+        // Preserve the existing data shape from the old REST endpoints by defaulting missing lists to [].
+        const mergedSafe: PaxData = {
+          info: mergedPlain.info as PAXInfo,
+          summary: mergedPlain.summary as PaxSummary,
+          events: (mergedPlain.events ?? []) as EventData[],
+          ao_breakdown: (mergedPlain.ao_breakdown ?? []) as PaxAOBreakdown[],
+        };
 
-    // Defensive: many UI components assume list fields are arrays and call `.map`.
-    // Preserve the existing data shape from the old REST endpoints by defaulting missing lists to [].
-    const mergedSafe: PaxData = {
-      info: mergedPlain.info as PAXInfo,
-      summary: mergedPlain.summary as PaxSummary,
-      events: (mergedPlain.events ?? []) as EventData[],
-      ao_breakdown: (mergedPlain.ao_breakdown ?? []) as PaxAOBreakdown[],
-    };
+        mergedSafe.events = (mergedSafe.events ?? []).map((e: EventData) => ({
+          ...e,
+          attendance: Array.isArray(e?.attendance) ? e.attendance : [],
+          tags: Array.isArray(e?.tags) ? e.tags : [],
+          types: Array.isArray(e?.types) ? e.types : [],
+        })) as EventData[];
 
-    mergedSafe.events = (mergedSafe.events ?? []).map((e: EventData) => ({
-      ...e,
-      attendance: Array.isArray(e?.attendance) ? e.attendance : [],
-      tags: Array.isArray(e?.tags) ? e.tags : [],
-      types: Array.isArray(e?.types) ? e.types : [],
-    })) as EventData[];
-
-    return mergedSafe;
+        return mergedSafe;
+      },
+      ["pax-page-data", String(paxId), JSON.stringify(filters ?? {})],
+      [`pax-${paxId}`],
+    );
   } catch (err) {
     console.error("Error fetching PAX data:", err);
+    return null;
   }
-
-  return null;
 }

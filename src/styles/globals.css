@@ -107,3 +107,16 @@ body {
   background-color: var(--background);
   color: var(--foreground);
 }
+
+/*
+ * Keyboard-focus baseline for bare native interactive elements (raw <a>,
+ * <button>, inputs, [tabindex]). Wrapped in :where() so it has ZERO
+ * specificity — HeroUI components keep their own focus rings, and this only
+ * applies where nothing else styles focus. Mouse clicks are unaffected
+ * (:focus-visible).
+ */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

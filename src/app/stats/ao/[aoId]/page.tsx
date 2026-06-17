@@ -11,9 +11,10 @@ import { loadAOData } from "./loader";
 import { PageHeader } from "@/components/pageHeader";
 import { AOPageWrapper } from "@/components/ao/PageWrapper";
 import { Breadcrumb } from "@/components/breadcrumb";
-import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
-import Link from "next/link";
+import { buildBreadcrumb } from "@/lib/breadcrumb";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
+import { parseFilterParams } from "@/lib/filters";
+import { EntityDataUnavailable } from "@/components/EntityDataUnavailable";
 
 interface PageProps {
   params: Promise<{ aoId: string }>;
@@ -31,17 +32,6 @@ interface PageProps {
   }>;
 }
 
-/**
- * Normalize a query param that may be a string or string[] into a number[]
- * or undefined when not present.
- */
-function parseIdList(value?: string | string[]): number[] | undefined {
-  if (!value) return undefined;
-  const list = Array.isArray(value) ? value : value.split(",");
-  const nums = list.map((v) => Number(v)).filter((v) => Number.isFinite(v));
-  return nums.length ? nums : undefined;
-}
-
 export default async function AODetailPage({
   params,
   searchParams,
@@ -53,24 +43,7 @@ export default async function AODetailPage({
   const { aoId } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;
 
-  const filters = {
-    startDate: searchParamsResolved?.startDate,
-    endDate: searchParamsResolved?.endDate,
-    range: searchParamsResolved?.range,
-    tagIds: parseIdList(searchParamsResolved?.tagIds),
-    tagMode: searchParamsResolved?.tagMode as "include" | "exclude" | undefined,
-    typeIds: parseIdList(searchParamsResolved?.typeIds),
-    typeMode: searchParamsResolved?.typeMode as
-      | "include"
-      | "exclude"
-      | undefined,
-    categoryIds: parseIdList(searchParamsResolved?.categoryIds),
-    categoryMode: searchParamsResolved?.categoryMode as
-      | "include"
-      | "exclude"
-      | undefined,
-    persist: searchParamsResolved?.persist,
-  };
+  const filters = parseFilterParams(searchParamsResolved);
 
   // Preserve raw query params for downstream UI state (filters, toggles, etc.)
   const categoryIds = searchParamsResolved?.categoryIds;
@@ -89,74 +62,7 @@ export default async function AODetailPage({
 
   // Show empty state when AO data is missing or empty
   if (!hasAOData) {
-    return (
-      <main className="min-h-screen flex items-center justify-center px-4 pt-10 pb-10 bg-gradient-to-b from-background to-default-50">
-        <Card
-          className="w-full max-w-3xl bg-background/80 dark:bg-default-100/60"
-          shadow="lg"
-        >
-          <CardHeader className="flex flex-col gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-center">
-              AO Data Not Available
-            </h1>
-            <p className="text-sm text-foreground/70 text-center max-w-xl mx-auto">
-              This AO exists, but no data is currently available to display.
-            </p>
-          </CardHeader>
-
-          <CardBody className="space-y-4 text-sm text-foreground/80">
-            <p>
-              This usually means the AO has not migrated to{" "}
-              <strong>F3 Nation Data</strong> yet, or the migration process is
-              currently in progress. Until that data is connected, PAX Vault has
-              nothing to index or display.
-            </p>
-
-            <p>
-              If your region has not migrated yet, moving to F3 Nation Data
-              unlocks:
-            </p>
-
-            <ul className="list-disc list-inside space-y-1 text-foreground/70">
-              <li>Reliable, centralized workout and attendance data</li>
-              <li>Accurate PAX, AO, and region-level stats</li>
-              <li>Direct compatibility with tools like PAX Vault</li>
-              <li>Less manual work for Site Qs and Data Qs</li>
-            </ul>
-
-            <p>
-              To get started, follow the official migration instructions here:
-            </p>
-
-            <div className="flex justify-center pt-2">
-              <Link
-                href="https://docs.google.com/document/d/1e7tmuY3irKDt9oy1URQVcxPwxyet1ZY_bVZhGvhESEw/edit?usp=drivesdk"
-                target="_blank"
-                className="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-              >
-                View F3 Nation Data Migration Guide
-              </Link>
-            </div>
-
-            <div className="rounded-md border-2 border-danger bg-danger/15 p-4 text-danger-foreground shadow-sm">
-              <div className="flex items-center gap-2 font-semibold">
-                ⚠️ PAXminer Shutdown Notice
-              </div>
-              <p className="mt-1">
-                PAXminer will be shut down on <strong>March 31st</strong>. AOs
-                that have not migrated to F3 Nation Data by then will lose
-                access to automated data feeds.
-              </p>
-            </div>
-          </CardBody>
-
-          <CardFooter className="text-[11px] text-foreground/50 text-center">
-            Once your AO&apos;s data is connected, refresh this page to view the
-            full dashboard.
-          </CardFooter>
-        </Card>
-      </main>
-    );
+    return <EntityDataUnavailable entity="AO" />;
   }
 
   return (
@@ -164,19 +70,16 @@ export default async function AODetailPage({
       <div className="grid grid-cols-1 gap-6 w-full max-w-6xl pb-6 px-4">
         {/* Breadcrumb */}
         <Breadcrumb
-          items={[
-            { label: "Home", href: "/" },
-            { label: "Nation", href: "/stats/nation" },
-            ...(aoData.info?.region_id && aoData.info?.region_name
-              ? [
-                  {
+          items={buildBreadcrumb({
+            parent:
+              aoData.info?.region_id && aoData.info?.region_name
+                ? {
                     label: aoData.info.region_name,
                     href: `/stats/region/${aoData.info.region_id}`,
-                  },
-                ]
-              : []),
-            { label: aoData.info?.ao_name ?? "AO" },
-          ]}
+                  }
+                : null,
+            current: aoData.info?.ao_name ?? "AO",
+          })}
         />
 
         {/* Page Header */}

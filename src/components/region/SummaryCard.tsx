@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 /**
  * SummaryCard
  *
@@ -15,42 +13,14 @@ import { useEffect, useState } from "react";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { RegionSummary } from "@/lib/types";
-import { formatNumber } from "@/lib/utils";
-import { HelpIcon } from "@/components/icons";
-import { Tooltip } from "@heroui/tooltip";
-import { Popover, PopoverTrigger, PopoverContent } from "@heroui/popover";
+import { renderStat } from "@/lib/utils";
+import { HelpHint } from "@/components/HelpHint";
 
 type SummaryCardProps = {
   summary: RegionSummary;
 };
 
-/**
- * Format a numeric summary value or return a safe fallback.
- */
-function renderStat(value?: number, decimals?: number, suffix?: string) {
-  if (typeof value !== "number") return "Unknown";
-  const formatted = formatNumber(value, decimals);
-  return suffix ? `${formatted} ${suffix}` : formatted;
-}
-
 export function SummaryCard({ summary }: SummaryCardProps) {
-  // Tooltip hover isn't reliable on mobile; use Popover instead
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 640px)");
-    const update = () => setIsMobile(mq.matches);
-    update();
-
-    if (typeof mq.addEventListener === "function") {
-      mq.addEventListener("change", update);
-      return () => mq.removeEventListener("change", update);
-    }
-
-    mq.addListener(update);
-    return () => mq.removeListener(update);
-  }, []);
-
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="flex justify-between items-center px-6 lg:min-h-16">
@@ -70,24 +40,7 @@ export function SummaryCard({ summary }: SummaryCardProps) {
         <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10 text-sm">
           <span className="text-primary flex items-center">
             Active PAX:
-            {isMobile ? (
-              <Popover placement="bottom-start">
-                <PopoverTrigger>
-                  <span className="inline-flex cursor-pointer items-center">
-                    <HelpIcon className="inline-block ml-1 text-default" />
-                  </span>
-                </PopoverTrigger>
-                <PopoverContent className="max-w-[260px] p-2 text-sm">
-                  Number of active PAX in the region over last 30 days
-                </PopoverContent>
-              </Popover>
-            ) : (
-              <Tooltip content="Number of active PAX in the region over last 30 days">
-                <span className="inline-flex cursor-help items-center">
-                  <HelpIcon className="inline-block ml-1 text-default" />
-                </span>
-              </Tooltip>
-            )}
+            <HelpHint content="Number of active PAX in the region over last 30 days" />
           </span>
           <span>{renderStat(summary.active_pax, undefined, "PAX")}</span>
         </div>

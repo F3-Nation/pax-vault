@@ -5,12 +5,7 @@ import {
   AreaRegionBreakdown,
   ChartData,
 } from "@/lib/types";
-
-type EventFilterOpts = {
-  range?: string;
-  startDate?: string; // 'YYYY-MM-DD'
-  endDate?: string; // 'YYYY-MM-DD'
-};
+import { DateRangeFilters } from "@/lib/filters";
 
 /**
  * Convert a named range into UTC YYYY-MM-DD start/end strings.
@@ -77,7 +72,7 @@ function buildRangeDates(range: string | undefined): {
   };
 }
 
-function buildDateFilterClauses(opts?: EventFilterOpts): string[] {
+function buildDateFilterClauses(opts?: DateRangeFilters): string[] {
   const rangeDates = buildRangeDates(opts?.range);
   const startDate = opts?.startDate ?? rangeDates.startDate;
   const endDate = opts?.endDate ?? rangeDates.endDate;
@@ -105,7 +100,7 @@ export async function searchAreasByName(
   const term = (q || "").trim();
   if (term.length < 2) return [];
 
-  const escapedTerm = term.replace(/'/g, "''").toLowerCase();
+  const likePattern = `%${term.toLowerCase()}%`;
 
   const query = `-- AREA SEARCH
     SELECT
@@ -115,7 +110,7 @@ export async function searchAreasByName(
       is_active
     FROM pv_areas
     WHERE area_name IS NOT NULL
-      AND LOWER(area_name) LIKE '%${escapedTerm}%'
+      AND LOWER(area_name) LIKE @term
       ${includeInactive ? "" : "AND is_active = TRUE"}
     ORDER BY area_name
     LIMIT 50
@@ -125,6 +120,7 @@ export async function searchAreasByName(
     query,
     userIdentifier,
     `search areas by name: ${q}`,
+    { term: likePattern },
   );
   return results ?? [];
 }
@@ -132,7 +128,7 @@ export async function searchAreasByName(
 export async function getPageData(
   areaId: number,
   userIdentifier?: string,
-  opts?: EventFilterOpts,
+  opts?: DateRangeFilters,
 ): Promise<{
   info: AreaInfo | null;
   summary: AreaSummary | null;

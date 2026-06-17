@@ -125,12 +125,15 @@ export function LeadersCard({
       <CardBody className="px-6">
         <ScrollShadow style={{ height }} className="w-full">
           <div className="space-y-1 text-sm overflow-y-auto">
-            {visibleLeaders.map((leader) => (
+            {visibleLeaders.map((leader, index) => (
               <div
                 key={leader.user_id}
-                className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10"
+                className="flex justify-between items-center py-1 pb-2 border-b light:border-black/10 dark:border-white/10"
               >
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-sm min-w-0">
+                  <span className="w-5 shrink-0 text-right tabular-nums text-default-400">
+                    {index + 1}
+                  </span>
                   <Avatar
                     alt={leader.f3_name ?? leader.user_id.toString()}
                     className="flex-shrink-0 w-5 h-5"
@@ -138,14 +141,16 @@ export function LeadersCard({
                     src={leader.avatar_url}
                   />
                   <Link
-                    className="text-sm"
+                    className="text-sm truncate"
                     color="primary"
                     href={`/stats/pax/${leader.user_id}${filters ? `?${filters}` : ""}`}
                   >
                     {leader.f3_name ?? leader.user_id.toString()}
                   </Link>
                 </div>
-                {renderLeaderValue(leader, scope, mode)}
+                <span className="whitespace-nowrap pl-2">
+                  {renderLeaderValue(leader, scope, mode)}
+                </span>
               </div>
             ))}
           </div>

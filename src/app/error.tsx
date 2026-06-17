@@ -2,19 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
-
-/**
- * Generate a short, stable-ish id for this error instance.
- * Useful for support screenshots without exposing stack traces.
- */
-function makeErrorId(error: Error): string {
-  const src = `${error.name}:${error.message}`;
-  let hash = 0;
-  for (let i = 0; i < src.length; i++) {
-    hash = (hash * 31 + src.charCodeAt(i)) >>> 0;
-  }
-  return hash.toString(16).padStart(8, "0");
-}
+import { makeErrorId, reportError } from "@/lib/observability";
 
 /**
  * Avoid leaking internal details while still giving the user something actionable.
@@ -33,12 +21,12 @@ export default function GlobalError({
   error: Error;
   reset: () => void;
 }) {
-  useEffect(() => {
-    // Central place to hook in Sentry/LogRocket/etc. in the future.
-    console.error("App error boundary:", error);
-  }, [error]);
-
   const errorId = useMemo(() => makeErrorId(error), [error]);
+
+  useEffect(() => {
+    reportError(error, { scope: "client/error-boundary", errorId });
+  }, [error, errorId]);
+
   const userMessage = useMemo(() => getUserMessage(error), [error]);
 
   return (

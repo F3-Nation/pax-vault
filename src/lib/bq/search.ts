@@ -21,8 +21,8 @@ export async function searchAll(
   const term = (q || "").trim();
   if (term.length < 2) return { regions: [], aos: [], pax: [] };
 
-  // Escape single quotes to prevent SQL injection via LIKE.
-  const escapedTerm = term.replace(/'/g, "''").toLowerCase();
+  // Bound as a query parameter (@term) — no manual escaping needed.
+  const likePattern = `%${term.toLowerCase()}%`;
   const activeFilter = includeInactive ? "" : "AND is_active = TRUE";
 
   // Single query — each subquery returns an ARRAY of STRUCTs so the entire
@@ -35,7 +35,7 @@ export async function searchAll(
                ORDER BY region_name LIMIT 50)
         FROM pv_regions
         WHERE region_name IS NOT NULL
-          AND LOWER(region_name) LIKE '%${escapedTerm}%'
+          AND LOWER(region_name) LIKE @term
           ${activeFilter}
       ) AS regions,
       (
@@ -43,7 +43,7 @@ export async function searchAll(
                ORDER BY ao_name LIMIT 50)
         FROM pv_aos
         WHERE ao_name IS NOT NULL
-          AND LOWER(ao_name) LIKE '%${escapedTerm}%'
+          AND LOWER(ao_name) LIKE @term
           ${activeFilter}
       ) AS aos,
       (
@@ -51,7 +51,7 @@ export async function searchAll(
                ORDER BY f3_name LIMIT 50)
         FROM pv_pax
         WHERE f3_name IS NOT NULL
-          AND LOWER(f3_name) LIKE '%${escapedTerm}%'
+          AND LOWER(f3_name) LIKE @term
       ) AS pax
   `;
 
@@ -59,6 +59,7 @@ export async function searchAll(
     query,
     userIdentifier,
     `unified search: ${q}`,
+    { term: likePattern },
   );
 
   const row = rows[0];
