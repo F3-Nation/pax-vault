@@ -63,54 +63,6 @@ function toUTCDateString(date: Date) {
   return date.toISOString().split("T")[0];
 }
 
-// --- Filter chip helpers ---
-type ChipColor = "primary" | "secondary" | "warning" | "default" | "success";
-
-type FilterChip = {
-  label: string;
-  color: ChipColor;
-};
-
-function findAoName(aos: FilterProps["aos"], id: string): string | null {
-  if (!aos) return null;
-  const n = Number(id);
-  const found = aos.find((a) => a.ao_org_id === n);
-  return found ? found.ao_name : null;
-}
-
-function findRegionName(
-  regions: FilterProps["regions"],
-  id: string,
-): string | null {
-  if (!regions) return null;
-  const n = Number(id);
-  const found = regions.find((r) => r.region_org_id === n);
-  return found ? found.region_name : null;
-}
-
-function findTagName(tags: FilterProps["tags"], id: string): string | null {
-  const n = Number(id);
-  const found = tags.find((t) => t.tag_id === n);
-  return found ? found.tag_name : null;
-}
-
-function findTypeName(types: FilterProps["types"], id: string): string | null {
-  const n = Number(id);
-  const found = types.find((t) => t.type_id === n);
-  return found ? found.type_name : null;
-}
-
-const CATEGORY_LOOKUP: ReadonlyArray<{ id: string; name: string }> = [
-  { id: "1", name: "1st F" },
-  { id: "2", name: "2nd F" },
-  { id: "3", name: "3rd F" },
-];
-
-function findCategoryName(id: string): string | null {
-  const found = CATEGORY_LOOKUP.find((c) => c.id === id);
-  return found ? found.name : null;
-}
-
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@heroui/button";
@@ -127,7 +79,7 @@ import { RadioGroup, Radio } from "@heroui/radio";
 import { CheckboxGroup, Checkbox } from "@heroui/checkbox";
 import { useDisclosure } from "@heroui/use-disclosure";
 import { Switch } from "@heroui/switch";
-import { Chip } from "@heroui/chip";
+import { ActiveFilterChips } from "@/components/ActiveFilterChips";
 
 export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
   // Drawer open/close state
@@ -224,88 +176,6 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
     () => new Set(computedExpandedKeys),
   );
-
-  // Build active filter chips
-  const activeChips = useMemo<FilterChip[]>(() => {
-    const chips: FilterChip[] = [];
-
-    // Date filters (primary)
-    if (parsedFilters.range && parsedFilters.range !== ALL_HISTORY) {
-      chips.push({ label: `${parsedFilters.range}`, color: "primary" });
-    }
-    if (parsedFilters.startDate) {
-      chips.push({
-        label: `Start: ${parsedFilters.startDate}`,
-        color: "primary",
-      });
-    }
-    if (parsedFilters.endDate) {
-      chips.push({ label: `End: ${parsedFilters.endDate}`, color: "primary" });
-    }
-
-    // Regions (secondary)
-    if (
-      parsedFilters.regionMode === "exclude" &&
-      parsedFilters.regionIds.length > 0
-    ) {
-      chips.push({ label: "Exclude", color: "secondary" });
-    }
-    for (const id of parsedFilters.regionIds) {
-      const name = findRegionName(regions, id);
-      if (name) chips.push({ label: `F3 ${name}`, color: "secondary" });
-    }
-
-    // AOs (secondary)
-    if (parsedFilters.aoMode === "exclude" && parsedFilters.aoIds.length > 0) {
-      chips.push({ label: "Exclude", color: "secondary" });
-    }
-    for (const id of parsedFilters.aoIds) {
-      if (id === "0") {
-        chips.push({ label: "Unknown AO", color: "secondary" });
-        continue;
-      }
-      const name = findAoName(aos, id);
-      if (name) chips.push({ label: `${name}`, color: "secondary" });
-    }
-
-    // Tags (warning)
-    if (
-      parsedFilters.tagMode === "exclude" &&
-      parsedFilters.tagIds.length > 0
-    ) {
-      chips.push({ label: "Exclude", color: "warning" });
-    }
-    for (const id of parsedFilters.tagIds) {
-      const name = findTagName(tags, id);
-      if (name) chips.push({ label: `${name}`, color: "warning" });
-    }
-
-    // Types (default)
-    if (
-      parsedFilters.typeMode === "exclude" &&
-      parsedFilters.typeIds.length > 0
-    ) {
-      chips.push({ label: "Exclude", color: "default" });
-    }
-    for (const id of parsedFilters.typeIds) {
-      const name = findTypeName(types, id);
-      if (name) chips.push({ label: `${name}`, color: "default" });
-    }
-
-    // Categories (success)
-    if (
-      parsedFilters.categoryMode === "exclude" &&
-      parsedFilters.categoryIds.length > 0
-    ) {
-      chips.push({ label: "Exclude", color: "success" });
-    }
-    for (const id of parsedFilters.categoryIds) {
-      const name = findCategoryName(id);
-      if (name) chips.push({ label: `${name}`, color: "success" });
-    }
-
-    return chips;
-  }, [parsedFilters, aos, regions, tags, types]);
 
   // Move Next.js router hooks above shareUrl for readability
   const router = useRouter();
@@ -441,30 +311,13 @@ export function Filter({ aos, regions, types, tags, filters }: FilterProps) {
   return (
     <>
       <div className="grid grid-cols-1 w-full max-w-6xl">
-        {activeChips.length > 0 ? (
-          <div id="filter-container" className="w-full max-w-6xl">
-            {activeChips.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 rounded-md bg-card px-3 py-2">
-                <span className="text-xs text-muted-foreground mr-1">
-                  Active Filters:
-                </span>
-                {activeChips.map((c, idx) => (
-                  <Chip
-                    key={`${c.label}-${idx}`}
-                    size="sm"
-                    color={c.color}
-                    variant="bordered"
-                    className="shrink-0"
-                    radius="sm"
-                    title={c.label}
-                  >
-                    {c.label}
-                  </Chip>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : null}
+        <ActiveFilterChips
+          aos={aos}
+          regions={regions}
+          types={types}
+          tags={tags}
+          filters={filters}
+        />
         <div className="flex w-full gap-2">
           <Drawer
             isOpen={isOpen}
