@@ -50,6 +50,20 @@ export function formatNumber(
 }
 
 /**
+ * Format a numeric summary stat for display, with an optional unit suffix.
+ * Returns `"Unknown"` for non-numeric input. Shared by the entity SummaryCards.
+ */
+export function renderStat(
+  value?: number,
+  decimals?: number,
+  suffix?: string,
+): string {
+  if (typeof value !== "number") return "Unknown";
+  const formatted = formatNumber(value, decimals);
+  return suffix ? `${formatted} ${suffix}` : formatted;
+}
+
+/**
  * Format a date using UTC-only semantics to avoid timezone drift.
  *
  * Accepts a Date or ISO date string (YYYY-MM-DD).

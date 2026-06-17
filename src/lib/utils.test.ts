@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   getBaseUrl,
   formatNumber,
+  renderStat,
   formatDate,
   cleanEventName,
   formatChangeDescription,
@@ -9,6 +10,20 @@ import {
   formatTime,
   fallbackF3Logo,
 } from "./utils";
+
+describe("renderStat", () => {
+  it("returns 'Unknown' for non-numeric input", () => {
+    expect(renderStat(undefined)).toBe("Unknown");
+  });
+
+  it("formats a number and appends a suffix", () => {
+    expect(renderStat(1234, undefined, "PAX")).toBe("1,234 PAX");
+  });
+
+  it("respects decimals and omits suffix when absent", () => {
+    expect(renderStat(12.5, 2)).toBe("12.50");
+  });
+});
 
 describe("getBaseUrl", () => {
   const originalEnv = process.env;
