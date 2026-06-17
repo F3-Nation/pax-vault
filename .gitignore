@@ -54,3 +54,9 @@ pr.md
 # large log files in issue context
 .context/issues/**/*.json
 certificates
+
+# Playwright (local-only e2e)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
