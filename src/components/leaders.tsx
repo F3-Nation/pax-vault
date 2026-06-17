@@ -148,7 +148,7 @@ export function LeadersCard({
                     {leader.f3_name ?? leader.user_id.toString()}
                   </Link>
                 </div>
-                <span className="font-semibold text-primary tabular-nums whitespace-nowrap pl-2">
+                <span className="whitespace-nowrap pl-2">
                   {renderLeaderValue(leader, scope, mode)}
                 </span>
               </div>
