@@ -14,6 +14,7 @@ import {
   ChartData,
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/areas";
+import { cacheStatsData } from "@/lib/cache";
 
 type AreaFilterOpts = {
   range?: string;
@@ -27,28 +28,35 @@ export async function loadAreaData(
   filters?: AreaFilterOpts,
 ): Promise<AreaData | null> {
   try {
-    const areaData = await getPageData(areaId, userIdentifier, filters);
+    // Cache key is entity-scoped (area + filters), NOT user-scoped — the
+    // normalization runs inside the cache so the cached value is plain JSON.
+    return await cacheStatsData<AreaData>(
+      async () => {
+        const areaData = await getPageData(areaId, userIdentifier, filters);
 
-    const mergedPlain = JSON.parse(
-      JSON.stringify(areaData, (_k, v) => {
-        if (v && typeof v === "object" && "value" in v) return v.value;
-        if (typeof v === "bigint") return Number(v);
-        return v;
-      }),
-    ) as AreaData;
+        const mergedPlain = JSON.parse(
+          JSON.stringify(areaData, (_k, v) => {
+            if (v && typeof v === "object" && "value" in v) return v.value;
+            if (typeof v === "bigint") return Number(v);
+            return v;
+          }),
+        ) as AreaData;
 
-    const mergedSafe: AreaData = {
-      info: mergedPlain.info as AreaInfo,
-      summary: mergedPlain.summary as AreaSummary,
-      regionBreakdown: (mergedPlain.regionBreakdown ??
-        []) as AreaRegionBreakdown[],
-      charts: (mergedPlain.charts ?? []) as ChartData[],
-    };
+        const mergedSafe: AreaData = {
+          info: mergedPlain.info as AreaInfo,
+          summary: mergedPlain.summary as AreaSummary,
+          regionBreakdown: (mergedPlain.regionBreakdown ??
+            []) as AreaRegionBreakdown[],
+          charts: (mergedPlain.charts ?? []) as ChartData[],
+        };
 
-    return mergedSafe;
+        return mergedSafe;
+      },
+      ["area-page-data", String(areaId), JSON.stringify(filters ?? {})],
+      [`area-${areaId}`],
+    );
   } catch (err) {
     console.error(`Error fetching Area data (area=${areaId}):`, err);
+    return null;
   }
-
-  return null;
 }
