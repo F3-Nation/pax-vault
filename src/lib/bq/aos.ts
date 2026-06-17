@@ -6,33 +6,7 @@ import {
   Leaders,
   EventUpcoming,
 } from "@/lib/types";
-
-/**
- * Common filter options for AO event-based queries.
- *
- * Notes:
- * - All list filters are treated as numeric-only (non-finite values are dropped).
- * - Modes default to "include".
- * - `categoryIds` is restricted to 1/2/3 which map to first/second/third F flags.
- */
-type EventFilterOpts = {
-  range?: string;
-  startDate?: string; // 'YYYY-MM-DD'
-  endDate?: string; // 'YYYY-MM-DD'
-  tagIds?: number[];
-  tagMode?: "include" | "exclude";
-  typeIds?: number[];
-  typeMode?: "include" | "exclude";
-  categoryIds?: number[];
-  categoryMode?: "include" | "exclude";
-};
-
-/**
- * Keep only finite numeric values from a list.
- * This helps prevent accidental SQL injection through non-numeric input.
- */
-const cleanNumberList = (vals?: number[]) =>
-  (vals || []).filter((v) => Number.isFinite(v)).map((v) => Number(v));
+import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
 
 /**
  * Build a BigQuery WHERE clause for pv_events-based queries.
@@ -43,7 +17,7 @@ const cleanNumberList = (vals?: number[]) =>
  * - tagIds/typeIds use EXISTS / NOT EXISTS against the nested arrays.
  * - categories maps 1/2/3 to first_f_ind/second_f_ind/third_f_ind and combines with OR.
  */
-function buildEventsWhereSql(aoId: number, opts?: EventFilterOpts): string {
+function buildEventsWhereSql(aoId: number, opts?: StatsFilters): string {
   const rangeDates = buildRangeDates(opts?.range);
   const startDate = opts?.startDate ?? rangeDates.startDate;
   const endDate = opts?.endDate ?? rangeDates.endDate;
@@ -53,9 +27,9 @@ function buildEventsWhereSql(aoId: number, opts?: EventFilterOpts): string {
   const categoryMode = opts?.categoryMode ?? "include";
 
   // Normalize lists.
-  const tagList = cleanNumberList(opts?.tagIds);
-  const typeList = cleanNumberList(opts?.typeIds);
-  const categoryList = cleanNumberList(opts?.categoryIds).filter(
+  const tagList = toFiniteNumbers(opts?.tagIds);
+  const typeList = toFiniteNumbers(opts?.typeIds);
+  const categoryList = toFiniteNumbers(opts?.categoryIds).filter(
     (c) => c === 1 || c === 2 || c === 3,
   );
 
@@ -185,7 +159,7 @@ function buildRangeDates(range: string | undefined): {
 export async function getEvents(
   aoId: number,
   userIdentifier?: string,
-  opts?: EventFilterOpts & {
+  opts?: StatsFilters & {
     limit?: number;
   },
 ): Promise<EventData[] | null> {
@@ -226,7 +200,7 @@ export async function getEvents(
 export async function getPageData(
   aoId: number,
   userIdentifier?: string,
-  opts?: EventFilterOpts,
+  opts?: StatsFilters,
 ): Promise<{
   info: AOInfo | null;
   events: EventData[] | null;

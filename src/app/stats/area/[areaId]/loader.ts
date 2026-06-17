@@ -15,17 +15,12 @@ import {
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/areas";
 import { cacheStatsData } from "@/lib/cache";
-
-type AreaFilterOpts = {
-  range?: string;
-  startDate?: string;
-  endDate?: string;
-};
+import { DateRangeFilters } from "@/lib/filters";
 
 export async function loadAreaData(
   areaId: number,
   userIdentifier?: string,
-  filters?: AreaFilterOpts,
+  filters?: DateRangeFilters,
 ): Promise<AreaData | null> {
   try {
     // Cache key is entity-scoped (area + filters), NOT user-scoped — the

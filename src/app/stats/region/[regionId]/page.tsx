@@ -14,6 +14,7 @@ import { Breadcrumb } from "@/components/breadcrumb";
 import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
 import Link from "next/link";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
+import { parseFilterParams } from "@/lib/filters";
 
 interface PageProps {
   params: Promise<{ regionId: string }>;
@@ -33,17 +34,6 @@ interface PageProps {
   }>;
 }
 
-/**
- * Normalize a query param that may be a string or string[] into a number[]
- * or undefined when not present.
- */
-function parseIdList(value?: string | string[]): number[] | undefined {
-  if (!value) return undefined;
-  const list = Array.isArray(value) ? value : value.split(",");
-  const nums = list.map((v) => Number(v)).filter((v) => Number.isFinite(v));
-  return nums.length ? nums : undefined;
-}
-
 export default async function RegionDetailPage({
   params,
   searchParams,
@@ -55,26 +45,7 @@ export default async function RegionDetailPage({
   const { regionId } = await params;
   const searchParamsResolved = searchParams ? await searchParams : undefined;
 
-  const filters = {
-    startDate: searchParamsResolved?.startDate,
-    endDate: searchParamsResolved?.endDate,
-    range: searchParamsResolved?.range,
-    aoIds: parseIdList(searchParamsResolved?.aoIds),
-    aoMode: searchParamsResolved?.aoMode as "include" | "exclude" | undefined,
-    tagIds: parseIdList(searchParamsResolved?.tagIds),
-    tagMode: searchParamsResolved?.tagMode as "include" | "exclude" | undefined,
-    typeIds: parseIdList(searchParamsResolved?.typeIds),
-    typeMode: searchParamsResolved?.typeMode as
-      | "include"
-      | "exclude"
-      | undefined,
-    categoryIds: parseIdList(searchParamsResolved?.categoryIds),
-    categoryMode: searchParamsResolved?.categoryMode as
-      | "include"
-      | "exclude"
-      | undefined,
-    persist: searchParamsResolved?.persist,
-  };
+  const filters = parseFilterParams(searchParamsResolved);
 
   // Preserve raw query params for downstream UI state (filters, toggles, etc.)
   const categoryIds = searchParamsResolved?.categoryIds;

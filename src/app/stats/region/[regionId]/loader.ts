@@ -20,23 +20,7 @@ import {
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/regions";
 import { cacheStatsData } from "@/lib/cache";
-
-/**
- * Shared filter options passed through to region API endpoints.
- */
-type RegionFilterOpts = {
-  range?: string;
-  startDate?: string;
-  endDate?: string;
-  aoIds?: number[];
-  aoMode?: "include" | "exclude";
-  tagIds?: number[];
-  tagMode?: "include" | "exclude";
-  typeIds?: number[];
-  typeMode?: "include" | "exclude";
-  categoryIds?: number[];
-  categoryMode?: "include" | "exclude";
-};
+import { StatsFilters } from "@/lib/filters";
 
 /**
  * Load all data required for the region stats page.
@@ -46,7 +30,7 @@ type RegionFilterOpts = {
 export async function loadRegionData(
   regionId: number,
   userIdentifier?: string,
-  filters?: RegionFilterOpts,
+  filters?: StatsFilters,
 ): Promise<RegionData | null> {
   try {
     // Cache key is entity-scoped (region + filters), NOT user-scoped — the

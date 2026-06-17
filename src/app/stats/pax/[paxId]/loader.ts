@@ -16,25 +16,7 @@ import {
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/pax";
 import { cacheStatsData } from "@/lib/cache";
-
-/**
- * Shared filter options passed through to pax API endpoints.
- */
-type PaxFilterOpts = {
-  range?: string;
-  startDate?: string;
-  endDate?: string;
-  aoIds?: number[];
-  aoMode?: "include" | "exclude";
-  regionIds?: number[];
-  regionMode?: "include" | "exclude";
-  tagIds?: number[];
-  tagMode?: "include" | "exclude";
-  typeIds?: number[];
-  typeMode?: "include" | "exclude";
-  categoryIds?: number[];
-  categoryMode?: "include" | "exclude";
-};
+import { StatsFilters } from "@/lib/filters";
 
 /**
  * Load all data required for the pax stats page.
@@ -44,7 +26,7 @@ type PaxFilterOpts = {
 export async function loadPaxData(
   paxId: number,
   userIdentifier?: string,
-  filters?: PaxFilterOpts,
+  filters?: StatsFilters,
 ): Promise<PaxData | null> {
   try {
     // Cache key is entity-scoped (PAX + filters), NOT user-scoped — the

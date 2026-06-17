@@ -17,21 +17,7 @@ import {
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/aos";
 import { cacheStatsData } from "@/lib/cache";
-
-/**
- * Shared filter options passed through to AO API endpoints.
- */
-type AOFilterOpts = {
-  range?: string;
-  startDate?: string;
-  endDate?: string;
-  tagIds?: number[];
-  tagMode?: "include" | "exclude";
-  typeIds?: number[];
-  typeMode?: "include" | "exclude";
-  categoryIds?: number[];
-  categoryMode?: "include" | "exclude";
-};
+import { StatsFilters } from "@/lib/filters";
 
 /**
  * Load all data required for the AO stats page.
@@ -41,7 +27,7 @@ type AOFilterOpts = {
 export async function loadAOData(
   aoId: number,
   userIdentifier?: string,
-  filters?: AOFilterOpts,
+  filters?: StatsFilters,
 ): Promise<AOData | null> {
   try {
     // Cache key is entity-scoped (AO + filters), NOT user-scoped — the
