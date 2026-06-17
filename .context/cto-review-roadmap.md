@@ -11,10 +11,11 @@ querying a BigQuery warehouse and rendering server-side leaderboards, summaries,
 This document is the deliverable: an evidence-based assessment plus one prioritized roadmap,
 integrating three review lenses — **engineering (CTO), design (CDO), and application architecture
 (senior engineer).** Every recommendation is calibrated to the real constraint — **a solo /
-volunteer-driven team** — so the bar is not "best practice" but *"the smallest change that buys the
-most reliability, cost, security, and felt-quality at once, with the least ongoing maintenance."*
+volunteer-driven team** — so the bar is not "best practice" but _"the smallest change that buys the
+most reliability, cost, security, and felt-quality at once, with the least ongoing maintenance."_
 
 ### One-line verdict
+
 The product is **well-built and roughly 80% of the way there.** The architecture is pragmatic, the
 layering is disciplined, and the design is clean. The work ahead is **not building more — it's
 hardening, caching, and sharpening what already exists.** Almost none of it is a rewrite.
@@ -25,33 +26,33 @@ hardening, caching, and sharpening what already exists.** Almost none of it is a
 
 All findings collapse into three moves. The roadmap below is ordered to deliver them.
 
-1. **HARDEN** *(reliability + security).* Today the team learns about incidents from users, not
+1. **HARDEN** _(reliability + security)._ Today the team learns about incidents from users, not
    monitoring (both postmortems were user-reported); the unsafe query path (string interpolation) is
-   the *easy* one; and the known failure modes have no tests. Fix: error tracking, query parameters,
+   the _easy_ one; and the known failure modes have no tests. Fix: error tracking, query parameters,
    and tests for the things that have already broken.
-2. **CACHE** *(cost + scale + speed).* Every authenticated page load runs a live BigQuery query with
+2. **CACHE** _(cost + scale + speed)._ Every authenticated page load runs a live BigQuery query with
    **zero caching.** BigQuery is an OLAP warehouse (per-query latency + cost), not a serving DB —
    using it as one is the root cause behind the incidents, the cost curve, and the latency. Fix:
    a thin Next.js caching layer in front of it. (Postgres/materialized serving tier stays a
-   *documented-but-unbuilt* "if it grows" option — too much maintenance for one person now.)
-3. **SHARPEN** *(design + architecture, without over-abstracting).* The UI *displays data instead of
-   driving decisions*, and the same contracts (filters, normalization, empty-states, stat cards) are
+   _documented-but-unbuilt_ "if it grows" option — too much maintenance for one person now.)
+3. **SHARPEN** _(design + architecture, without over-abstracting)._ The UI _displays data instead of
+   driving decisions_, and the same contracts (filters, normalization, empty-states, stat cards) are
    copy-pasted across five entity verticals. Fix: centralize the duplicated contracts and make a
    handful of high-impact UI changes (un-hide the already-built trend chart, fix the mobile-breaking
-   heights, rank the leaderboard) — favoring shared *utilities* over a clever factory.
+   heights, rank the leaderboard) — favoring shared _utilities_ over a clever factory.
 
 ---
 
 ## What's working (protect these — do not "improve" them)
 
-- **Disciplined layering (verified).** `lib/db` is imported *only* by `lib/bq/*` and `auth/allowlist`
+- **Disciplined layering (verified).** `lib/db` is imported _only_ by `lib/bq/*` and `auth/allowlist`
   — no page or component reaches the database directly. A real, enforced data-access boundary.
 - **Two data paths that share the DAL, not duplicate it.** The SSR loader (`getPageData`) and the
   client API route (`getEvents`) both sit on the same `lib/bq/regions.ts`. Correct SSR-first +
   client-interaction split. **Do not merge them.**
 - **Pragmatic stack choices.** App Router + server-component loaders; one BQ query per page
   (cost-conscious by design); URL-based filter state (shareable, no Redux); HeroUI design system with
-  real light/dark tokens. The team correctly *avoided* Redux/React Query/a custom component lib.
+  real light/dark tokens. The team correctly _avoided_ Redux/React Query/a custom component lib.
 - **Real engineering discipline already in CI** (`.github/workflows/pr.yaml`): strict TypeScript,
   ESLint `--max-warnings 0`, Prettier check, `tsc --noEmit`. No `ts-ignore`, no TODO litter.
 - **Mature incident culture.** Two well-written postmortems in `.context/postmortems/` — the roadmap
@@ -72,7 +73,7 @@ Rigor matters in a review — these corrections prevent the roadmap from chasing
   item** (P1-#7): production secrets shouldn't sit in plaintext on a laptop.
 - **"SQL injection" — real pattern, low actual severity.** In `auth/allowlist.ts` the email is
   OAuth-sourced + quote-escaped and the table name is operator-controlled (env var), so it is not
-  exploitable today. The defensible finding is *systemic*: `lib/db.ts` `queryBigQuery()` accepts only
+  exploitable today. The defensible finding is _systemic_: `lib/db.ts` `queryBigQuery()` accepts only
   a raw SQL string — **no parameter support at all** — so every query is built by interpolation. A
   latent hazard to close cheaply, not an active vulnerability.
 - **Design "brand = F" — tempered.** For a solo-maintained, auth-gated internal tool, "clean and
@@ -92,7 +93,7 @@ velocity/polish.
    `export const revalidate = 3600` on `src/app/stats/**/page.tsx`, or wrap the loaders' BQ calls in
    `unstable_cache` with a per-entity tag. Workout data changes daily, not per-second, so this cuts
    BigQuery cost/bytes by ~1–2 orders of magnitude on repeat views, removes BQ from the hot path, and
-   makes nav feel instant — with near-zero upkeep. *Files:* `region/[regionId]/loader.ts` + the
+   makes nav feel instant — with near-zero upkeep. _Files:_ `region/[regionId]/loader.ts` + the
    `ao/pax/area/sector` siblings.
 2. **Un-hide and finish the region trend chart.** [Design][UX] The chart that answers "how is my
    region trending?" **already exists and is switched off** — `components/region/PageWrapper.tsx:143`
@@ -104,8 +105,8 @@ velocity/polish.
    users. Add to the global error boundary + API route catch blocks. ~1 hour.
 4. **Add BQ query-parameter support, then convert the allowlist query.** [Eng][Sec] Extend
    `lib/db.ts` `queryBigQuery()` to accept an optional `params` object passed to
-   `bigquery.query({ query, params })`; convert `auth/allowlist.ts` first. Makes the *safe* path the
-   *easy* path for all future queries without a big migration.
+   `bigquery.query({ query, params })`; convert `auth/allowlist.ts` first. Makes the _safe_ path the
+   _easy_ path for all future queries without a big migration.
 
 ### P1 — Lock in correctness (weeks; kill the known failure classes)
 
@@ -119,13 +120,13 @@ velocity/polish.
    200 + `[]`)** when BQ throws, and that location/dataset are configured. Re-enable the BQ suite
    currently disabled in `vitest.config` ("DISABLING TESTS FOR NOW…"). Regression insurance, not
    coverage-chasing.
-7. **Fix the four hardcoded card heights.** [Design][UX] A *pattern*, not a one-off:
+7. **Fix the four hardcoded card heights.** [Design][UX] A _pattern_, not a one-off:
    `AchievementsCard.tsx:346` `h-[1105px]`, `KotterCard.tsx:216` & `upcomingEvents.tsx:74` `h-[500px]`,
    `AOBreakdownCard.tsx:55` `h-[400px]`. On a phone the 1105px card swallows the viewport and traps
    scroll. Replace with `max-h-[60vh]` + `overflow-y-auto` (or first-N rows + "View all"). Pure bug-fix.
 8. **One Playwright smoke test in CI.** [Eng][Rel] A single happy path (sign-in redirect → load a
    region page → search returns results) catches deploy-level breakage unit tests miss. Keep it to
-   *one* flow — a volunteer team shouldn't maintain a big E2E suite.
+   _one_ flow — a volunteer team shouldn't maintain a big E2E suite.
 9. **Secret hygiene + ops alerts.** [Eng][Sec·Rel·Cost] Stop keeping prod secrets in `.env.firebase`
    on the laptop; pull from Google Secret Manager when needed, and rotate `SESSION_SECRET` once as
    hygiene. Add a free external uptime check + a GCP **BigQuery budget alert** (catches "site down"
@@ -143,8 +144,8 @@ velocity/polish.
     verticals copy-paste: a parameterized `<EntityDataUnavailable entity="Region" />` (the excellent
     60-line empty state, currently inline in each `page.tsx`), a shared `<StatRow>`/`SummaryCard` (the
     five near-duplicate variants), and a `buildBreadcrumb()` helper. Drops each `page.tsx` from ~229
-    to ~40 lines and gives one place to change stat-row styling. *(Do NOT build a generic
-    `createStatsPage` factory — see anti-recommendations.)*
+    to ~40 lines and gives one place to change stat-row styling. _(Do NOT build a generic
+    `createStatsPage` factory — see anti-recommendations.)_
 13. **Centralize BQ→domain deserialization.** [Arch][Rel] Replace the per-loader
     `JSON.parse(JSON.stringify(..., replacer))` (slow; silently corrupts `Date`s) with one typed
     `normalizeDeep<T>()` in `lib/db.ts` handling `{value}`, `bigint`, and `DATE`. One place to fix
@@ -158,7 +159,7 @@ velocity/polish.
     phone — collapse to a count ("42 PAX") with tap-to-expand.
 17. **Split the two oversized components.** [Design][UX] `components/events.tsx` (~36KB) and
     `pageFilter.tsx` (~39KB). Extract `EventList`/`EventModal` and the filter sections — but
-    *opportunistically, when next editing them*, not as a standalone project.
+    _opportunistically, when next editing them_, not as a standalone project.
 
 ### P3 — Polish & "if it grows" (backlog, not commitments)
 
@@ -170,7 +171,7 @@ velocity/polish.
     out of scope until there's a designer.
 20. **Tighten the server/client seam.** [Arch][Cost·UX] 35 `use client` files ship static cards as
     JS. Keep static cards as server components, push `use client` to interactive leaves — real
-    bundle-size win, but do it *when next refactoring the dashboard*.
+    bundle-size win, but do it _when next refactoring the dashboard_.
 21. **Standardize file naming** (PascalCase components, camelCase utils) and give `nation/` the
     missing `loader`/`loading` for consistency. [Arch]
 22. **Documented-but-unbuilt: Postgres/materialized serving tier** (one-page ADR) and **rate limiting**
@@ -185,11 +186,11 @@ Common "CTO checklist" items that add maintenance without proportional payoff at
 - ❌ **Standing up Postgres / a data pipeline now** — P0 caching solves the real problem far cheaper.
 - ❌ **Merging the loader and API data paths** — the split is correct.
 - ❌ **A generic `createStatsPage` loader/page factory** — factories over-abstract fast; ship the
-  shared *utilities* (filters, primitives, normalization) first and let the pattern emerge. Three
+  shared _utilities_ (filters, primitives, normalization) first and let the pattern emerge. Three
   small shared functions beat one magic factory for one maintainer.
 - ❌ **A state-management lib or client data-fetching layer** to "fix" the searchParams blob — a
   single typed `filters` object (or `useSearchParams`) is enough.
-- ❌ **A coverage-number chase or a large E2E suite** — test the *known* failure modes only.
+- ❌ **A coverage-number chase or a large E2E suite** — test the _known_ failure modes only.
 - ❌ **A design-system-and-rebrand project** — new font, regional color theming, custom HeroUI theme.
 - ❌ **Heavy process** — ADR-for-everything, deployment approval gates, husky pre-commit hooks (CI
   already enforces the gates).
@@ -213,39 +214,39 @@ Common "CTO checklist" items that add maintenance without proportional payoff at
   re-enabled BQ suite passes.
 - **Smoke test (#8):** Playwright green on sign-in → region → search in CI.
 - **Full quality gate:** `npm run format:check && npm run lint && npm run typecheck && npm run build
-  && npm run test` all pass (mirrors `.github/workflows/pr.yaml`).
+&& npm run test` all pass (mirrors `.github/workflows/pr.yaml`).
 - **Design (#7, #14–#16):** this review was code-based — before executing design items, do a **live
-  device audit** (real iPhone + Android, portrait *and* landscape) of the region dashboard, focusing
+  device audit** (real iPhone + Android, portrait _and_ landscape) of the region dashboard, focusing
   on the four height-bug cards and the events list.
 
 ---
 
 ## Quick reference
 
-| # | Item | Tier | Disc. | Serves | Effort | Maint. |
-|---|------|------|-------|--------|--------|--------|
-| 1 | Cache page loaders (`revalidate`/`unstable_cache`) | P0 | Eng | Cost·Rel·UX | S | none |
-| 2 | Un-hide & finish the region trend chart | P0 | Design | UX | S | none |
-| 3 | Sentry error tracking | P0 | Eng | Rel·Sec | S | none |
-| 4 | BQ param support + convert allowlist | P0 | Eng | Sec | S | low |
-| 5 | `lib/filters.ts` — single filter contract | P1 | Arch | Rel·Sec | M | low |
-| 6 | Tests for the two postmortem incidents | P1 | Eng | Rel | M | low |
-| 7 | Fix 4 hardcoded card heights (mobile) | P1 | Design | UX | S | none |
-| 8 | One Playwright smoke test in CI | P1 | Eng | Rel | M | low |
-| 9 | Secret hygiene + uptime/BQ-budget alerts | P1 | Eng | Sec·Rel·Cost | S | none |
-| 10 | Finish parameterizing `lib/bq/*` | P2 | Eng | Sec | M | low |
-| 11 | Delete dead `.disable`/`.desable`, drop `pg` | P2 | Arch | UX | S | none |
-| 12 | De-dup entity verticals (empty-state, StatRow, breadcrumb) | P2 | Arch·Design | UX | M | low |
-| 13 | Centralize `normalizeDeep<T>()` in `lib/db.ts` | P2 | Arch | Rel | M | low |
-| 14 | Reorder dashboard to a decision pyramid | P2 | Design | UX | M | low |
-| 15 | Rank numbers + bold metric on leaderboard | P2 | Design | UX | S | none |
-| 16 | Collapse mobile event-card attendees | P2 | Design | UX | S | low |
-| 17 | Split `events.tsx` / `pageFilter.tsx` | P2 | Design | UX | M | low |
-| 18 | UX fit-and-finish (spinner, chips, focus, trend deltas/CTAs) | P3 | Design | UX | M | low |
-| 19 | Cheap brand equity (F3 logo in navbar, warmer copy) | P3 | Design | UX | S | low |
-| 20 | Tighten server/client seam (static cards → RSC) | P3 | Arch | Cost·UX | L | low |
-| 21 | Naming consistency + `nation/` loader parity | P3 | Arch | UX | S | none |
-| 22 | ADR for Postgres serving tier; rate limiting (if needed) | P3 | Eng | Cost·Rel·Sec | M | low |
+| #   | Item                                                         | Tier | Disc.       | Serves       | Effort | Maint. |
+| --- | ------------------------------------------------------------ | ---- | ----------- | ------------ | ------ | ------ |
+| 1   | Cache page loaders (`revalidate`/`unstable_cache`)           | P0   | Eng         | Cost·Rel·UX  | S      | none   |
+| 2   | Un-hide & finish the region trend chart                      | P0   | Design      | UX           | S      | none   |
+| 3   | Sentry error tracking                                        | P0   | Eng         | Rel·Sec      | S      | none   |
+| 4   | BQ param support + convert allowlist                         | P0   | Eng         | Sec          | S      | low    |
+| 5   | `lib/filters.ts` — single filter contract                    | P1   | Arch        | Rel·Sec      | M      | low    |
+| 6   | Tests for the two postmortem incidents                       | P1   | Eng         | Rel          | M      | low    |
+| 7   | Fix 4 hardcoded card heights (mobile)                        | P1   | Design      | UX           | S      | none   |
+| 8   | One Playwright smoke test in CI                              | P1   | Eng         | Rel          | M      | low    |
+| 9   | Secret hygiene + uptime/BQ-budget alerts                     | P1   | Eng         | Sec·Rel·Cost | S      | none   |
+| 10  | Finish parameterizing `lib/bq/*`                             | P2   | Eng         | Sec          | M      | low    |
+| 11  | Delete dead `.disable`/`.desable`, drop `pg`                 | P2   | Arch        | UX           | S      | none   |
+| 12  | De-dup entity verticals (empty-state, StatRow, breadcrumb)   | P2   | Arch·Design | UX           | M      | low    |
+| 13  | Centralize `normalizeDeep<T>()` in `lib/db.ts`               | P2   | Arch        | Rel          | M      | low    |
+| 14  | Reorder dashboard to a decision pyramid                      | P2   | Design      | UX           | M      | low    |
+| 15  | Rank numbers + bold metric on leaderboard                    | P2   | Design      | UX           | S      | none   |
+| 16  | Collapse mobile event-card attendees                         | P2   | Design      | UX           | S      | low    |
+| 17  | Split `events.tsx` / `pageFilter.tsx`                        | P2   | Design      | UX           | M      | low    |
+| 18  | UX fit-and-finish (spinner, chips, focus, trend deltas/CTAs) | P3   | Design      | UX           | M      | low    |
+| 19  | Cheap brand equity (F3 logo in navbar, warmer copy)          | P3   | Design      | UX           | S      | low    |
+| 20  | Tighten server/client seam (static cards → RSC)              | P3   | Arch        | Cost·UX      | L      | low    |
+| 21  | Naming consistency + `nation/` loader parity                 | P3   | Arch        | UX           | S      | none   |
+| 22  | ADR for Postgres serving tier; rate limiting (if needed)     | P3   | Eng         | Cost·Rel·Sec | M      | low    |
 
 **Bottom line:** PAX-Vault is well-built and the team's instincts are sound. The single most valuable
 sequence is **cache BigQuery, start hearing about your own errors, un-hide the chart you already
