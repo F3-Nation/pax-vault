@@ -625,7 +625,7 @@ export function EventsCard({
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1">
             {selectedEvent ? (
-              <div className="flex flex-col gap-3 w-full sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-3 w-full pr-10 sm:flex-row sm:items-start sm:justify-between">
                 <EventDetailsHeader event={selectedEvent} filters={filters} />
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
