@@ -5,6 +5,7 @@ import { Divider } from "@heroui/divider";
 import { PaxSummary } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
 import { Link } from "@heroui/link";
+import { HelpHint } from "@/components/HelpHint";
 
 export function SummaryCard({
   summary,
@@ -180,7 +181,10 @@ export function SummaryCard({
             </span>
           </div>
           <div className="flex justify-between py-1 pb-2">
-            <span className="text-primary">Efficiency:</span>
+            <span className="text-primary flex items-center">
+              Efficiency:
+              <HelpHint content="Posting consistency: posts divided by the number of days since the first post, shown as a percentage. Higher means this PAX posts more often relative to how long they've been around." />
+            </span>
             <span>
               {summary?.event_count === 0 ? (
                 <span className="text-default-500 italic">No Event Data</span>

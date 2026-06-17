@@ -230,7 +230,7 @@ export interface PaxSummary {
   last_q_ao_id: number | null; // ID of the AO for the last Q event
   last_q_ao_name: string | null; // Name of the AO for the last Q event
   unique_pax_when_q: number; // Number of unique pax who attended events when the main user was a Q
-  effective_percentage: number | null; // Percentage of events where the main user was an effective Q
+  effective_percentage: number | null; // "Efficiency" — posting consistency: posts / days since first post * 100 (see lib/bq/pax.ts)
 }
 
 /* USED FOR PAX AO BREAKDOWN */

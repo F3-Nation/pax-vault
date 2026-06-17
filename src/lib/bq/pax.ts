@@ -501,6 +501,10 @@ export async function getPageData(
           qb.last_q_date,
           qbao.last_q_ao_id,
           qbao.last_q_ao_name,
+          -- "Efficiency" (UI label): posting consistency, not Q effectiveness.
+          -- posts / days since the PAX's first post * 100. Both event_count and
+          -- first_event_date respect the active date/tag/type filters; the
+          -- denominator runs to CURRENT_DATE().
           SAFE_DIVIDE(
             m.event_count,
             DATE_DIFF(CURRENT_DATE(), eb.first_event_date, DAY))
