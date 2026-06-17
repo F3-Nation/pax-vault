@@ -71,7 +71,7 @@ export function UpcomingEventsCard({
       <Divider />
       <CardBody className="px-6">
         {/* Scroll container to cap card height while keeping header visible */}
-        <ScrollShadow className="max-h-[60vh]">
+        <ScrollShadow className="max-h-[60vh] lg:max-h-[32rem]">
           <div className="space-y-1 text-sm">
             {/* Empty state when filtering open-Q events */}
             {showOpenOnly && filteredEvents.length === 0 ? (

@@ -213,7 +213,7 @@ export function KotterCard({ kotters, filters }: KotterCardProps) {
       <Divider />
       <CardBody className="px-6">
         {/* Scrollable list to cap card height while keeping headers visible */}
-        <ScrollShadow className="max-h-[60vh]">
+        <ScrollShadow className="max-h-[60vh] lg:max-h-[32rem]">
           <div className="space-y-1 text-sm">
             {filteredKotters.length === 0 ? (
               <div className="italic text-default-500 text-sm">
