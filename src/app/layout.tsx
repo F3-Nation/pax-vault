@@ -9,7 +9,6 @@
 import "@/styles/globals.css";
 import { Providers } from "./providers";
 import NavbarComponent from "@/components/navbar";
-import ServiceWorkerRegister from "@/lib/service-worker";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 import Script from "next/script";
@@ -98,8 +97,6 @@ export default function RootLayout({ children }: RootLayoutProps) {
       </head>
 
       <body>
-        {/* Registers the service worker client-side for offline/PWA behavior. */}
-        <ServiceWorkerRegister />
         {/* Google Analytics page view tracking. */}
         <Suspense fallback={null}>
           <GaPageView />
