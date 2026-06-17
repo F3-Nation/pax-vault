@@ -47,6 +47,7 @@ export async function queryBigQuery<T = BigQueryRow>(
   sql: string,
   userIdentifier?: string,
   reason?: string,
+  params?: Record<string, unknown>,
 ): Promise<T[]> {
   // Obfuscate and sanitize email for BigQuery label in one step
   const userLabel = (userIdentifier ?? "unknown")
@@ -74,6 +75,9 @@ export async function queryBigQuery<T = BigQueryRow>(
       user: sanitize(userLabel),
       reason: sanitize(reason || "unspecified"),
     },
+    // Named query parameters (@name) — the safe path for user-supplied values.
+    // Prefer this over string interpolation in all new/converted queries.
+    ...(params ? { params } : {}),
   });
 
   const rows = (rawRows as BigQueryRow[]).map((row) =>

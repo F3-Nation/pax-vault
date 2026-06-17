@@ -11,7 +11,9 @@ export async function isAuthorizedEmail(rawEmail: string): Promise<boolean> {
   const email = rawEmail.trim().toLowerCase();
   if (!email) return false;
 
-  const escaped = email.replace(/'/g, "''");
+  // Table name is operator-controlled (env var), not user input, so it stays
+  // interpolated — BigQuery cannot parameterize identifiers. The user-supplied
+  // email is bound as a named parameter (@email) instead of interpolated.
   const table = getAuthTable();
   const tableRef = table.startsWith("`") ? table : `\`${table}\``;
 
@@ -19,7 +21,7 @@ export async function isAuthorizedEmail(rawEmail: string): Promise<boolean> {
     SELECT 1 AS ok
     FROM ${tableRef}
     WHERE email IS NOT NULL
-      AND LOWER(email) = '${escaped}'
+      AND LOWER(email) = @email
     LIMIT 1
   `;
 
@@ -27,6 +29,7 @@ export async function isAuthorizedEmail(rawEmail: string): Promise<boolean> {
     query,
     email,
     "email allowlist check",
+    { email },
   );
   return Array.isArray(results) && results.length > 0;
 }
