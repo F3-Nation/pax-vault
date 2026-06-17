@@ -343,7 +343,7 @@ export function AchievementsCard({
       </CardHeader>
       <Divider />
       <CardBody className="px-6">
-        <ScrollShadow className="h-[1105px]">
+        <ScrollShadow className="max-h-[60vh]">
           <div className="space-y-1 text-sm">
             {visibleRows.length === 0 ? (
               <div className="italic text-default-500 text-sm py-2">
