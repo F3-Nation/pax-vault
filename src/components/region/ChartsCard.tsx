@@ -41,14 +41,12 @@ const SimpleBarChart = (charts: ChartData[]) => {
         <Bar
           yAxisId="left"
           dataKey="unique_pax_count"
-          name="Unique PAX"
           fill="#8884d8"
           radius={[10, 10, 0, 0]}
         />
         <Bar
           yAxisId="right"
           dataKey="unique_q_count"
-          name="Unique Qs"
           fill="#82ca9d"
           radius={[10, 10, 0, 0]}
         />
