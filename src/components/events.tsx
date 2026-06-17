@@ -60,6 +60,16 @@ import { Modal, ModalContent, ModalHeader, ModalBody } from "@heroui/modal";
 import { useDisclosure } from "@heroui/use-disclosure";
 import { Button } from "@heroui/button";
 import { Image } from "@heroui/image";
+import { Tab, Tabs } from "@heroui/tabs";
+
+/**
+ * True when `paxId` was a Q (q_ind) on this event. Single source of truth for
+ * both the purple "I Q'd this" highlight and the PAX-page "As Q" filter
+ * (issue #115). Exported for tests.
+ */
+export function paxQdEvent(event: EventData, paxId: number): boolean {
+  return event.attendance.some((att) => att.q_ind && att.user_id === paxId);
+}
 
 type EventsCardProps = {
   events: EventData[];
@@ -92,6 +102,10 @@ export function EventsCard({
   const perPage = 10;
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // PAX-page "As PAX / As Q" view toggle (issue #115). Only meaningful when a
+  // single PAX is in scope; ignored on region/AO pages where thisPaxId is unset.
+  const [viewMode, setViewMode] = useState<"asPax" | "asQ">("asPax");
 
   // Per-event toggle for the attendee list, which is collapsed to a count on
   // mobile (where 20+ chips become an unreadable wall) and tap-to-expand.
@@ -181,6 +195,17 @@ export function EventsCard({
     }
   }
 
+  // Switching to "As Q" filters down to a (usually small) subset, so pull the
+  // full history first — otherwise the filter only sees the recent slice and an
+  // older workout the PAX is hunting for would be missing.
+  const handleViewModeChange = (mode: "asPax" | "asQ") => {
+    setViewMode(mode);
+    setPage(1);
+    if (mode === "asQ" && !hasLoadedAll && !isLoadingAll) {
+      void loadAllEvents();
+    }
+  };
+
   const sortAttendance = (list: (typeof events)[number]["attendance"]) =>
     list
       .slice()
@@ -198,8 +223,17 @@ export function EventsCard({
 
   const getPaxList = (event: EventData) => sortAttendance(event.attendance);
 
-  // Client-side search across event, AO, region, PAX, and Q names
+  // Client-side search across event, AO, region, PAX, and Q names, plus the
+  // optional "As Q" gate that hides events this PAX did not Q (issue #115).
   const filteredEvents = eventsData.filter((ev) => {
+    if (
+      viewMode === "asQ" &&
+      thisPaxId !== undefined &&
+      !paxQdEvent(ev, thisPaxId)
+    ) {
+      return false;
+    }
+
     const term = searchTerm.toLowerCase();
     const name = ev.event_name?.toLowerCase() || "";
     const ao = ev.ao_name?.toLowerCase() || "";
@@ -248,7 +282,23 @@ export function EventsCard({
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center justify-start">Recent Events</div>
 
-            <div className="flex items-center justify-end gap-2">
+            <div className="flex items-center justify-end gap-2 flex-wrap">
+              {thisPaxId !== undefined && (
+                <Tabs
+                  aria-label="Filter recent events by role"
+                  selectedKey={viewMode}
+                  onSelectionChange={(key) =>
+                    handleViewModeChange(key as "asPax" | "asQ")
+                  }
+                  size="sm"
+                  radius="sm"
+                  variant="bordered"
+                  color="secondary"
+                >
+                  <Tab key="asPax" title="As PAX" />
+                  <Tab key="asQ" title="As Q" />
+                </Tabs>
+              )}
               {!hasLoadedAll && (
                 <Button
                   onPress={loadAllEvents}
@@ -300,6 +350,16 @@ export function EventsCard({
             ) : null}
 
             {!isLoadingAll &&
+            eventsData.length > 0 &&
+            filteredEvents.length === 0 ? (
+              <p className="italic text-center text-sm text-default">
+                {viewMode === "asQ" && thisPaxId !== undefined
+                  ? "No Q'd events match this view"
+                  : "No events match your search"}
+              </p>
+            ) : null}
+
+            {!isLoadingAll &&
               paginatedEvents.map((event, index) => {
                 const pax_list = getPaxList(event);
                 const q_list = getQList(event);
@@ -309,7 +369,7 @@ export function EventsCard({
                   <div key={event.event_instance_id || index}>
                     <Card
                       className={`bg-background/60 dark:bg-default-100/50 border ${
-                        q_list.some((q) => q.user_id === thisPaxId)
+                        thisPaxId !== undefined && paxQdEvent(event, thisPaxId)
                           ? "border-secondary"
                           : "border-default-200 dark:border-default-300"
                       }`}
