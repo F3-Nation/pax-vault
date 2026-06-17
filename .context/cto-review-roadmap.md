@@ -95,11 +95,14 @@ velocity/polish.
    BigQuery cost/bytes by ~1–2 orders of magnitude on repeat views, removes BQ from the hot path, and
    makes nav feel instant — with near-zero upkeep. _Files:_ `region/[regionId]/loader.ts` + the
    `ao/pax/area/sector` siblings.
-2. **Un-hide and finish the region trend chart.** [Design][UX] The chart that answers "how is my
-   region trending?" **already exists and is switched off** — `components/region/PageWrapper.tsx:143`
-   wraps the charts grid in a literal `hidden` class and `components/charts/treeChart.tsx:94` still
-   renders a `"TITLE"` placeholder. Finish the title/labels + empty state and remove `hidden`. Near
-   zero effort, top-of-page impact.
+2. ~~**Un-hide and finish the region trend chart.**~~ **RECLASSIFIED → see "Ship charts properly"
+   in P2.** Initial assumption was that the region chart was _accidentally_ left hidden. On execution
+   this proved **false**: region, area, AND sector pages all hide their charts with the same `hidden`
+   class (`components/region/PageWrapper.tsx:143`, `app/stats/area/[areaId]/page.tsx:105`,
+   `app/stats/sector/[sectorId]/page.tsx:94`) — a deliberate, site-wide disable, not a slip. P0-2 was
+   implemented then reverted (commits `e2ca1cc` → `c44e72d`) to preserve production behavior. Showing
+   charts is real feature work (consistent un-hide across all 3 entities + the chart-quality fixes
+   noted by the design review), not a flag flip. Tracked under P2 #14-area below.
 3. **Wire up error tracking (Sentry, free tier).** [Eng][Rel·Sec] `src/app/error.tsx` already
    references this as "future work." Lowest-maintenance way to stop hearing about incidents from
    users. Add to the global error boundary + API route catch blocks. ~1 hour.
@@ -226,7 +229,7 @@ Common "CTO checklist" items that add maintenance without proportional payoff at
 | #   | Item                                                         | Tier | Disc.       | Serves       | Effort | Maint. |
 | --- | ------------------------------------------------------------ | ---- | ----------- | ------------ | ------ | ------ |
 | 1   | Cache page loaders (`revalidate`/`unstable_cache`)           | P0   | Eng         | Cost·Rel·UX  | S      | none   |
-| 2   | Un-hide & finish the region trend chart                      | P0   | Design      | UX           | S      | none   |
+| 2   | ~~Un-hide region trend chart~~ → ship charts properly (P2)   | P2   | Design      | UX           | M      | low    |
 | 3   | Sentry error tracking                                        | P0   | Eng         | Rel·Sec      | S      | none   |
 | 4   | BQ param support + convert allowlist                         | P0   | Eng         | Sec          | S      | low    |
 | 5   | `lib/filters.ts` — single filter contract                    | P1   | Arch        | Rel·Sec      | M      | low    |
