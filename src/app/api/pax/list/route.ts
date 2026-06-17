@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { searchUsersByName } from "@/lib/bq/pax";
 import { getSessionUser } from "@/lib/auth/server";
+import { reportError } from "@/lib/observability";
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -32,9 +33,12 @@ export async function GET(request: Request) {
     const users = await searchUsersByName(q, user.email, regionId);
     return NextResponse.json(users, { status: 200 });
   } catch (err) {
-    console.error("Pax search failed:", err);
+    const errorId = reportError(err, {
+      scope: "api/pax/list",
+      user: user.email,
+    });
     return NextResponse.json(
-      { error: "Pax search failed. Please try again." },
+      { error: "Pax search failed. Please try again.", errorId },
       { status: 500 },
     );
   }

@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { searchRegionsByName } from "@/lib/bq/regions";
 import { getSessionUser } from "@/lib/auth/server";
+import { reportError } from "@/lib/observability";
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -30,9 +31,12 @@ export async function GET(request: Request) {
     const regions = await searchRegionsByName(q, user.email, includeInactive);
     return NextResponse.json(regions, { status: 200 });
   } catch (err) {
-    console.error("Region search failed:", err);
+    const errorId = reportError(err, {
+      scope: "api/region/list",
+      user: user.email,
+    });
     return NextResponse.json(
-      { error: "Region search failed. Please try again." },
+      { error: "Region search failed. Please try again.", errorId },
       { status: 500 },
     );
   }
