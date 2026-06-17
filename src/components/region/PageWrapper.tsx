@@ -140,7 +140,7 @@ export function RegionalPageWrapper({
         />
       </div>
       {/* Charting */}
-      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl hidden">
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
         <ChartCard charts={region_charts || []} />
       </div>
       {/* Upcoming achievements */}
