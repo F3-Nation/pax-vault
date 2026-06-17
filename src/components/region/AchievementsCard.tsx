@@ -59,9 +59,12 @@ interface AchievementRow {
 const POST_THRESHOLD = 5;
 const Q_THRESHOLD = 3;
 const ANNIVERSARY_DAYS = 14;
+// Hide post/Q achievements for PAX inactive longer than this (issue #119).
+// 90 days mirrors the Kotter "fall-off" window. Manniversaries are exempt.
+const INACTIVE_DAYS = 90;
 
-/** Derive achievement rows from raw PAX data for the given scope. */
-function computeAchievements(
+/** Derive achievement rows from raw PAX data for the given scope. Exported for tests. */
+export function computeAchievements(
   achievements: RegionAchievementPax[],
   scope: AchievementScope,
 ): AchievementRow[] {
@@ -79,14 +82,20 @@ function computeAchievements(
         ? pax.next_nation_q_milestone
         : pax.next_region_q_milestone;
 
-    const recentlyActive =
-      pax.last_region_event_date !== null &&
-      (new Date().getTime() - new Date(pax.last_region_event_date).getTime()) /
-        (1000 * 60 * 60 * 24) <=
-        30;
+    const daysSinceLastRegionEvent =
+      pax.last_region_event_date !== null
+        ? (new Date().getTime() -
+            new Date(pax.last_region_event_date).getTime()) /
+          (1000 * 60 * 60 * 24)
+        : Infinity;
+    const recentlyActive = daysSinceLastRegionEvent <= 30;
+    // Post/Q milestones are suppressed once a PAX goes inactive (issue #119);
+    // anniversaries below are intentionally exempt from this gate.
+    const inactive = daysSinceLastRegionEvent > INACTIVE_DAYS;
 
     // Post milestone
     if (
+      !inactive &&
       nextPostMilestone !== null &&
       nextPostMilestone - posts <= POST_THRESHOLD
     ) {
@@ -109,7 +118,11 @@ function computeAchievements(
     }
 
     // Q milestone
-    if (nextQMilestone !== null && nextQMilestone - qs <= Q_THRESHOLD) {
+    if (
+      !inactive &&
+      nextQMilestone !== null &&
+      nextQMilestone - qs <= Q_THRESHOLD
+    ) {
       const remaining = nextQMilestone - qs;
       if (remaining <= 1 || recentlyActive) {
         rows.push({

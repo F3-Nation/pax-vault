@@ -667,22 +667,29 @@ export async function getPageData(
         FROM achievement_pax_milestones
         WHERE
           (
-            -- 1 away from any milestone — always show regardless of recent activity
-            (next_region_post_milestone IS NOT NULL AND next_region_post_milestone - region_posts = 1)
-            OR (next_nation_post_milestone IS NOT NULL AND next_nation_post_milestone - all_posts = 1)
-            OR (next_region_q_milestone IS NOT NULL AND next_region_q_milestone - region_qs = 1)
-            OR (next_nation_q_milestone IS NOT NULL AND next_nation_q_milestone - all_qs = 1)
-            -- Within milestone range and active in the last 30 days
-            OR (
-              last_region_event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+            -- Post/Q milestones are hidden once a PAX is inactive >90 days (issue #119).
+            -- The 90-day window mirrors the Kotter fall-off; anniversaries below are exempt.
+            (
+              last_region_event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
               AND (
-                (next_region_post_milestone IS NOT NULL AND next_region_post_milestone - region_posts <= 5)
-                OR (next_nation_post_milestone IS NOT NULL AND next_nation_post_milestone - all_posts <= 5)
-                OR (next_region_q_milestone IS NOT NULL AND next_region_q_milestone - region_qs <= 3)
-                OR (next_nation_q_milestone IS NOT NULL AND next_nation_q_milestone - all_qs <= 3)
+                -- 1 away from any milestone
+                (next_region_post_milestone IS NOT NULL AND next_region_post_milestone - region_posts = 1)
+                OR (next_nation_post_milestone IS NOT NULL AND next_nation_post_milestone - all_posts = 1)
+                OR (next_region_q_milestone IS NOT NULL AND next_region_q_milestone - region_qs = 1)
+                OR (next_nation_q_milestone IS NOT NULL AND next_nation_q_milestone - all_qs = 1)
+                -- Within milestone range and active in the last 30 days
+                OR (
+                  last_region_event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+                  AND (
+                    (next_region_post_milestone IS NOT NULL AND next_region_post_milestone - region_posts <= 5)
+                    OR (next_nation_post_milestone IS NOT NULL AND next_nation_post_milestone - all_posts <= 5)
+                    OR (next_region_q_milestone IS NOT NULL AND next_region_q_milestone - region_qs <= 3)
+                    OR (next_nation_q_milestone IS NOT NULL AND next_nation_q_milestone - all_qs <= 3)
+                  )
+                )
               )
             )
-            -- Upcoming anniversary (no activity gate, but min 25 region posts)
+            -- Upcoming anniversary / Manniversary (no activity gate, but min 25 region posts) — always shown per #119
             OR (next_anniversary_date IS NOT NULL AND DATE_DIFF(next_anniversary_date, CURRENT_DATE(), DAY) BETWEEN 0 AND 14 AND region_posts >= 25)
           )
           AND (region_posts > 10) -- Filter out very new PAX with no significant activity
