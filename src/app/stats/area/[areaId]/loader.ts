@@ -16,6 +16,7 @@ import {
 import { getPageData } from "@/lib/bq/areas";
 import { cacheStatsData } from "@/lib/cache";
 import { DateRangeFilters } from "@/lib/filters";
+import { normalizeDeep } from "@/lib/normalize";
 
 export async function loadAreaData(
   areaId: number,
@@ -29,13 +30,7 @@ export async function loadAreaData(
       async () => {
         const areaData = await getPageData(areaId, userIdentifier, filters);
 
-        const mergedPlain = JSON.parse(
-          JSON.stringify(areaData, (_k, v) => {
-            if (v && typeof v === "object" && "value" in v) return v.value;
-            if (typeof v === "bigint") return Number(v);
-            return v;
-          }),
-        ) as AreaData;
+        const mergedPlain = normalizeDeep<AreaData>(areaData);
 
         const mergedSafe: AreaData = {
           info: mergedPlain.info as AreaInfo,

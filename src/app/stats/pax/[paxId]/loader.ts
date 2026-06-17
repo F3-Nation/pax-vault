@@ -17,6 +17,7 @@ import {
 import { getPageData } from "@/lib/bq/pax";
 import { cacheStatsData } from "@/lib/cache";
 import { StatsFilters } from "@/lib/filters";
+import { normalizeDeep } from "@/lib/normalize";
 
 /**
  * Load all data required for the pax stats page.
@@ -35,18 +36,9 @@ export async function loadPaxData(
       async () => {
         const paxData = await getPageData(paxId, userIdentifier, filters);
 
-        // Next.js can only pass plain JSON-serializable data from Server -> Client components.
-        // BigQuery libraries sometimes return objects with custom / null prototypes (e.g., DATE wrappers).
-        // Normalize to plain objects here to avoid: "Only plain objects ... can be passed to Client Components".
-
-        const mergedPlain = JSON.parse(
-          JSON.stringify(paxData, (_k, v) => {
-            // Unwrap common BigQuery wrappers: { value: ... }
-            if (v && typeof v === "object" && "value" in v) return v.value;
-            if (typeof v === "bigint") return Number(v);
-            return v;
-          }),
-        ) as PaxData;
+        // Normalize BigQuery output into plain, serializable data so it can
+        // be passed from this Server Component to Client Components.
+        const mergedPlain = normalizeDeep<PaxData>(paxData);
 
         // Defensive: many UI components assume list fields are arrays and call `.map`.
         // Preserve the existing data shape from the old REST endpoints by defaulting missing lists to [].

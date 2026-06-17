@@ -16,6 +16,7 @@ import {
 import { getPageData } from "@/lib/bq/sectors";
 import { cacheStatsData } from "@/lib/cache";
 import { DateRangeFilters } from "@/lib/filters";
+import { normalizeDeep } from "@/lib/normalize";
 
 export async function loadSectorData(
   sectorId: number,
@@ -29,13 +30,7 @@ export async function loadSectorData(
       async () => {
         const sectorData = await getPageData(sectorId, userIdentifier, filters);
 
-        const mergedPlain = JSON.parse(
-          JSON.stringify(sectorData, (_k, v) => {
-            if (v && typeof v === "object" && "value" in v) return v.value;
-            if (typeof v === "bigint") return Number(v);
-            return v;
-          }),
-        ) as SectorData;
+        const mergedPlain = normalizeDeep<SectorData>(sectorData);
 
         const mergedSafe: SectorData = {
           info: mergedPlain.info as SectorInfo,
