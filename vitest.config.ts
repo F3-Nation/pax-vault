@@ -19,6 +19,7 @@ export default defineConfig({
         "**/*.d.ts",
         "src/types/**",
         "src/lib/db.ts",
+        "src/lib/cache.ts", // thin env-gated wrapper over Next unstable_cache
         "src/lib/cache/**",
         "src/lib/types.ts",
         "src/lib/service-worker.tsx",
