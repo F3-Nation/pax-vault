@@ -12,6 +12,9 @@ function att(overrides: Partial<EventAttendance>): EventAttendance {
     coq_ind: false,
     avatar_url: null,
     isBot: false,
+    attended: true,
+    ghost: false,
+    fartsack: false,
     ...overrides,
   };
 }

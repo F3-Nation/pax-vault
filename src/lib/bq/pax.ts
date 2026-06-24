@@ -33,12 +33,15 @@ function buildEventsWhereSql(paxId: number, opts?: StatsFilters): string {
   );
 
   const whereClauses: string[] = [];
-  // Attendance filter: only include events where the given PAX appears in the attendance array for that event.
+  // Attendance filter: only include events where the given PAX actually attended.
+  // `a.fartsack IS NOT TRUE` excludes events the PAX signed up for but no-showed
+  // (and keeps legacy rows where the flag is NULL/FALSE).
   whereClauses.push(
     `EXISTS (
       SELECT 1
       FROM UNNEST(attendance) a
       WHERE a.user_id = ${paxId}
+        AND a.fartsack IS NOT TRUE
     )`,
   );
 
@@ -216,12 +219,13 @@ export async function getEvents(
       third_f_ind,
       types,
       tags,
-      attendance
+      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
     FROM pv_events
     WHERE EXISTS (
       SELECT 1
       FROM UNNEST(attendance) a
       WHERE a.user_id = ${paxId}
+        AND a.fartsack IS NOT TRUE
     )
     ORDER BY event_date DESC, event_id DESC
     ${limitSql};
@@ -355,7 +359,11 @@ export async function getPageData(
           third_f_ind,
           types,
           tags,
-          attendance
+          -- Strip fartsack (no-show) PAX once here so every downstream CTE that
+          -- unnests e.attendance (attendance_flat, co_attendance, ao_events) and
+          -- the final events array all exclude no-shows. 'fartsack IS NOT TRUE'
+          -- preserves legacy rows (flag NULL/FALSE) and real attendees.
+          ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
         FROM pv_events
         ${whereSql}
       ),
