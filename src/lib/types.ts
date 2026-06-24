@@ -43,6 +43,9 @@ export interface EventAttendance {
   coq_ind: boolean; // Indicates if the user was a co-Q (co-leader) for the event
   avatar_url: string | null; // Optional URL to the user's avatar image
   isBot: boolean; // Indicates if the user is a bot
+  attended: boolean | null; // Has an actual (is_planned=FALSE) record — physically there
+  ghost: boolean | null; // Attended unannounced (actual record, no planned record)
+  fartsack: boolean | null; // Signed up but no-showed — filtered out at the SQL source (bq/*.ts)
 }
 
 /* USED FOR UPCOMING EVENTS */

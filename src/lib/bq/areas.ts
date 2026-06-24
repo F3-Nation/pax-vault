@@ -178,7 +178,10 @@ export async function getPageData(
           ao_org_id,
           region_org_id,
           region_name,
-          attendance
+          -- Strip fartsack (no-show) PAX once here so attendance_flat and every
+          -- downstream count (unique_pax, active_pax) exclude no-shows.
+          -- 'fartsack IS NOT TRUE' keeps legacy rows (flag NULL/FALSE) + attendees.
+          ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
         FROM pv_events
         WHERE area_org_id = ${areaId}
           ${dateFilterSql}

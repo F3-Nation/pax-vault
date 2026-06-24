@@ -182,7 +182,7 @@ export async function getEvents(
       third_f_ind,
       types,
       tags,
-      attendance
+      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
     FROM pv_events
     WHERE ao_org_id = ${aoId}
     ORDER BY event_date DESC, event_id DESC
@@ -229,7 +229,11 @@ export async function getPageData(
           third_f_ind,
           types,
           tags,
-          attendance
+          -- Strip fartsack (no-show) PAX once here so attendance_flat (and thus
+          -- active_pax/unique_pax, the leaders' post counts) and the events list
+          -- all exclude no-shows. 'fartsack IS NOT TRUE' keeps legacy rows
+          -- (flag NULL/FALSE) + real attendees.
+          ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
         FROM pv_events
         ${whereSql}
       ),

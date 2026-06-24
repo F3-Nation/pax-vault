@@ -255,7 +255,7 @@ export async function getEvents(
       third_f_ind,
       types,
       tags,
-      attendance
+      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
     FROM pv_events
     ${whereSql}
     ORDER BY event_date DESC, event_id DESC
@@ -378,7 +378,10 @@ export async function getPageData(
           third_f_ind,
           types,
           tags,
-          attendance
+          -- Strip fartsack (no-show) PAX once here so attendance_flat, the events
+          -- list, the summary counts, and the charts all exclude no-shows.
+          -- 'fartsack IS NOT TRUE' keeps legacy rows (flag NULL/FALSE) + attendees.
+          ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
         FROM pv_events
         ${whereSql}
       ),
@@ -427,7 +430,10 @@ export async function getPageData(
         JOIN UNNEST(e.attendance) a
         JOIN leader_ids li
           ON li.user_id = a.user_id
-        WHERE a.user_id IS NOT NULL${eventsFilterAndSql}
+        -- Exclude fartsack (no-show) rows so posts/all_posts count real
+        -- attendance only; the q_ind-based counts are unaffected (a no-show Q
+        -- reads q_ind = 0).
+        WHERE a.user_id IS NOT NULL AND a.fartsack IS NOT TRUE${eventsFilterAndSql}
         GROUP BY a.user_id
       ),
 
@@ -458,6 +464,9 @@ export async function getPageData(
         FROM pv_events e
         JOIN UNNEST(e.attendance) a ON TRUE
         JOIN achievement_pax_base pb ON pb.user_id = a.user_id
+        -- Exclude fartsack (no-show) rows so post milestones reflect real
+        -- attendance; q_ind-based Q milestones are unaffected.
+        WHERE a.fartsack IS NOT TRUE
         GROUP BY a.user_id
       ),
 
