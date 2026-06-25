@@ -327,7 +327,11 @@ export async function getPageData(
   // Fartsacks (signed up, no-showed) are stripped from the events CTE, so count
   // them straight from pv_events using the same filters but the inverse
   // attendance gate.
-  const fartsackWhereSql = buildEventsWhereSql(paxId, opts, "a.fartsack IS TRUE");
+  const fartsackWhereSql = buildEventsWhereSql(
+    paxId,
+    opts,
+    "a.fartsack IS TRUE",
+  );
 
   const query = `-- PAX PAGE LOAD
     WITH
