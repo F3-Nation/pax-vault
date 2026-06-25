@@ -43,6 +43,26 @@ export function SummaryCard({
             </span>
           </div>
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
+            <span className="text-primary">Ghost Events:</span>
+            <span>
+              {summary?.event_count === 0 ? (
+                <span className="text-default-500 italic">No Event Data</span>
+              ) : (
+                <>{formatNumber(summary.ghost_count)}</>
+              )}
+            </span>
+          </div>
+          <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
+            <span className="text-primary">Fart Sacked:</span>
+            <span>
+              {summary?.event_count === 0 ? (
+                <span className="text-default-500 italic">No Event Data</span>
+              ) : (
+                <>{formatNumber(summary.fartsack_count)}</>
+              )}
+            </span>
+          </div>
+          <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">FNG Date:</span>
             <span>
               {summary?.event_count === 0 ? (

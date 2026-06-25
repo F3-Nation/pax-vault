@@ -12,15 +12,17 @@
 
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
+import { Link } from "@heroui/link";
 import { RegionSummary } from "@/lib/types";
 import { renderStat } from "@/lib/utils";
 import { HelpHint } from "@/components/HelpHint";
 
 type SummaryCardProps = {
   summary: RegionSummary;
+  filters?: string;
 };
 
-export function SummaryCard({ summary }: SummaryCardProps) {
+export function SummaryCard({ summary, filters }: SummaryCardProps) {
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="flex justify-between items-center px-6 lg:min-h-16">
@@ -55,6 +57,25 @@ export function SummaryCard({ summary }: SummaryCardProps) {
         <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10 text-sm">
           <span className="text-primary">FNGs:</span>
           <span>{renderStat(summary.fng_count, undefined, "FNGs")}</span>
+        </div>
+        <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10 text-sm">
+          <span className="text-primary">Fart Sack King:</span>
+          <span>
+            {summary.fartsack_king_count && summary.fartsack_king_user_id ? (
+              <>
+                <Link
+                  className="text-sm"
+                  color="secondary"
+                  href={`/stats/pax/${summary.fartsack_king_user_id}${filters ? `?${filters}` : ""}`}
+                >
+                  {summary.fartsack_king_f3_name || "Unknown PAX"}
+                </Link>
+                {` (${renderStat(summary.fartsack_king_count)})`}
+              </>
+            ) : (
+              "No PAX"
+            )}
+          </span>
         </div>
         <div className="flex justify-between py-1 pb-2 text-sm">
           <span className="text-primary">Average PAX:</span>

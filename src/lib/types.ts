@@ -141,6 +141,9 @@ export interface RegionSummary {
   unique_qs: number; // Number of unique Qs (leaders) who have led events in the region
   fng_count: number; // Total number of first-time participants (FNGs) in the region
   pax_count_average: number; // Average number of participants (pax) per event in the region
+  fartsack_king_user_id: number | null; // PAX with the most fartsacks (no-shows) in the region; null when none
+  fartsack_king_f3_name: string | null; // F3 name of the Fart Sack King; null when none
+  fartsack_king_count: number | null; // Number of fartsacks for the Fart Sack King; null when none
 }
 
 /* USED FOR REGION UPCOMING ACHIEVEMENTS */
@@ -215,6 +218,8 @@ export interface PAXInfo {
 export interface PaxSummary {
   event_count: number; // Total number of events held in the region
   q_count: number; // Total number of Qs (leaders) across all events
+  ghost_count: number; // Number of events the PAX attended unannounced (ghost)
+  fartsack_count: number; // Number of events the PAX signed up for but no-showed (fartsack)
   fng_date: string | null; // Optional override for the user's start date, can be null
   first_event_date: string | null; // Date of the first event in the region
   first_event_ao_id: number | null; // ID of the first event in the region
@@ -279,6 +284,9 @@ export interface AreaSummary {
   unique_qs: number;
   fng_count: number;
   pax_count_average: number;
+  fartsack_king_user_id: number | null; // PAX with the most fartsacks (no-shows) in the area; null when none
+  fartsack_king_f3_name: string | null; // F3 name of the Fart Sack King; null when none
+  fartsack_king_count: number | null; // Number of fartsacks for the Fart Sack King; null when none
 }
 
 /* USED FOR AREA REGION BREAKDOWN */
@@ -325,6 +333,9 @@ export interface SectorSummary {
   unique_qs: number;
   fng_count: number;
   pax_count_average: number;
+  fartsack_king_user_id: number | null; // PAX with the most fartsacks (no-shows) in the sector; null when none
+  fartsack_king_f3_name: string | null; // F3 name of the Fart Sack King; null when none
+  fartsack_king_count: number | null; // Number of fartsacks for the Fart Sack King; null when none
 }
 
 /* USED FOR SECTOR AREA BREAKDOWN */
@@ -374,4 +385,7 @@ export interface AOSummary {
   unique_qs: number; // Number of unique Qs (leaders) who have led events in the AO
   fng_count: number; // Total number of first-time participants (FNGs) in the AO
   pax_count_average: number; // Average number of participants (pax) per event in the AO
+  fartsack_king_user_id: number | null; // PAX with the most fartsacks (no-shows) at the AO; null when none
+  fartsack_king_f3_name: string | null; // F3 name of the Fart Sack King; null when none
+  fartsack_king_count: number | null; // Number of fartsacks for the Fart Sack King; null when none
 }

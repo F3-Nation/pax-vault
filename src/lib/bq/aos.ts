@@ -250,8 +250,23 @@ export async function getPageData(
         FROM events e
         LEFT JOIN UNNEST(e.attendance) a
         WHERE a.user_id IS NOT NULL
+      ),
+
+      -- Fart Sack King: PAX with the most no-shows at this AO. Fartsacks are
+      -- stripped from the events CTE above, so count them from the raw
+      -- pv_events table (same filters via whereSql). Empty when nobody has any.
+      fartsack_king AS (
+        SELECT
+          a.user_id,
+          ANY_VALUE(a.f3_name) AS f3_name,
+          COUNT(*) AS fartsack_count
+        FROM pv_events e, UNNEST(e.attendance) a
+        ${whereSql ? `${whereSql}\n          AND a.fartsack IS TRUE` : "WHERE a.fartsack IS TRUE"}
+        GROUP BY a.user_id
+        ORDER BY fartsack_count DESC
+        LIMIT 1
       )
-        
+
     SELECT
       -- AO info as a STRUCT
       (
@@ -313,7 +328,10 @@ export async function getPageData(
           am.unique_pax,
           am.unique_qs,
           em.fng_count,
-          em.pax_count_average
+          em.pax_count_average,
+          (SELECT user_id FROM fartsack_king) AS fartsack_king_user_id,
+          (SELECT f3_name FROM fartsack_king) AS fartsack_king_f3_name,
+          (SELECT fartsack_count FROM fartsack_king) AS fartsack_king_count
         FROM event_metrics em
         CROSS JOIN attendance_metrics am
       ) AS summary,
