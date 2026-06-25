@@ -198,6 +198,24 @@ export async function getPageData(
         WHERE a.user_id IS NOT NULL
       ),
 
+      -- Fart Sack King: PAX with the most no-shows in this area. Fartsacks are
+      -- stripped from the events CTE above, so count them from the raw
+      -- pv_events table (same area + date filters). Empty when nobody has any.
+      fartsack_king AS (
+        SELECT
+          a.user_id,
+          ANY_VALUE(a.f3_name) AS f3_name,
+          COUNT(*) AS fartsack_count
+        FROM pv_events e
+        JOIN UNNEST(e.attendance) a
+        WHERE e.area_org_id = ${areaId}
+          AND a.fartsack IS TRUE
+          ${dateFilterSql}
+        GROUP BY a.user_id
+        ORDER BY fartsack_count DESC
+        LIMIT 1
+      ),
+
       -- Region-level event aggregates
       region_event_stats AS (
         SELECT
@@ -306,7 +324,10 @@ export async function getPageData(
           am.unique_pax,
           am.unique_qs,
           em.fng_count,
-          em.pax_count_average
+          em.pax_count_average,
+          (SELECT user_id FROM fartsack_king) AS fartsack_king_user_id,
+          (SELECT f3_name FROM fartsack_king) AS fartsack_king_f3_name,
+          (SELECT fartsack_count FROM fartsack_king) AS fartsack_king_count
         FROM area_event_metrics em
         CROSS JOIN area_attendance_metrics am
       ) AS summary,

@@ -107,7 +107,7 @@ export function AOPageWrapper({
       )}
       {/* Summary + leaders */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
-        <SummaryCard summary={ao_summary!} />
+        <SummaryCard summary={ao_summary!} filters={eventsFiltersQuery} />
         <LeadersCard
           leaders={
             ao_leaders

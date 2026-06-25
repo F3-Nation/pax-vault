@@ -12,7 +12,15 @@ import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
  * - tagIds/typeIds use EXISTS / NOT EXISTS against the nested arrays.
  * - categories maps 1/2/3 to first_f_ind/second_f_ind/third_f_ind and combines with OR.
  */
-function buildEventsWhereSql(paxId: number, opts?: StatsFilters): string {
+function buildEventsWhereSql(
+  paxId: number,
+  opts?: StatsFilters,
+  // Predicate applied to the PAX's attendance row inside the EXISTS gate.
+  // Defaults to "physically posted" (no-shows excluded). Pass
+  // `a.fartsack IS TRUE` to instead select events the PAX signed up for but
+  // no-showed — those rows are otherwise stripped at the events CTE.
+  attendancePredicate: string = "a.fartsack IS NOT TRUE",
+): string {
   const rangeDates = buildRangeDates(opts?.range);
   const startDate = opts?.startDate ?? rangeDates.startDate;
   const endDate = opts?.endDate ?? rangeDates.endDate;
@@ -41,7 +49,7 @@ function buildEventsWhereSql(paxId: number, opts?: StatsFilters): string {
       SELECT 1
       FROM UNNEST(attendance) a
       WHERE a.user_id = ${paxId}
-        AND a.fartsack IS NOT TRUE
+        AND ${attendancePredicate}
     )`,
   );
 
@@ -316,6 +324,10 @@ export async function getPageData(
 }> {
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(paxId, opts);
+  // Fartsacks (signed up, no-showed) are stripped from the events CTE, so count
+  // them straight from pv_events using the same filters but the inverse
+  // attendance gate.
+  const fartsackWhereSql = buildEventsWhereSql(paxId, opts, "a.fartsack IS TRUE");
 
   const query = `-- PAX PAGE LOAD
     WITH
@@ -380,7 +392,8 @@ export async function getPageData(
           a.user_id,
           a.f3_name,
           a.q_ind,
-          a.coq_ind
+          a.coq_ind,
+          a.ghost
         FROM events e
         JOIN UNNEST(e.attendance) a
       ),
@@ -480,8 +493,17 @@ export async function getPageData(
       metrics AS (
         SELECT
           COUNT(*) AS event_count,
-          SUM(CASE WHEN q_ind = 1 THEN 1 ELSE 0 END) AS q_count
+          SUM(CASE WHEN q_ind = 1 THEN 1 ELSE 0 END) AS q_count,
+          -- Ghost rows (attended unannounced) survive the fartsack filter, so
+          -- they're already in self_attendance.
+          SUM(CASE WHEN ghost IS TRUE THEN 1 ELSE 0 END) AS ghost_count
         FROM self_attendance
+      ),
+      -- Fartsacks are stripped upstream; count them from the raw events table.
+      fartsack_metrics AS (
+        SELECT COUNT(*) AS fartsack_count
+        FROM pv_events
+        ${fartsackWhereSql}
       ),
 
       -- -----------------------
@@ -491,6 +513,8 @@ export async function getPageData(
         SELECT
           m.event_count,
           m.q_count,
+          m.ghost_count,
+          fs.fartsack_count,
           pi.start_date_override,
           eb.first_event_date,
           ebao.first_event_ao_id,
@@ -518,6 +542,7 @@ export async function getPageData(
             DATE_DIFF(CURRENT_DATE(), eb.first_event_date, DAY))
             * 100 AS effective_percentage
         FROM metrics m
+        CROSS JOIN fartsack_metrics fs
         CROSS JOIN event_bounds eb
         LEFT JOIN event_bounds_ao ebao
           ON TRUE
@@ -591,6 +616,8 @@ export async function getPageData(
         SELECT AS STRUCT
           event_count,
           q_count,
+          ghost_count,
+          fartsack_count,
           IFNULL(CAST(start_date_override AS STRING), CAST(first_event_date AS STRING)) AS fng_date,
           CAST(first_event_date AS STRING) AS first_event_date,
           first_event_ao_id,

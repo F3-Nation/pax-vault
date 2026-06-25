@@ -125,7 +125,7 @@ export function RegionalPageWrapper({
       )}
       {/* Summary + leaders */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
-        <SummaryCard summary={region_summary!} />
+        <SummaryCard summary={region_summary!} filters={eventsFiltersQuery} />
         <LeadersCard
           leaders={
             region_leaders
