@@ -43,7 +43,10 @@ export function SummaryCard({
             </span>
           </div>
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
-            <span className="text-primary">Ghost Events:</span>
+            <span className="text-primary flex items-center">
+              Ghost Events:
+              <HelpHint content="Workouts this PAX showed up to unannounced — posted without being on the planned roster beforehand." />
+            </span>
             <span>
               {summary?.event_count === 0 ? (
                 <span className="text-default-500 italic">No Event Data</span>
@@ -53,7 +56,10 @@ export function SummaryCard({
             </span>
           </div>
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
-            <span className="text-primary">Fart Sacked:</span>
+            <span className="text-primary flex items-center">
+              Fart Sacked:
+              <HelpHint content="Workouts this PAX signed up for but didn't attend — a no-show." />
+            </span>
             <span>
               {summary?.event_count === 0 ? (
                 <span className="text-default-500 italic">No Event Data</span>

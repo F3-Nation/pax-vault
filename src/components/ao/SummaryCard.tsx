@@ -14,7 +14,8 @@ import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { AOSummary } from "@/lib/types";
 import { renderStat } from "@/lib/utils";
-import { FartSackKing } from "@/components/FartSackKing";
+import { KingCell } from "@/components/KingCell";
+import { HelpHint } from "@/components/HelpHint";
 
 type SummaryCardProps = {
   summary: AOSummary;
@@ -51,9 +52,21 @@ export function SummaryCard({ summary, filters }: SummaryCardProps) {
           <span>{renderStat(summary.fng_count, undefined, "FNGs")}</span>
         </div>
         <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
-          <span className="text-primary">Fart Sack King:</span>
+          <span className="text-primary flex items-center">
+            Fart Sack King:
+            <HelpHint content="The PAX with the most fartsacks here — signed up for workouts but didn't show." />
+          </span>
           <span>
-            <FartSackKing kings={summary.fartsack_kings} filters={filters} />
+            <KingCell leaders={summary.fartsack_kings} filters={filters} />
+          </span>
+        </div>
+        <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
+          <span className="text-primary flex items-center">
+            Ghost King:
+            <HelpHint content="The PAX with the most ghost posts here — showed up to workouts unannounced, without signing up beforehand." />
+          </span>
+          <span>
+            <KingCell leaders={summary.ghost_kings} filters={filters} />
           </span>
         </div>
         <div className="flex justify-between py-1 pb-2">

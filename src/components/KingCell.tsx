@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * FartSackKing
+ * KingCell
  *
- * Renders the "Fart Sack King" value for an AO/Region/Area/Sector summary —
- * the PAX with the most fartsacks (no-shows) at that scope.
+ * Renders a "King" leaderboard value for an AO/Region/Area/Sector summary —
+ * the PAX with the most of some attendance metric (fartsacks, ghosts, ...) at
+ * that scope. Handles ties by listing every PAX at the top count.
  *
  * - 0 tied PAX  -> "No PAX"
  * - 1 PAX       -> a link to the PAX + their count
@@ -13,17 +14,17 @@
 
 import { Link } from "@heroui/link";
 import { Popover, PopoverTrigger, PopoverContent } from "@heroui/popover";
-import { FartSackKing as FartSackKingType } from "@/lib/types";
+import { PaxLeader } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
 
-export function FartSackKing({
-  kings,
+export function KingCell({
+  leaders,
   filters,
 }: {
-  kings?: FartSackKingType[] | null;
+  leaders?: PaxLeader[] | null;
   filters?: string;
 }) {
-  const list = kings ?? [];
+  const list = leaders ?? [];
   const href = (id: number) =>
     `/stats/pax/${id}${filters ? `?${filters}` : ""}`;
 
@@ -38,7 +39,7 @@ export function FartSackKing({
         <Link className="text-sm" color="secondary" href={href(king.user_id)}>
           {king.f3_name || "Unknown PAX"}
         </Link>
-        {` (${formatNumber(king.fartsack_count)})`}
+        {` (${formatNumber(king.count)})`}
       </>
     );
   }
@@ -65,7 +66,7 @@ export function FartSackKing({
               >
                 {king.f3_name || "Unknown PAX"}
               </Link>
-              <span>{formatNumber(king.fartsack_count)}</span>
+              <span>{formatNumber(king.count)}</span>
             </div>
           ))}
         </div>

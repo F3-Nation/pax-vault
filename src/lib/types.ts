@@ -132,12 +132,13 @@ export interface RegionInfo {
   tags: { tag_id: number; tag_name: string }[];
 }
 
-/* USED FOR THE "FART SACK KING" — the PAX (or PAX, when tied) with the most
- * fartsacks (no-shows) at a given scope. Empty array when nobody has any. */
-export interface FartSackKing {
+/* USED FOR "KING" LEADERBOARD CELLS (Fart Sack King, Ghost King, ...) — the
+ * PAX (or PAX, when tied) with the most of some attendance flag at a given
+ * scope. Empty array when nobody has any. */
+export interface PaxLeader {
   user_id: number; // PAX user id
   f3_name: string | null; // F3 name of the PAX
-  fartsack_count: number; // Number of fartsacks (all entries in a list share the top count)
+  count: number; // The metric count (all entries in a list share the top count)
 }
 
 /* USED ONLY FOR REGION SUMMARY STATS */
@@ -149,7 +150,8 @@ export interface RegionSummary {
   unique_qs: number; // Number of unique Qs (leaders) who have led events in the region
   fng_count: number; // Total number of first-time participants (FNGs) in the region
   pax_count_average: number; // Average number of participants (pax) per event in the region
-  fartsack_kings: FartSackKing[]; // PAX tied for the most fartsacks (no-shows); empty when none
+  fartsack_kings: PaxLeader[]; // PAX tied for the most fartsacks (no-shows); empty when none
+  ghost_kings: PaxLeader[]; // PAX tied for the most ghost events (attended unannounced); empty when none
 }
 
 /* USED FOR REGION UPCOMING ACHIEVEMENTS */
@@ -290,7 +292,8 @@ export interface AreaSummary {
   unique_qs: number;
   fng_count: number;
   pax_count_average: number;
-  fartsack_kings: FartSackKing[]; // PAX tied for the most fartsacks (no-shows); empty when none
+  fartsack_kings: PaxLeader[]; // PAX tied for the most fartsacks (no-shows); empty when none
+  ghost_kings: PaxLeader[]; // PAX tied for the most ghost events (attended unannounced); empty when none
 }
 
 /* USED FOR AREA REGION BREAKDOWN */
@@ -337,7 +340,8 @@ export interface SectorSummary {
   unique_qs: number;
   fng_count: number;
   pax_count_average: number;
-  fartsack_kings: FartSackKing[]; // PAX tied for the most fartsacks (no-shows); empty when none
+  fartsack_kings: PaxLeader[]; // PAX tied for the most fartsacks (no-shows); empty when none
+  ghost_kings: PaxLeader[]; // PAX tied for the most ghost events (attended unannounced); empty when none
 }
 
 /* USED FOR SECTOR AREA BREAKDOWN */
@@ -387,5 +391,6 @@ export interface AOSummary {
   unique_qs: number; // Number of unique Qs (leaders) who have led events in the AO
   fng_count: number; // Total number of first-time participants (FNGs) in the AO
   pax_count_average: number; // Average number of participants (pax) per event in the AO
-  fartsack_kings: FartSackKing[]; // PAX tied for the most fartsacks (no-shows); empty when none
+  fartsack_kings: PaxLeader[]; // PAX tied for the most fartsacks (no-shows); empty when none
+  ghost_kings: PaxLeader[]; // PAX tied for the most ghost events (attended unannounced); empty when none
 }

@@ -198,26 +198,35 @@ export async function getPageData(
         WHERE a.user_id IS NOT NULL
       ),
 
-      -- Fart Sack King: PAX with the most no-shows in this area. Fartsacks are
-      -- stripped from the events CTE above, so count them from the raw
-      -- pv_events table (same area + date filters). All PAX tied at the top
-      -- count are kept so the UI can surface ties; empty when nobody has any.
-      fartsack_counts AS (
+      -- Fart Sack King / Ghost King: PAX with the most no-shows (fartsacks) /
+      -- unannounced posts (ghosts) in this area, counted from the raw pv_events
+      -- table (same area + date filters) since the events CTE strips fartsacks.
+      -- All PAX tied at the top count are kept so the UI can surface ties;
+      -- empty when nobody has any.
+      flag_counts AS (
         SELECT
           a.user_id,
           ANY_VALUE(a.f3_name) AS f3_name,
-          COUNT(*) AS fartsack_count
+          COUNTIF(a.fartsack IS TRUE) AS fartsack_count,
+          COUNTIF(a.ghost IS TRUE) AS ghost_count
         FROM pv_events e
         JOIN UNNEST(e.attendance) a
         WHERE e.area_org_id = ${areaId}
-          AND a.fartsack IS TRUE
+          AND (a.fartsack IS TRUE OR a.ghost IS TRUE)
           ${dateFilterSql}
         GROUP BY a.user_id
       ),
       fartsack_kings AS (
-        SELECT user_id, f3_name, fartsack_count
-        FROM fartsack_counts
-        WHERE fartsack_count = (SELECT MAX(fartsack_count) FROM fartsack_counts)
+        SELECT user_id, f3_name, fartsack_count AS count
+        FROM flag_counts
+        WHERE fartsack_count > 0
+          AND fartsack_count = (SELECT MAX(fartsack_count) FROM flag_counts)
+      ),
+      ghost_kings AS (
+        SELECT user_id, f3_name, ghost_count AS count
+        FROM flag_counts
+        WHERE ghost_count > 0
+          AND ghost_count = (SELECT MAX(ghost_count) FROM flag_counts)
       ),
 
       -- Region-level event aggregates
@@ -330,10 +339,15 @@ export async function getPageData(
           em.fng_count,
           em.pax_count_average,
           ARRAY(
-            SELECT AS STRUCT user_id, f3_name, fartsack_count
+            SELECT AS STRUCT user_id, f3_name, count
             FROM fartsack_kings
             ORDER BY f3_name
-          ) AS fartsack_kings
+          ) AS fartsack_kings,
+          ARRAY(
+            SELECT AS STRUCT user_id, f3_name, count
+            FROM ghost_kings
+            ORDER BY f3_name
+          ) AS ghost_kings
         FROM area_event_metrics em
         CROSS JOIN area_attendance_metrics am
       ) AS summary,

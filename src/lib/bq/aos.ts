@@ -177,6 +177,7 @@ export async function getEvents(
       ao_org_id,
       ao_name,
       region_org_id,
+      region_name,
       first_f_ind,
       second_f_ind,
       third_f_ind,
@@ -252,23 +253,33 @@ export async function getPageData(
         WHERE a.user_id IS NOT NULL
       ),
 
-      -- Fart Sack King: PAX with the most no-shows at this AO. Fartsacks are
-      -- stripped from the events CTE above, so count them from the raw
-      -- pv_events table (same filters via whereSql). All PAX tied at the top
-      -- count are kept so the UI can surface ties; empty when nobody has any.
-      fartsack_counts AS (
+      -- Fart Sack King / Ghost King: PAX with the most no-shows (fartsacks) /
+      -- unannounced posts (ghosts) at this AO. Both flags are counted from the
+      -- raw pv_events table (same filters via whereSql): fartsacks are stripped
+      -- from the events CTE above, and ghosts are counted the same way for
+      -- consistency. All PAX tied at the top count are kept so the UI can
+      -- surface ties; empty when nobody has any.
+      flag_counts AS (
         SELECT
           a.user_id,
           ANY_VALUE(a.f3_name) AS f3_name,
-          COUNT(*) AS fartsack_count
+          COUNTIF(a.fartsack IS TRUE) AS fartsack_count,
+          COUNTIF(a.ghost IS TRUE) AS ghost_count
         FROM pv_events e, UNNEST(e.attendance) a
-        ${whereSql ? `${whereSql}\n          AND a.fartsack IS TRUE` : "WHERE a.fartsack IS TRUE"}
+        ${whereSql ? `${whereSql}\n          AND (a.fartsack IS TRUE OR a.ghost IS TRUE)` : "WHERE (a.fartsack IS TRUE OR a.ghost IS TRUE)"}
         GROUP BY a.user_id
       ),
       fartsack_kings AS (
-        SELECT user_id, f3_name, fartsack_count
-        FROM fartsack_counts
-        WHERE fartsack_count = (SELECT MAX(fartsack_count) FROM fartsack_counts)
+        SELECT user_id, f3_name, fartsack_count AS count
+        FROM flag_counts
+        WHERE fartsack_count > 0
+          AND fartsack_count = (SELECT MAX(fartsack_count) FROM flag_counts)
+      ),
+      ghost_kings AS (
+        SELECT user_id, f3_name, ghost_count AS count
+        FROM flag_counts
+        WHERE ghost_count > 0
+          AND ghost_count = (SELECT MAX(ghost_count) FROM flag_counts)
       )
 
     SELECT
@@ -334,10 +345,15 @@ export async function getPageData(
           em.fng_count,
           em.pax_count_average,
           ARRAY(
-            SELECT AS STRUCT user_id, f3_name, fartsack_count
+            SELECT AS STRUCT user_id, f3_name, count
             FROM fartsack_kings
             ORDER BY f3_name
-          ) AS fartsack_kings
+          ) AS fartsack_kings,
+          ARRAY(
+            SELECT AS STRUCT user_id, f3_name, count
+            FROM ghost_kings
+            ORDER BY f3_name
+          ) AS ghost_kings
         FROM event_metrics em
         CROSS JOIN attendance_metrics am
       ) AS summary,
