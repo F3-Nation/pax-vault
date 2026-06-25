@@ -198,8 +198,9 @@ export async function getPageData(
 
       -- Fart Sack King: PAX with the most no-shows in this sector. Fartsacks are
       -- stripped from the events CTE above, so count them from the raw
-      -- pv_events table (same sector + date filters). Empty when nobody has any.
-      fartsack_king AS (
+      -- pv_events table (same sector + date filters). All PAX tied at the top
+      -- count are kept so the UI can surface ties; empty when nobody has any.
+      fartsack_counts AS (
         SELECT
           a.user_id,
           ANY_VALUE(a.f3_name) AS f3_name,
@@ -210,8 +211,11 @@ export async function getPageData(
           AND a.fartsack IS TRUE
           ${dateFilterSql}
         GROUP BY a.user_id
-        ORDER BY fartsack_count DESC
-        LIMIT 1
+      ),
+      fartsack_kings AS (
+        SELECT user_id, f3_name, fartsack_count
+        FROM fartsack_counts
+        WHERE fartsack_count = (SELECT MAX(fartsack_count) FROM fartsack_counts)
       ),
 
       -- Area-level event aggregates
@@ -323,9 +327,11 @@ export async function getPageData(
           am.unique_qs,
           em.fng_count,
           em.pax_count_average,
-          (SELECT user_id FROM fartsack_king) AS fartsack_king_user_id,
-          (SELECT f3_name FROM fartsack_king) AS fartsack_king_f3_name,
-          (SELECT fartsack_count FROM fartsack_king) AS fartsack_king_count
+          ARRAY(
+            SELECT AS STRUCT user_id, f3_name, fartsack_count
+            FROM fartsack_kings
+            ORDER BY f3_name
+          ) AS fartsack_kings
         FROM sector_event_metrics em
         CROSS JOIN sector_attendance_metrics am
       ) AS summary,

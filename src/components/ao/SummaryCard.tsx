@@ -12,9 +12,9 @@
 
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { Link } from "@heroui/link";
 import { AOSummary } from "@/lib/types";
 import { renderStat } from "@/lib/utils";
+import { FartSackKing } from "@/components/FartSackKing";
 
 type SummaryCardProps = {
   summary: AOSummary;
@@ -53,20 +53,7 @@ export function SummaryCard({ summary, filters }: SummaryCardProps) {
         <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
           <span className="text-primary">Fart Sack King:</span>
           <span>
-            {summary.fartsack_king_count && summary.fartsack_king_user_id ? (
-              <>
-                <Link
-                  className="text-sm"
-                  color="secondary"
-                  href={`/stats/pax/${summary.fartsack_king_user_id}${filters ? `?${filters}` : ""}`}
-                >
-                  {summary.fartsack_king_f3_name || "Unknown PAX"}
-                </Link>
-                {` (${renderStat(summary.fartsack_king_count)})`}
-              </>
-            ) : (
-              "No PAX"
-            )}
+            <FartSackKing kings={summary.fartsack_kings} filters={filters} />
           </span>
         </div>
         <div className="flex justify-between py-1 pb-2">
