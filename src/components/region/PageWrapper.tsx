@@ -134,7 +134,7 @@ export function RegionalPageWrapper({
                 : [region_leaders]
               : []
           }
-          height={260}
+          height={330}
           page="region"
           filters={eventsFiltersQuery}
         />

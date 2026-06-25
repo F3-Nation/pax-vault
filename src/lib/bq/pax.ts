@@ -222,6 +222,7 @@ export async function getEvents(
       ao_org_id,
       ao_name,
       region_org_id,
+      region_name,
       first_f_ind,
       second_f_ind,
       third_f_ind,

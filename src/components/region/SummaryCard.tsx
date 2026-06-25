@@ -12,10 +12,10 @@
 
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { Link } from "@heroui/link";
 import { RegionSummary } from "@/lib/types";
 import { renderStat } from "@/lib/utils";
 import { HelpHint } from "@/components/HelpHint";
+import { KingCell } from "@/components/KingCell";
 
 type SummaryCardProps = {
   summary: RegionSummary;
@@ -59,22 +59,21 @@ export function SummaryCard({ summary, filters }: SummaryCardProps) {
           <span>{renderStat(summary.fng_count, undefined, "FNGs")}</span>
         </div>
         <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10 text-sm">
-          <span className="text-primary">Fart Sack King:</span>
+          <span className="text-primary flex items-center">
+            Fart Sack King:
+            <HelpHint content="The PAX with the most fartsacks here — signed up for workouts but didn't show." />
+          </span>
           <span>
-            {summary.fartsack_king_count && summary.fartsack_king_user_id ? (
-              <>
-                <Link
-                  className="text-sm"
-                  color="secondary"
-                  href={`/stats/pax/${summary.fartsack_king_user_id}${filters ? `?${filters}` : ""}`}
-                >
-                  {summary.fartsack_king_f3_name || "Unknown PAX"}
-                </Link>
-                {` (${renderStat(summary.fartsack_king_count)})`}
-              </>
-            ) : (
-              "No PAX"
-            )}
+            <KingCell leaders={summary.fartsack_kings} filters={filters} />
+          </span>
+        </div>
+        <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10 text-sm">
+          <span className="text-primary flex items-center">
+            Ghost King:
+            <HelpHint content="The PAX with the most ghost posts here — showed up to workouts unannounced, without signing up beforehand." />
+          </span>
+          <span>
+            <KingCell leaders={summary.ghost_kings} filters={filters} />
           </span>
         </div>
         <div className="flex justify-between py-1 pb-2 text-sm">
