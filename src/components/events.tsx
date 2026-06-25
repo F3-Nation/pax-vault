@@ -563,6 +563,14 @@ export function EventsCard({
                                         variant="bordered"
                                         color="default"
                                         size="sm"
+                                        // Ghosts (attended unannounced) keep the
+                                        // default border but get danger-colored
+                                        // text to flag them more subtly.
+                                        classNames={{
+                                          content: pax.ghost
+                                            ? "text-danger"
+                                            : "",
+                                        }}
                                       >
                                         {pax.f3_name ?? pax.user_id.toString()}
                                       </Chip>

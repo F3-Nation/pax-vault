@@ -180,6 +180,9 @@ export function EventDetailsBody({
               variant="bordered"
               color="default"
               size="sm"
+              // Ghosts (attended unannounced) keep the default border but get
+              // danger-colored text to flag them.
+              classNames={{ content: pax.ghost ? "text-danger" : "" }}
             >
               {pax.f3_name ?? pax.user_id.toString()}
             </Chip>
