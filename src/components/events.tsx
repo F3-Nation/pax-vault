@@ -228,6 +228,11 @@ export function EventsCard({
 
   const getPaxList = (event: EventData) => sortAttendance(event.attendance);
 
+  // No-shows (signed up but didn't post). Lives in its own array so it never
+  // mixes with the attendance roster or its counts.
+  const getFartsackList = (event: EventData) =>
+    sortAttendance(event.fartsacks ?? []);
+
   // Client-side search across event, AO, region, PAX, and Q names, plus the
   // optional "As Q" gate that hides events this PAX did not Q (issue #115).
   const filteredEvents = eventsData.filter((ev) => {
@@ -368,6 +373,7 @@ export function EventsCard({
                 const pax_list = getPaxList(event);
                 const q_list = getQList(event);
                 const coq_list = getcoQList(event);
+                const fartsack_list = getFartsackList(event);
 
                 return (
                   <div key={event.event_instance_id || index}>
@@ -456,7 +462,8 @@ export function EventsCard({
                           </div>
                         </div>
 
-                        <div className="flex gap-2 pb-2">
+                        <div className="flex flex-col gap-1 pb-2">
+                          <span className="text-xs text-default-500">Qs</span>
                           <div className="flex flex-wrap gap-1">
                             {q_list.length === 0 ? (
                               <Chip
@@ -516,7 +523,8 @@ export function EventsCard({
                               : null}
                           </div>
                         </div>
-                        <div className="flex justify-between pb-2">
+                        <div className="flex flex-col gap-1 pb-2">
+                          <span className="text-xs text-default-500">PAX</span>
                           <div className="flex flex-wrap gap-1 w-full">
                             {pax_list.length === 0 ? (
                               <span className="italic text-default-500">
@@ -563,12 +571,11 @@ export function EventsCard({
                                         variant="bordered"
                                         color="default"
                                         size="sm"
-                                        // Ghosts (attended unannounced) keep the
-                                        // default border but get danger-colored
-                                        // text to flag them more subtly.
+                                        // Ghosts (attended unannounced) get muted
+                                        // text — they posted, just off-plan.
                                         classNames={{
                                           content: pax.ghost
-                                            ? "text-danger"
+                                            ? "text-default-400"
                                             : "",
                                         }}
                                       >
@@ -591,6 +598,38 @@ export function EventsCard({
                             )}
                           </div>
                         </div>
+                        {/* Fart Sacks: signed up but no-showed. Separate labeled
+                            row, kept out of the attendee chips and counts. */}
+                        {fartsack_list.length > 0 && (
+                          <div className="flex flex-col gap-1 pb-2">
+                            <span className="text-xs text-danger">
+                              Fart Sackers
+                            </span>
+                            <div className="flex flex-wrap gap-1 w-full">
+                              {fartsack_list.map((pax, i) => (
+                                <Link
+                                  key={`fartsack-${event.event_instance_id}-${i}`}
+                                  href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
+                                  className="text-default-100"
+                                >
+                                  <Chip
+                                    avatar={
+                                      <Avatar
+                                        showFallback
+                                        src={pax.avatar_url || undefined}
+                                      />
+                                    }
+                                    variant="bordered"
+                                    color="danger"
+                                    size="sm"
+                                  >
+                                    {pax.f3_name ?? pax.user_id.toString()}
+                                  </Chip>
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </CardBody>
                     </Card>
                   </div>
