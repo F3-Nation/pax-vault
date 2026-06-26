@@ -23,6 +23,7 @@ export default defineConfig({
         "src/lib/cache.ts", // thin env-gated wrapper over Next unstable_cache
         "src/lib/cache/**",
         "src/lib/types.ts",
+        "src/lib/changelog.ts", // static changelog data, no logic to cover
         "src/lib/service-worker.tsx",
         "src/lib/theme-switcher.tsx",
         "src/app/**",
