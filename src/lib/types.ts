@@ -31,6 +31,7 @@ export interface EventData {
     | null; // List of all types/categories associated with the event
   tags: { id: number; name: string; description: string }[] | null; // List of all tags associated with the event
   attendance: EventAttendance[]; // List of attendance records for the event
+  fartsacks?: EventAttendance[]; // Signed up but no-showed; display-only, excluded from attendance and all counts
 }
 
 /* USED FOR EVENT ATTENDANCE RECORDS */

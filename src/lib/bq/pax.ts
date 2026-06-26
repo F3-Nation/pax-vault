@@ -228,7 +228,8 @@ export async function getEvents(
       third_f_ind,
       types,
       tags,
-      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
+      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance,
+      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS TRUE) AS fartsacks
     FROM pv_events
     WHERE EXISTS (
       SELECT 1
@@ -380,7 +381,10 @@ export async function getPageData(
           -- unnests e.attendance (attendance_flat, co_attendance, ao_events) and
           -- the final events array all exclude no-shows. 'fartsack IS NOT TRUE'
           -- preserves legacy rows (flag NULL/FALSE) and real attendees.
-          ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
+          ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance,
+          -- Display-only roster of the no-shows; never consumed by any aggregate
+          -- CTE, only surfaced on the final events struct for the UI chips.
+          ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS TRUE) AS fartsacks
         FROM pv_events
         ${whereSql}
       ),
@@ -663,7 +667,8 @@ export async function getPageData(
                 e.third_f_ind,
                 e.types,
                 e.tags,
-                e.attendance)
+                e.attendance,
+                e.fartsacks)
               ORDER BY e.event_date DESC, e.event_id DESC)
           FROM events e
           LIMIT 100

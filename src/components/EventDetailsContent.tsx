@@ -35,6 +35,11 @@ const getQList = (event: EventData) =>
 
 const getPaxList = (event: EventData) => sortAttendance(event.attendance);
 
+// No-shows (signed up but didn't post). Separate array, kept out of the
+// attendance roster and counts.
+const getFartsackList = (event: EventData) =>
+  sortAttendance(event.fartsacks ?? []);
+
 export function EventDetailsHeader({
   event,
   filters,
@@ -180,9 +185,9 @@ export function EventDetailsBody({
               variant="bordered"
               color="default"
               size="sm"
-              // Ghosts (attended unannounced) keep the default border but get
-              // danger-colored text to flag them.
-              classNames={{ content: pax.ghost ? "text-danger" : "" }}
+              // Ghosts (attended unannounced) get muted text — they posted,
+              // just off-plan.
+              classNames={{ content: pax.ghost ? "text-default-400" : "" }}
             >
               {pax.f3_name ?? pax.user_id.toString()}
             </Chip>
@@ -198,6 +203,37 @@ export function EventDetailsBody({
     </div>
   );
 
+  // Fart Sacks: signed up but no-showed. Rendered as its own labeled, danger
+  // section after the PAX chips; null when there are none.
+  const fartsackChips =
+    getFartsackList(event).length > 0 ? (
+      <div className="mt-3">
+        <div className="text-xs tracking-wide text-danger mb-2">
+          Fart Sackers
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {getFartsackList(event).map((pax, i) => (
+            <Link
+              key={`fartsack-${event.event_instance_id}-${i}`}
+              href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
+              className="text-default-100"
+            >
+              <Chip
+                avatar={
+                  <Avatar showFallback src={pax.avatar_url || undefined} />
+                }
+                variant="bordered"
+                color="danger"
+                size="sm"
+              >
+                {pax.f3_name ?? pax.user_id.toString()}
+              </Chip>
+            </Link>
+          ))}
+        </div>
+      </div>
+    ) : null;
+
   return (
     <div className="space-y-6">
       {hasEventImages ? (
@@ -206,8 +242,8 @@ export function EventDetailsBody({
           <div className="flex-1 min-w-0 rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-4">
             <div className="space-y-5">
               <div>
-                <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
-                  Q
+                <div className="text-xs tracking-wide text-default-500 mb-2">
+                  Qs
                 </div>
                 {qChips}
               </div>
@@ -220,6 +256,7 @@ export function EventDetailsBody({
                   {paxCountLabel}
                 </div>
                 {paxChips}
+                {fartsackChips}
               </div>
             </div>
           </div>
@@ -283,8 +320,8 @@ export function EventDetailsBody({
         <section className="rounded-lg border border-default-200 dark:border-default-300 bg-background/60 dark:bg-default-100/50 p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <div className="text-xs uppercase tracking-wide text-default-500 mb-2">
-                Q
+              <div className="text-xs tracking-wide text-default-500 mb-2">
+                Qs
               </div>
               {qChips}
             </div>
@@ -297,6 +334,7 @@ export function EventDetailsBody({
                 {paxCountLabel}
               </div>
               {paxChips}
+              {fartsackChips}
             </div>
           </div>
         </section>

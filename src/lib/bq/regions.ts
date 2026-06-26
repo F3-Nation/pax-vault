@@ -256,7 +256,8 @@ export async function getEvents(
       third_f_ind,
       types,
       tags,
-      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
+      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance,
+      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS TRUE) AS fartsacks
     FROM pv_events
     ${whereSql}
     ORDER BY event_date DESC, event_id DESC
@@ -382,7 +383,10 @@ export async function getPageData(
           -- Strip fartsack (no-show) PAX once here so attendance_flat, the events
           -- list, the summary counts, and the charts all exclude no-shows.
           -- 'fartsack IS NOT TRUE' keeps legacy rows (flag NULL/FALSE) + attendees.
-          ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
+          ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance,
+          -- Display-only roster of the no-shows for the UI chips; not consumed
+          -- by any aggregate CTE.
+          ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS TRUE) AS fartsacks
         FROM pv_events
         ${whereSql}
       ),
@@ -580,8 +584,8 @@ export async function getPageData(
               third_f_ind,
               types,
               tags,
-              attendance
-              -- omit attendance unless the UI truly needs it here
+              attendance,
+              fartsacks
             )
             ORDER BY event_date DESC, event_id DESC
             LIMIT 100)
