@@ -215,6 +215,37 @@ function DownloadIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+function ChangelogIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M6 3H13L18 8V20C18 20.55 17.55 21 17 21H6C5.45 21 5 20.55 5 20V4C5 3.45 5.45 3 6 3Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13 3V8H18"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 13H14M8 16.5H12"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export default function NavbarClient() {
   const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
@@ -258,6 +289,10 @@ export default function NavbarClient() {
     await pwaPrompt.userChoice;
     setPwaPrompt(null);
   }, [isIOS, onInstallOpen, pwaPrompt]);
+
+  const handleChangelog = useCallback(() => {
+    router.push("/changelog");
+  }, [router]);
 
   const handleReportBug = useCallback(() => {
     window.open(
@@ -366,6 +401,12 @@ export default function NavbarClient() {
             </div>
           </DropdownItem>
         ) : null}
+        <DropdownItem key="changelog" onPress={handleChangelog}>
+          <div className="flex items-center gap-2">
+            <ChangelogIcon className="h-4 w-4" />
+            <span>What&apos;s New</span>
+          </div>
+        </DropdownItem>
         <DropdownItem key="report-bug" onPress={handleReportBug}>
           <div className="flex items-center gap-2">
             <BugIcon className="h-4 w-4" />
