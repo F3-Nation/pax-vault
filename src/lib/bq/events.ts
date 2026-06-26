@@ -32,7 +32,9 @@ export async function getEventById(
       -- Exclude fartsack (signed-up no-show) PAX from the roster/count. See
       -- attendance flags note in pax.ts. 'fartsack IS NOT TRUE' keeps legacy
       -- rows (flag NULL/FALSE) and real attendees, drops only no-shows.
-      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance
+      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance,
+      -- Display-only roster of the no-shows for the UI chips.
+      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS TRUE) AS fartsacks
     FROM pv_events
     WHERE event_id = ${eventInstanceId}
     LIMIT 1;
