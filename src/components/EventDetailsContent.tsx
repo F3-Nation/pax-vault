@@ -37,8 +37,9 @@ const getPaxList = (event: EventData) => sortAttendance(event.attendance);
 
 // No-shows (signed up but didn't post). Separate array, kept out of the
 // attendance roster and counts.
-const getFartsackList = (event: EventData) =>
-  sortAttendance(event.fartsacks ?? []);
+// Hidden from public view for now — kept for easy restore.
+// const getFartsackList = (event: EventData) =>
+//   sortAttendance(event.fartsacks ?? []);
 
 export function EventDetailsHeader({
   event,
@@ -180,14 +181,13 @@ export function EventDetailsBody({
             href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
             className="text-default-100"
           >
+            {/* Ghost styling hidden from public view for now — ghosts render as
+                normal chips. (pax.ghost flag still computed upstream.) */}
             <Chip
               avatar={<Avatar showFallback src={pax.avatar_url || undefined} />}
               variant="bordered"
               color="default"
               size="sm"
-              // Ghosts (attended unannounced) get muted text — they posted,
-              // just off-plan.
-              classNames={{ content: pax.ghost ? "text-default-400" : "" }}
             >
               {pax.f3_name ?? pax.user_id.toString()}
             </Chip>
@@ -203,8 +203,12 @@ export function EventDetailsBody({
     </div>
   );
 
-  // Fart Sacks: signed up but no-showed. Rendered as its own labeled, danger
-  // section after the PAX chips; null when there are none.
+  // Fart Sacks: signed up but no-showed. Hidden from public view for now — the
+  // fartsack roster (event.fartsacks) is still computed upstream; fartsackChips
+  // is null so the {fartsackChips} render slots below show nothing. The original
+  // render is kept below for easy restore.
+  const fartsackChips = null;
+  /*
   const fartsackChips =
     getFartsackList(event).length > 0 ? (
       <div className="mt-3">
@@ -233,6 +237,7 @@ export function EventDetailsBody({
         </div>
       </div>
     ) : null;
+  */
 
   return (
     <div className="space-y-6">

@@ -230,8 +230,9 @@ export function EventsCard({
 
   // No-shows (signed up but didn't post). Lives in its own array so it never
   // mixes with the attendance roster or its counts.
-  const getFartsackList = (event: EventData) =>
-    sortAttendance(event.fartsacks ?? []);
+  // Hidden from public view for now — kept for easy restore.
+  // const getFartsackList = (event: EventData) =>
+  //   sortAttendance(event.fartsacks ?? []);
 
   // Client-side search across event, AO, region, PAX, and Q names, plus the
   // optional "As Q" gate that hides events this PAX did not Q (issue #115).
@@ -373,7 +374,8 @@ export function EventsCard({
                 const pax_list = getPaxList(event);
                 const q_list = getQList(event);
                 const coq_list = getcoQList(event);
-                const fartsack_list = getFartsackList(event);
+                // Fart Sackers hidden from public view for now.
+                // const fartsack_list = getFartsackList(event);
 
                 return (
                   <div key={event.event_instance_id || index}>
@@ -561,6 +563,9 @@ export function EventsCard({
                                       href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
                                       className="text-default-100"
                                     >
+                                      {/* Ghost styling hidden from public view
+                                          for now — ghosts render as normal chips.
+                                          (pax.ghost flag still computed upstream.) */}
                                       <Chip
                                         avatar={
                                           <Avatar
@@ -571,13 +576,6 @@ export function EventsCard({
                                         variant="bordered"
                                         color="default"
                                         size="sm"
-                                        // Ghosts (attended unannounced) get muted
-                                        // text — they posted, just off-plan.
-                                        classNames={{
-                                          content: pax.ghost
-                                            ? "text-default-400"
-                                            : "",
-                                        }}
                                       >
                                         {pax.f3_name ?? pax.user_id.toString()}
                                       </Chip>
@@ -598,8 +596,9 @@ export function EventsCard({
                             )}
                           </div>
                         </div>
-                        {/* Fart Sacks: signed up but no-showed. Separate labeled
-                            row, kept out of the attendee chips and counts. */}
+                        {/* Fart Sackers hidden from public view for now. The
+                            fartsack roster (event.fartsacks) is still computed
+                            upstream; only the display below is disabled.
                         {fartsack_list.length > 0 && (
                           <div className="flex flex-col gap-1 pb-2">
                             <span className="text-xs text-danger">
@@ -630,6 +629,7 @@ export function EventsCard({
                             </div>
                           </div>
                         )}
+                        */}
                       </CardBody>
                     </Card>
                   </div>
