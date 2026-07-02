@@ -12,7 +12,8 @@ import { Divider } from "@heroui/divider";
 import { AreaSummary } from "@/lib/types";
 import { renderStat } from "@/lib/utils";
 import { HelpHint } from "@/components/HelpHint";
-import { KingCell } from "@/components/KingCell";
+// Fart Sack King / Ghost King hidden from public view for now.
+// import { KingCell } from "@/components/KingCell";
 
 type AreaSummaryCardProps = {
   summary: AreaSummary;
@@ -57,6 +58,8 @@ export function AreaSummaryCard({ summary }: AreaSummaryCardProps) {
           <span className="text-primary">FNGs:</span>
           <span>{renderStat(summary.fng_count, undefined, "FNGs")}</span>
         </div>
+        {/* Fart Sack King / Ghost King hidden from public view for now.
+            Calculations (summary.fartsack_kings / ghost_kings) still run upstream.
         <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
           <span className="text-primary flex items-center">
             Fart Sack King:
@@ -75,6 +78,7 @@ export function AreaSummaryCard({ summary }: AreaSummaryCardProps) {
             <KingCell leaders={summary.ghost_kings} />
           </span>
         </div>
+        */}
         <div className="flex justify-between py-1 pb-2">
           <span className="text-primary">Average PAX:</span>
           <span>{renderStat(summary.pax_count_average, 2, "PAX")}</span>

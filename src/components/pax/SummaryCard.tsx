@@ -42,6 +42,8 @@ export function SummaryCard({
               )}
             </span>
           </div>
+          {/* Ghost Events / Fart Sacked hidden from public view for now.
+              Calculations (summary.ghost_count / fartsack_count) still run upstream.
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary flex items-center">
               Ghost Events:
@@ -68,6 +70,7 @@ export function SummaryCard({
               )}
             </span>
           </div>
+          */}
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">FNG Date:</span>
             <span>
