@@ -6,6 +6,7 @@ import { Button } from "@heroui/button";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { normalizeRedirect, startSignIn } from "@/lib/auth/login";
 
 const ERROR_MESSAGES: Record<string, string> = {
   not_authorized: "Your email does not match a PAX member.",
@@ -18,13 +19,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_params: "Incomplete sign-in response. Please try again.",
   missing_code_verifier: "Security check failed. Please try again.",
 };
-
-function normalizeRedirect(path: string | null) {
-  if (!path) return null;
-  if (!path.startsWith("/")) return null;
-  if (path.startsWith("//")) return null;
-  return path;
-}
 
 export default function AuthCard() {
   const searchParams = useSearchParams();
@@ -40,13 +34,7 @@ export default function AuthCard() {
     ? (ERROR_MESSAGES[errorParam] ?? "An error occurred during sign-in.")
     : null;
 
-  const handleSignIn = () => {
-    const loginUrl = new URL("/api/auth/login", window.location.origin);
-    if (redirectTo) {
-      loginUrl.searchParams.set("returnTo", redirectTo);
-    }
-    window.location.href = loginUrl.toString();
-  };
+  const handleSignIn = () => startSignIn(redirectTo);
 
   if (loading) {
     return (
