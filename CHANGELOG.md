@@ -10,6 +10,33 @@ signing up), **fartsack** (signed up but didn't show).
 
 ---
 
+## August 2026 — A real front door
+
+**Added**
+
+- **Redesigned home page** — the page you land on before signing in now shows
+  what PAX Vault actually does, with previews of the region leaderboards, the
+  AO day-of-week attendance heatmap, FNG growth, upcoming achievements,
+  search, and filter chips. (The previews use made-up names and numbers; real
+  data still requires sign-in.)
+- **Drill-down map** on the home page laying out the full Nation → Sector →
+  Area → Region → AO → PAX hierarchy.
+- **F3 glossary** on the home page — PAX, Post, Q, AO, FNG, Kotter, Bestie,
+  and Region — plus a "who it's for" section for Site Qs, Nantans, and
+  Weasel Shakers.
+
+**Improved**
+
+- Signed-in visitors now get real entry points from the home page — the Nation
+  dashboard, plus sample PAX and region links — instead of generic marketing
+  copy.
+
+**Fixed**
+
+- The home page's "Sample PAX" and "Sample Region" buttons no longer bounce
+  signed-out visitors straight back to the home page. Those links now appear
+  only once you're signed in, where they actually work.
+
 ## June 2026 — Attendance accuracy
 
 **Added**

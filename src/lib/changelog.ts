@@ -23,6 +23,32 @@ export interface ChangelogRelease {
 
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    period: "August 2026",
+    title: "A real front door",
+    sections: [
+      {
+        tag: "Added",
+        items: [
+          "Redesigned home page — the page you land on before signing in now shows what PAX Vault actually does, with previews of the region leaderboards, the AO day-of-week attendance heatmap, FNG growth, upcoming achievements, search, and filter chips. (The previews use made-up names and numbers; real data still requires sign-in.)",
+          "Drill-down map on the home page laying out the full Nation → Sector → Area → Region → AO → PAX hierarchy.",
+          'F3 glossary on the home page — PAX, Post, Q, AO, FNG, Kotter, Bestie, and Region — plus a "who it\'s for" section for Site Qs, Nantans, and Weasel Shakers.',
+        ],
+      },
+      {
+        tag: "Improved",
+        items: [
+          "Signed-in visitors now get real entry points from the home page — the Nation dashboard, plus sample PAX and region links — instead of generic marketing copy.",
+        ],
+      },
+      {
+        tag: "Fixed",
+        items: [
+          'The home page\'s "Sample PAX" and "Sample Region" buttons no longer bounce signed-out visitors straight back to the home page. Those links now appear only once you\'re signed in, where they actually work.',
+        ],
+      },
+    ],
+  },
+  {
     period: "June 2026",
     title: "Attendance accuracy",
     sections: [
