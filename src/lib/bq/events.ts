@@ -13,38 +13,45 @@ import { EventData, EventDetails } from "@/lib/types";
 export async function getEventById(
   eventInstanceId: number,
   userIdentifier?: string,
-): Promise<EventData | null> {
+): Promise<(EventData & { preferencesJson: string | null }) | null> {
+  // Preferences come from a LEFT JOIN, not a scalar subquery: BigQuery rejects
+  // a correlated subquery that references another table ("Correlated
+  // subqueries that reference other tables are not supported unless they can
+  // be de-correlated"). The join keeps it to one round trip, and LEFT means an
+  // event whose region never saved preferences still returns its row, with
+  // preferencesJson NULL so the caller applies defaults.
   const query = `-- EVENT BY ID
     SELECT
-      event_id as event_instance_id,
-      event_date,
-      event_name,
-      pax_count,
-      fng_count,
-      ao_org_id,
-      ao_name,
-      region_org_id,
-      first_f_ind,
-      second_f_ind,
-      third_f_ind,
-      types,
-      tags,
+      e.event_id as event_instance_id,
+      e.event_date,
+      e.event_name,
+      e.pax_count,
+      e.fng_count,
+      e.ao_org_id,
+      e.ao_name,
+      e.region_org_id,
+      e.first_f_ind,
+      e.second_f_ind,
+      e.third_f_ind,
+      e.types,
+      e.tags,
       -- Exclude fartsack (signed-up no-show) PAX from the roster/count. See
       -- attendance flags note in pax.ts. 'fartsack IS NOT TRUE' keeps legacy
       -- rows (flag NULL/FALSE) and real attendees, drops only no-shows.
-      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance,
+      ARRAY(SELECT a FROM UNNEST(e.attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance,
       -- Display-only roster of the no-shows for the UI chips.
-      ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS TRUE) AS fartsacks
-    FROM pv_events
-    WHERE event_id = ${eventInstanceId}
+      ARRAY(SELECT a FROM UNNEST(e.attendance) a WHERE a.fartsack IS TRUE) AS fartsacks,
+      p.json_config AS preferencesJson
+    FROM pv_events e
+    LEFT JOIN pv_regions_preferences p
+      ON p.region_id = e.region_org_id
+    WHERE e.event_id = ${eventInstanceId}
     LIMIT 1;
   `;
 
-  const results = await queryBigQuery<EventData>(
-    query,
-    userIdentifier,
-    `fetch event by id ${eventInstanceId}`,
-  );
+  const results = await queryBigQuery<
+    EventData & { preferencesJson: string | null }
+  >(query, userIdentifier, `fetch event by id ${eventInstanceId}`);
 
   return results?.[0] || null;
 }

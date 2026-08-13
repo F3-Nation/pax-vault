@@ -214,7 +214,8 @@ export function KotterCard({ kotters, filters }: KotterCardProps) {
       <CardBody className="px-6">
         {/* Scrollable list to cap card height while keeping headers visible */}
         <ScrollShadow className="max-h-[60vh] lg:max-h-[32rem]">
-          <div className="space-y-1 text-sm">
+          {/* pr-3 keeps the right-hand content off the scrollbar. */}
+          <div className="space-y-1 text-sm pr-3">
             {filteredKotters.length === 0 ? (
               <div className="italic text-default-500 text-sm">
                 No kotters match this status.

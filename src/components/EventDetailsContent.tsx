@@ -36,10 +36,10 @@ const getQList = (event: EventData) =>
 const getPaxList = (event: EventData) => sortAttendance(event.attendance);
 
 // No-shows (signed up but didn't post). Separate array, kept out of the
-// attendance roster and counts.
-// Hidden from public view for now — kept for easy restore.
-// const getFartsackList = (event: EventData) =>
-//   sortAttendance(event.fartsacks ?? []);
+// attendance roster and counts. Only rendered when the event's region has
+// opted into fartsack/ghost stats.
+const getFartsackList = (event: EventData) =>
+  sortAttendance(event.fartsacks ?? []);
 
 export function EventDetailsHeader({
   event,
@@ -114,11 +114,18 @@ export function EventDetailsBody({
   details,
   isLoadingDetails = false,
   filters,
+  showFartsackGhost = false,
 }: {
   event: EventData;
   details: EventDetails | null;
   isLoadingDetails?: boolean;
   filters?: string;
+  /**
+   * Show the Fart Sacker roster and ghost chip styling. Comes from the
+   * preferences of the region this event belongs to. Defaults to false so any
+   * call site that doesn't opt in stays hidden — notably the PAX page.
+   */
+  showFartsackGhost?: boolean;
 }) {
   const hasEventImages = (details?.meta?.files?.length ?? 0) > 0;
 
@@ -181,13 +188,18 @@ export function EventDetailsBody({
             href={`/stats/pax/${pax.user_id}${filters ? `?${filters}` : ""}`}
             className="text-default-100"
           >
-            {/* Ghost styling hidden from public view for now — ghosts render as
-                normal chips. (pax.ghost flag still computed upstream.) */}
             <Chip
               avatar={<Avatar showFallback src={pax.avatar_url || undefined} />}
               variant="bordered"
               color="default"
               size="sm"
+              // Ghosts (attended unannounced) get muted text — they posted,
+              // just off-plan. Only when the region opted in; otherwise every
+              // PAX renders as a normal chip.
+              classNames={{
+                content:
+                  showFartsackGhost && pax.ghost ? "text-default-400" : "",
+              }}
             >
               {pax.f3_name ?? pax.user_id.toString()}
             </Chip>
@@ -203,14 +215,10 @@ export function EventDetailsBody({
     </div>
   );
 
-  // Fart Sacks: signed up but no-showed. Hidden from public view for now — the
-  // fartsack roster (event.fartsacks) is still computed upstream; fartsackChips
-  // is null so the {fartsackChips} render slots below show nothing. The original
-  // render is kept below for easy restore.
-  const fartsackChips = null;
-  /*
+  // Fart Sacks: signed up but no-showed. Its own labeled danger section after
+  // the PAX chips; null when the region opted out or there are none.
   const fartsackChips =
-    getFartsackList(event).length > 0 ? (
+    showFartsackGhost && getFartsackList(event).length > 0 ? (
       <div className="mt-3">
         <div className="text-xs tracking-wide text-danger mb-2">
           Fart Sackers
@@ -237,7 +245,6 @@ export function EventDetailsBody({
         </div>
       </div>
     ) : null;
-  */
 
   return (
     <div className="space-y-6">

@@ -72,7 +72,8 @@ export function UpcomingEventsCard({
       <CardBody className="px-6">
         {/* Scroll container to cap card height while keeping header visible */}
         <ScrollShadow className="max-h-[60vh] lg:max-h-[32rem]">
-          <div className="space-y-1 text-sm">
+          {/* pr-3 keeps the right-hand Q chips off the scrollbar. */}
+          <div className="space-y-1 text-sm pr-3">
             {/* Empty state when filtering open-Q events */}
             {showOpenOnly && filteredEvents.length === 0 ? (
               <div className="italic text-default-500 text-sm">

@@ -96,6 +96,7 @@ export default async function AODetailPage({
           ao_leaders={aoData.leaders}
           ao_upcoming={aoData.upcoming || []}
           ao_events={aoData.events || []}
+          ao_preferences={aoData.preferences}
           searchParams={{
             categoryIds,
             categoryMode,

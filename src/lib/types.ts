@@ -2,6 +2,8 @@
 /*                  TYPES USED ACROSS APP                      */
 /* =========================================================== */
 
+import type { RegionPreferences } from "@/lib/preferences";
+
 /* USED FOR ALL EVENT DATA */
 export interface EventData {
   event_instance_id: number; // Unique identifier for the event instance
@@ -118,6 +120,15 @@ export interface RegionData {
   kotter: RegionKotterList[] | null; // List of Kotter events in the region
   charts: ChartData[] | null; // List of chart data points for the region
   achievements: RegionAchievementPax[] | null; // PAX approaching milestones or with upcoming anniversaries
+  aoBreakdown: RegionAOBreakdown[] | null; // Beatdown counts per AO in the region (matches AreaData.regionBreakdown naming)
+  preferences: RegionPreferences; // This region's display preferences; defaults when never saved
+}
+
+/* USED FOR THE REGION PAGE'S AO BREAKDOWN */
+export interface RegionAOBreakdown {
+  ao_id: number; // AO org id
+  ao_name: string; // AO name
+  beatdowns: number; // Distinct workouts held at this AO, within the active filters
 }
 
 /* USED ONLY FOR REGION INFO */
@@ -369,6 +380,7 @@ export interface AOData {
   leaders: Leaders[] | null; // Leaderboard data for the AO
   events: EventData[] | null; // List of events held in the AO
   upcoming: EventUpcoming[] | null; // List of upcoming events in the AO
+  preferences: RegionPreferences; // INHERITED from the parent region; AOs have none of their own
 }
 
 /* USED ONLY FOR AO INFO */

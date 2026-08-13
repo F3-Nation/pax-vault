@@ -15,18 +15,24 @@ import { Divider } from "@heroui/divider";
 import { RegionSummary } from "@/lib/types";
 import { renderStat } from "@/lib/utils";
 import { HelpHint } from "@/components/HelpHint";
-// Fart Sack King / Ghost King hidden from public view for now.
-// import { KingCell } from "@/components/KingCell";
+import { KingCell } from "@/components/KingCell";
 
 type SummaryCardProps = {
   summary: RegionSummary;
   filters?: string;
+  /**
+   * Show the Fart Sack King / Ghost King rows. Driven by this region's
+   * `showFartsackGhostStats` preference; opt-out by default, so the rows stay
+   * hidden unless a region admin turned them on.
+   */
+  showFartsackGhost?: boolean;
 };
 
-// `filters` stays in the props type (callers still pass it) but is unused while
-// the Fart Sack King / Ghost King rows are hidden; re-add it to the destructure
-// when restoring those rows.
-export function SummaryCard({ summary }: SummaryCardProps) {
+export function SummaryCard({
+  summary,
+  filters,
+  showFartsackGhost = false,
+}: SummaryCardProps) {
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="flex justify-between items-center px-6 lg:min-h-16">
@@ -62,27 +68,29 @@ export function SummaryCard({ summary }: SummaryCardProps) {
           <span className="text-primary">FNGs:</span>
           <span>{renderStat(summary.fng_count, undefined, "FNGs")}</span>
         </div>
-        {/* Fart Sack King / Ghost King hidden from public view for now.
-            Calculations (summary.fartsack_kings / ghost_kings) still run upstream.
-        <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10 text-sm">
-          <span className="text-primary flex items-center">
-            Fart Sack King:
-            <HelpHint content="The PAX with the most fartsacks here — signed up for workouts but didn't show." />
-          </span>
-          <span>
-            <KingCell leaders={summary.fartsack_kings} filters={filters} />
-          </span>
-        </div>
-        <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10 text-sm">
-          <span className="text-primary flex items-center">
-            Ghost King:
-            <HelpHint content="The PAX with the most ghost posts here — showed up to workouts unannounced, without signing up beforehand." />
-          </span>
-          <span>
-            <KingCell leaders={summary.ghost_kings} filters={filters} />
-          </span>
-        </div>
-        */}
+        {/* Fart Sack King / Ghost King — only when this region opted in. */}
+        {showFartsackGhost && (
+          <>
+            <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10 text-sm">
+              <span className="text-primary flex items-center">
+                Fart Sack King:
+                <HelpHint content="The PAX with the most fartsacks here — signed up for workouts but didn't show." />
+              </span>
+              <span>
+                <KingCell leaders={summary.fartsack_kings} filters={filters} />
+              </span>
+            </div>
+            <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10 text-sm">
+              <span className="text-primary flex items-center">
+                Ghost King:
+                <HelpHint content="The PAX with the most ghost posts here — showed up to workouts unannounced, without signing up beforehand." />
+              </span>
+              <span>
+                <KingCell leaders={summary.ghost_kings} filters={filters} />
+              </span>
+            </div>
+          </>
+        )}
         <div className="flex justify-between py-1 pb-2 text-sm">
           <span className="text-primary">Average PAX:</span>
           <span>{renderStat(summary.pax_count_average, 2, "PAX")}</span>

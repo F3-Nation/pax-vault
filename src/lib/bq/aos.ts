@@ -209,6 +209,8 @@ export async function getPageData(
   summary: AOSummary | null;
   leaders: Leaders[] | null;
   upcoming: EventUpcoming[] | null;
+  /** Raw `json_config` inherited from the parent region; null when unset. */
+  preferencesJson: string | null;
 }> {
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(aoId, opts);
@@ -295,6 +297,20 @@ export async function getPageData(
         WHERE ao_id = ${aoId}
         LIMIT 1
       ) AS info,
+
+      -- Preferences INHERITED from this AO's parent region: an AO has no
+      -- preferences of its own, it renders under whatever its region set.
+      -- Resolved here (rather than by a second query) to hold the
+      -- single-query-per-page rule. NULL when the parent region has never
+      -- saved preferences, in which case the loader applies defaults.
+      (
+        SELECT p.json_config
+        FROM pv_regions_preferences p
+        WHERE p.region_id = (
+          SELECT region_id FROM pv_aos WHERE ao_id = ${aoId} LIMIT 1
+        )
+        LIMIT 1
+      ) AS preferencesJson,
 
       -- Events list as an ARRAY (limit it)
       (
@@ -414,6 +430,7 @@ export async function getPageData(
     summary: AOSummary;
     leaders: Leaders[];
     upcoming: EventUpcoming[];
+    preferencesJson: string | null;
   }>(query, userIdentifier, `fetch page data for AO ${aoId}`);
 
   return {
@@ -422,6 +439,7 @@ export async function getPageData(
     summary: results?.[0]?.summary || null,
     leaders: results?.[0]?.leaders || null,
     upcoming: results?.[0]?.upcoming || null,
+    preferencesJson: results?.[0]?.preferencesJson ?? null,
   };
 }
 

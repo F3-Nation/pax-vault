@@ -8,6 +8,7 @@ import {
   RegionKotterList,
   ChartData,
   RegionAchievementPax,
+  RegionAOBreakdown,
 } from "@/lib/types";
 import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
 
@@ -272,6 +273,69 @@ export async function getEvents(
   return results || null;
 }
 
+/**
+ * Fetch a single region's metadata.
+ *
+ * Deliberately lightweight — for pages that need to identify a region (name,
+ * logo, parent area) without paying for the full `getPageData` roll-up.
+ * Returns null when the id matches no region.
+ */
+export async function getRegionInfo(
+  regionId: number,
+  userIdentifier?: string,
+): Promise<RegionInfo | null> {
+  const query = `-- REGION INFO
+    SELECT
+      region_id,
+      region_name,
+      area_id,
+      area_name,
+      logo_url,
+      is_active,
+      aos,
+      types,
+      tags
+    FROM pv_regions
+    WHERE region_id = @regionId
+    LIMIT 1
+  `;
+
+  const results = await queryBigQuery<RegionInfo>(
+    query,
+    userIdentifier,
+    `fetch region info for region ${regionId}`,
+    { regionId },
+  );
+  return results?.[0] ?? null;
+}
+
+/**
+ * Fetch the AO org ids belonging to a region.
+ *
+ * Used when a region's preferences change: every AO page under that region
+ * renders with the inherited preferences, so their caches must be invalidated
+ * alongside the region's own.
+ */
+export async function getRegionAOIds(
+  regionId: number,
+  userIdentifier?: string,
+): Promise<number[]> {
+  const query = `-- REGION AO IDS
+    SELECT ao.ao_org_id AS ao_id
+    FROM pv_regions r, UNNEST(r.aos) ao
+    WHERE r.region_id = @regionId
+      AND ao.ao_org_id IS NOT NULL
+  `;
+
+  const results = await queryBigQuery<{ ao_id: number }>(
+    query,
+    userIdentifier,
+    `fetch AO ids for region ${regionId}`,
+    { regionId },
+  );
+  return (results ?? []).map((row) => row.ao_id).filter(Number.isFinite);
+}
+
 export async function searchRegionsByName(
   q: string,
   userIdentifier?: string,
@@ -330,6 +394,9 @@ export async function getPageData(
       }[]
     | null;
   achievements: RegionAchievementPax[] | null;
+  aoBreakdown: RegionAOBreakdown[] | null;
+  /** Raw `json_config` for this region; null when never saved. */
+  preferencesJson: string | null;
 }> {
   // Build WHERE clause from common filters (region-scoped).
   const whereSql = buildEventsWhereSql(regionId, opts);
@@ -565,6 +632,17 @@ export async function getPageData(
         LIMIT 1
       ) AS regionInfo,
 
+      -- Region preferences, as the raw json_config string (parsed by the
+      -- loader). Folded into this query rather than fetched separately to hold
+      -- the single-query-per-page rule. NULL when the region has never saved
+      -- preferences, in which case the loader applies defaults.
+      (
+        SELECT json_config
+        FROM pv_regions_preferences
+        WHERE region_id = ${regionId}
+        LIMIT 1
+      ) AS preferencesJson,
+
       -- Events list as an ARRAY (limit it)
       (
         SELECT
@@ -655,6 +733,30 @@ export async function getPageData(
         JOIN leaders_rollup r
           USING (user_id)
       ) AS leaders,
+
+      -- AO breakdown: beatdown (workout) count per AO.
+      -- Built from the shared events CTE so it honours the page filters the
+      -- same way the summary and leaders do.
+      --
+      -- Region-level events with no AO are kept as a single ao_id = 0 row
+      -- labelled "(No AO)", reusing the same 0 sentinel the AO filter uses for
+      -- "no AO". Without it the breakdown total would silently disagree with
+      -- the Total Events stat in the summary card directly above it.
+      (
+        SELECT
+          ARRAY_AGG(
+            STRUCT(ao_id, ao_name, beatdowns)
+            ORDER BY beatdowns DESC, ao_name ASC
+          )
+        FROM (
+          SELECT
+            IFNULL(ao_org_id, 0) AS ao_id,
+            IFNULL(ANY_VALUE(ao_name), '(No AO)') AS ao_name,
+            COUNT(DISTINCT event_id) AS beatdowns
+          FROM events
+          GROUP BY ao_org_id
+        )
+      ) AS aoBreakdown,
 
       -- Upcoming as an ARRAY
       (
@@ -816,6 +918,8 @@ export async function getPageData(
     kotter: RegionKotterList[];
     charts: ChartData[];
     achievements: RegionAchievementPax[];
+    aoBreakdown: RegionAOBreakdown[];
+    preferencesJson: string | null;
   }>(query, userIdentifier, `fetch region data for region ${regionId}`);
 
   return {
@@ -827,5 +931,7 @@ export async function getPageData(
     kotter: results?.[0]?.kotter || null,
     charts: results?.[0]?.charts || null,
     achievements: results?.[0]?.achievements || null,
+    aoBreakdown: results?.[0]?.aoBreakdown || null,
+    preferencesJson: results?.[0]?.preferencesJson ?? null,
   };
 }

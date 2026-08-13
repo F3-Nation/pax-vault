@@ -61,6 +61,56 @@ See `../.context/oauth-clients.md` for the full client registry.
 - **Stats pages** (`/stats/region/[id]`, `/stats/pax/[id]`, etc.): Server-side `requireAuth()` redirects to `/` if not authenticated
 - **Search API routes** (`/api/region/list`, `/api/pax/list`): Return 401 if `getSessionUser()` returns null
 
+## Authorization (Region Admin)
+
+Authentication says _who you are_; region admin rights say _what you can change_. They are separate systems — the session cookie carries no roles.
+
+Roles live in `f3data.public.roles_x_users_x_org` (`role_id`, `user_id`, `org_id`). `role_id = 3` is `admin` in `f3data.public.roles`. Admin grants are held per-org, and ~96% are on `org_type = 'region'` orgs, so for a region page the `org_id` **is** the `region_id`.
+
+Because the session only carries an email, every check resolves `email → f3data.public.users.id` first:
+
+```
+session email → public.users.id → roles_x_users_x_org (role_id=3, org_id=regionId) → isAdmin
+```
+
+`getRegionPermissionForSession(regionId)` wraps this in React `cache()`, so a request that gates a button and loads preferences pays one BigQuery round trip.
+
+**Admin rights do not cascade.** A grant on a parent area/sector/nation does not confer region admin — the check requires a row on the region's own `org_id`.
+
+**Enforcement is server-side, twice.** The button on the region page and the preferences page gate are UX affordances; `PUT /api/region/[regionId]/preferences` re-runs the same check and is the real enforcement point.
+
+**Failure is not denial.** The permission helpers propagate BigQuery errors instead of returning `isAdmin: false` — collapsing "lookup failed" into "denied" is the mistake the search-silent-failures postmortem covers. Call sites decide: the region page hides the button, the API returns 500.
+
+### Region Preferences
+
+Stored in `paxVault.pv_regions_preferences` (`region_id`, `json_config`, `updated_user_id`, `updated_at`), one row per region, upserted with a MERGE. The `json_config` shape lives in `src/lib/preferences.ts`; unknown keys are dropped on write and missing keys fall back to defaults on read, so old rows survive schema growth.
+
+#### Inheritance scope
+
+| Page                             | Preferences applied                           |
+| -------------------------------- | --------------------------------------------- |
+| **Region**                       | its own                                       |
+| **AO**                           | **inherited from its parent region**          |
+| **Event** (`/stats/events/[id]`) | inherited from the event's region             |
+| **PAX**                          | **none** — PAX pages do not inherit           |
+| **Area / Sector**                | **none** — they span regions (see note below) |
+
+An AO has no preferences of its own; it renders under whatever its parent region configured. PAX pages are deliberately excluded — a PAX spans regions, so there is no single region whose preferences would govern the page. Area and sector summary cards keep their fartsack/ghost rows hidden unconditionally for the same reason.
+
+#### The `showFartsackGhostStats` preference
+
+The first real preference. **Opt-out by default** (`false`): the Fart Sack King / Ghost King rows, the per-event Fart Sacker roster, and ghost chip styling stay hidden — the state #128 established — until a region admin turns them on.
+
+The flag is threaded as an explicit `showFartsackGhost` prop that **defaults to `false`** at every component boundary (`SummaryCard`, `EventsCard`, `EventDetailsBody`). That default is what keeps PAX pages clean: `EventsCard` is shared by the region, AO, and PAX pages, and the PAX page simply never passes the prop. A new call site that forgets it fails closed, not open.
+
+Both the region and AO page queries resolve preferences **inside the existing page query** (a `json_config` subquery returning `preferencesJson`), holding the single-query-per-page rule in `BigQuery.md` — inheritance costs no extra round trip. The loaders parse that string into `RegionData.preferences` / `AOData.preferences` via `parseRegionPreferences`, applying defaults when the region has no row.
+
+Because preferences are baked into those cached page payloads, saving invalidates `region-<id>` **and** `ao-<id>` for every AO in the region (`getRegionAOIds`); otherwise a change would take up to `STATS_REVALIDATE_SECONDS` (1h) to surface. A revalidation failure is logged, not surfaced — the write already succeeded. Note this path is inert in dev: `cacheStatsData` bypasses caching outside production.
+
+**Write access**: `pax-vault-bigquery-prod` is read-only across `f3data` _except_ for a table-level `roles/bigquery.dataEditor` grant on `paxVault.pv_regions_preferences` (granted 2026-08-13). The grant is scoped to that one table on purpose — dataset-level would open every `pv_*` view to writes. Local and prod share this service account, so one grant covers both.
+
+If a future preferences table (e.g. the unused `pv_pax_preferences`) needs writes, it needs its own grant. `isWritePermissionError()` stays as the guard for that case: it turns `Access Denied: bigquery.tables.updateData` into an actionable 503 naming the missing grant, instead of a generic 500.
+
 ## Source Files
 
 | File                                 | Purpose                                                                          |
@@ -71,6 +121,10 @@ See `../.context/oauth-clients.md` for the full client registry.
 | `src/lib/auth/AuthProvider.tsx`      | Client-side auth context (`useAuth()` hook)                                      |
 | `src/lib/auth/constants.ts`          | Cookie name, TTL                                                                 |
 | `src/lib/auth/allowlist.ts`          | BigQuery email allowlist check                                                   |
+| `src/lib/auth/permissions.ts`        | `getRegionPermissionForSession()` — session-aware, request-cached role check     |
+| `src/lib/bq/permissions.ts`          | `getRegionPermission()` — email -> user id -> `role_id = 3` on the region org    |
+| `src/lib/bq/preferences.ts`          | Region preferences read + MERGE upsert; `isWritePermissionError()`               |
+| `src/lib/preferences.ts`             | Preference schema, defaults, coercion, (de)serialization                         |
 | `src/app/api/auth/login/route.ts`    | Builds OAuth authorize URL, sets CSRF + PKCE cookies, redirects                  |
 | `src/app/api/auth/callback/route.ts` | Handles OAuth callback: validates state, exchanges code, creates session         |
 | `src/app/api/auth/me/route.ts`       | Returns current user (client-side session check)                                 |

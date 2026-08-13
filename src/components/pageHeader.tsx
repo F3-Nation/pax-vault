@@ -14,15 +14,28 @@ import { Card, CardHeader } from "@heroui/card";
 import { Link } from "@heroui/link";
 import { fallbackF3Logo } from "@/lib/utils";
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 type PageHeaderProps = {
   image?: string;
   name?: string;
   link?: string;
   linkName?: string;
+  /**
+   * Optional control rendered beneath the parent-org link, right-aligned with
+   * the title block — e.g. the region admin's preferences button. Server
+   * components may be passed straight through.
+   */
+  action?: ReactNode;
 };
 
-export function PageHeader({ image, name, link, linkName }: PageHeaderProps) {
+export function PageHeader({
+  image,
+  name,
+  link,
+  linkName,
+  action,
+}: PageHeaderProps) {
   const [avatarSrc, setAvatarSrc] = useState<string>(image ?? "");
 
   useEffect(() => {
@@ -71,6 +84,7 @@ export function PageHeader({ image, name, link, linkName }: PageHeaderProps) {
           ) : (
             <span className="text-lg">{linkName}</span>
           )}
+          {action && <div className="mt-2 flex justify-end">{action}</div>}
         </div>
       </CardHeader>
     </Card>

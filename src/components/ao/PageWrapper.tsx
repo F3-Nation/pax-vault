@@ -17,6 +17,7 @@ import {
   EventUpcoming,
   AOInfo,
 } from "@/lib/types";
+import type { RegionPreferences } from "@/lib/preferences";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "../leaders";
 import { UpcomingEventsCard } from "../upcomingEvents";
@@ -31,6 +32,8 @@ type AOPageWrapperProps = {
   ao_leaders: Leaders[] | null;
   ao_upcoming: EventUpcoming[] | null;
   ao_events: EventData[];
+  /** INHERITED from the parent region — AOs have no preferences of their own. */
+  ao_preferences: RegionPreferences;
   searchParams: {
     categoryIds?: string | string[];
     categoryMode?: string;
@@ -87,6 +90,7 @@ export function AOPageWrapper({
   ao_leaders,
   ao_upcoming,
   ao_events,
+  ao_preferences,
   searchParams,
 }: AOPageWrapperProps) {
   // Memoized query-string passed to events + filter components.
@@ -107,7 +111,11 @@ export function AOPageWrapper({
       )}
       {/* Summary + leaders */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
-        <SummaryCard summary={ao_summary!} filters={eventsFiltersQuery} />
+        <SummaryCard
+          summary={ao_summary!}
+          filters={eventsFiltersQuery}
+          showFartsackGhost={ao_preferences.showFartsackGhostStats}
+        />
         <LeadersCard
           leaders={
             ao_leaders
@@ -135,6 +143,7 @@ export function AOPageWrapper({
           thisAOId={ao_id}
           filtersQuery={eventsFiltersQuery}
           filters={eventsFiltersQuery}
+          showFartsackGhost={ao_preferences.showFartsackGhostStats}
         />
       </div>
       {/* Page-level filters at top of page if no filters are active */}

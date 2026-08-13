@@ -16,6 +16,7 @@ import {
   Leaders,
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/aos";
+import { parseRegionPreferences } from "@/lib/preferences";
 import { cacheStatsData } from "@/lib/cache";
 import { StatsFilters } from "@/lib/filters";
 import { normalizeDeep } from "@/lib/normalize";
@@ -49,6 +50,9 @@ export async function loadAOData(
           leaders: (mergedPlain.leaders ?? []) as Leaders[],
           events: (mergedPlain.events ?? []) as EventData[],
           upcoming: (mergedPlain.upcoming ?? []) as EventUpcoming[],
+          // Inherited from the parent region — an AO renders under whatever
+          // its region configured. Defaults when the region never saved any.
+          preferences: parseRegionPreferences(aoData.preferencesJson),
         };
 
         mergedSafe.events = (mergedSafe.events ?? []).map((e: EventData) => ({

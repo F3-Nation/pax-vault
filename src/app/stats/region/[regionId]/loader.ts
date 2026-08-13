@@ -17,8 +17,10 @@ import {
   RegionKotterList,
   ChartData,
   RegionAchievementPax,
+  RegionAOBreakdown,
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/regions";
+import { parseRegionPreferences } from "@/lib/preferences";
 import { cacheStatsData } from "@/lib/cache";
 import { StatsFilters } from "@/lib/filters";
 import { normalizeDeep } from "@/lib/normalize";
@@ -56,6 +58,10 @@ export async function loadRegionData(
           charts: (mergedPlain.charts ?? []) as ChartData[],
           achievements: (mergedPlain.achievements ??
             []) as RegionAchievementPax[],
+          aoBreakdown: (mergedPlain.aoBreakdown ?? []) as RegionAOBreakdown[],
+          // Parsed from the raw json_config the page query returned. Defaults
+          // are applied when the region has never saved preferences.
+          preferences: parseRegionPreferences(regionData.preferencesJson),
         };
 
         mergedSafe.events = (mergedSafe.events ?? []).map((e: EventData) => ({
