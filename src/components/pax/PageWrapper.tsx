@@ -10,10 +10,18 @@
  * and focuses only on rendering and query-string passthrough.
  */
 
-import { PaxAOBreakdown, PaxSummary, EventData, PAXInfo } from "@/lib/types";
+import {
+  PaxAOBreakdown,
+  PaxAOWeeklyActivity,
+  ActivityWindow,
+  PaxSummary,
+  EventData,
+  PAXInfo,
+} from "@/lib/types";
 import { Filter } from "../pageFilter";
 import { useMemo } from "react";
 import { SummaryCard } from "./SummaryCard";
+import { ActivityMatrixCard } from "./ActivityMatrixCard";
 import { AOBreakdownCard } from "./AOBreakdownCard";
 import { EventsCard } from "../events";
 
@@ -22,6 +30,8 @@ type PAXPageWrapperProps = {
   pax_info: PAXInfo | null;
   pax_summary: PaxSummary | null;
   pax_ao_breakdown: PaxAOBreakdown[] | null;
+  pax_ao_weekly: PaxAOWeeklyActivity[] | null;
+  pax_activity_window: ActivityWindow | null;
   pax_events: EventData[];
   searchParams: {
     categoryIds?: string | string[];
@@ -87,6 +97,8 @@ export function PAXPageWrapper({
   pax_info,
   pax_summary,
   pax_ao_breakdown,
+  pax_ao_weekly,
+  pax_activity_window,
   pax_events,
   searchParams,
 }: PAXPageWrapperProps) {
@@ -108,6 +120,14 @@ export function PAXPageWrapper({
           filters={eventsFiltersQuery}
         />
       )}
+      {/* Activity matrix (full width): where this PAX posts, week by week */}
+      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
+        <ActivityMatrixCard
+          activity={pax_ao_weekly || []}
+          activityWindow={pax_activity_window}
+          filters={eventsFiltersQuery}
+        />
+      </div>
       {/* Summary + leaders */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
         <SummaryCard summary={pax_summary!} filters={eventsFiltersQuery} />

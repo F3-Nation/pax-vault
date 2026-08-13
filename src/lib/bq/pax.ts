@@ -1,6 +1,19 @@
 import { queryBigQuery } from "@/lib/db";
-import { EventData, PaxSummary, PAXInfo, PaxAOBreakdown } from "@/lib/types";
+import {
+  ActivityWindow,
+  EventData,
+  PaxSummary,
+  PAXInfo,
+  PaxAOBreakdown,
+  PaxAOWeeklyActivity,
+} from "@/lib/types";
 import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
+import {
+  ACTIVITY_MAX_WEEKS,
+  ACTIVITY_WEEKS,
+  addWeeks,
+  startOfWeekISO,
+} from "@/lib/activityMatrix";
 
 /**
  * Build a BigQuery WHERE clause for pv_events-based queries.
@@ -199,6 +212,38 @@ function buildRangeDates(range: string | undefined): {
 }
 
 /**
+ * Resolve the week window the activity matrix should span.
+ *
+ * - No date filter: the trailing `ACTIVITY_WEEKS` weeks, so the card has a
+ *   sensible default instead of stretching across a PAX's whole career.
+ * - Date filter set: exactly that range, so the matrix agrees with every other
+ *   card on the page — capped at `ACTIVITY_MAX_WEEKS` columns, because a
+ *   multi-year custom range would otherwise render hundreds of columns.
+ *
+ * Both bounds are snapped to Mondays to line up with the WEEK(MONDAY) buckets.
+ */
+function buildActivityWindow(opts?: StatsFilters): ActivityWindow {
+  const rangeDates = buildRangeDates(opts?.range);
+  const filterStart = opts?.startDate ?? rangeDates.startDate;
+  const filterEnd = opts?.endDate ?? rangeDates.endDate;
+
+  const today = new Date().toISOString().split("T")[0];
+  const end = startOfWeekISO(filterEnd ?? today);
+
+  let start = filterStart
+    ? startOfWeekISO(filterStart)
+    : addWeeks(end, -(ACTIVITY_WEEKS - 1));
+
+  // Guard against an absurdly wide custom range.
+  const capStart = addWeeks(end, -(ACTIVITY_MAX_WEEKS - 1));
+  if (start < capStart) start = capStart;
+  // A start after the end (nonsense filter) collapses to a single week.
+  if (start > end) start = end;
+
+  return { start, end, isDefault: !filterStart && !filterEnd };
+}
+
+/**
  * Fetch events for a PAX with optional filtering.
  */
 export async function getEvents(
@@ -323,9 +368,17 @@ export async function getPageData(
   events: EventData[] | null;
   summary: PaxSummary | null;
   ao_breakdown: PaxAOBreakdown[] | null;
+  ao_weekly: PaxAOWeeklyActivity[] | null;
+  activity_window: ActivityWindow;
 }> {
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(paxId, opts);
+
+  // Window for the activity matrix. Its columns are weeks, so the active date
+  // filter has to decide how many columns there are — not just which cells are
+  // populated. Resolved from the same inputs as the WHERE clause above so the
+  // axis can never disagree with the data plotted on it.
+  const activityWindow = buildActivityWindow(opts);
   // Fartsacks (signed up, no-showed) are stripped from the events CTE, so count
   // them straight from pv_events using the same filters but the inverse
   // attendance gate.
@@ -688,7 +741,51 @@ export async function getPageData(
               ORDER BY total_events DESC, ao_name)
           FROM ao_breakdown
         ),
-        []) AS ao_breakdown;
+        []) AS ao_breakdown,
+
+      -- AO x week activity for the activity matrix.
+      --
+      -- The week window is bounded in TS (see buildActivityWindow) rather than
+      -- derived from the data: a handful of pv_events rows carry typo'd dates
+      -- centuries out (max is 3034-03-08), which would otherwise stretch the
+      -- axis to uselessness.
+      --
+      -- Rows are per AO per month; the top-N/"Other" bucketing happens in the
+      -- component so it stays a pure, testable transform.
+      IFNULL(
+        (
+          SELECT
+            ARRAY_AGG(
+              STRUCT(ao_org_id, ao_name, region_org_id, region_name, week, posts)
+              ORDER BY week, ao_name)
+          FROM (
+            SELECT
+              e.ao_org_id,
+              ANY_VALUE(e.ao_name) AS ao_name,
+              e.region_org_id,
+              ANY_VALUE(e.region_name) AS region_name,
+              -- Weeks start Monday, matching buildRangeDates and the charts.
+              FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(e.event_date, WEEK(MONDAY))) AS week,
+              COUNT(DISTINCT e.event_id) AS posts
+            -- Derived from the shared, already-filtered events CTE, so the
+            -- matrix honours every page filter (AO, region, type, tag,
+            -- category, date) exactly as the rest of the page does. That CTE
+            -- has also stripped fartsacks already.
+            FROM events e, UNNEST(e.attendance) a
+            WHERE a.user_id = ${paxId}
+              AND e.ao_org_id IS NOT NULL
+              -- The window bounds are Mondays (they are column keys), so the
+              -- end must extend to that week's Sunday or posts later in the
+              -- final partial week get dropped — including today's, in the
+              -- default view. The events CTE still caps at the user's own
+              -- filter end, so this cannot over-include.
+              AND e.event_date
+                BETWEEN DATE('${activityWindow.start}')
+                AND DATE_ADD(DATE('${activityWindow.end}'), INTERVAL 6 DAY)
+            GROUP BY e.ao_org_id, e.region_org_id, week
+          )
+        ),
+        []) AS ao_weekly;
     `;
 
   const results = await queryBigQuery<{
@@ -696,6 +793,7 @@ export async function getPageData(
     events: EventData[];
     summary: PaxSummary;
     ao_breakdown: PaxAOBreakdown[];
+    ao_weekly: PaxAOWeeklyActivity[];
   }>(query, userIdentifier, `fetch page data for PAX ${paxId}`);
 
   return {
@@ -703,5 +801,7 @@ export async function getPageData(
     events: results?.[0]?.events || null,
     summary: results?.[0]?.summary || null,
     ao_breakdown: results?.[0]?.ao_breakdown || null,
+    ao_weekly: results?.[0]?.ao_weekly || null,
+    activity_window: activityWindow,
   };
 }

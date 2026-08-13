@@ -104,6 +104,8 @@ export default async function PaxDetailPage({
           pax_summary={paxData.summary}
           pax_events={paxData.events || []}
           pax_ao_breakdown={paxData.ao_breakdown || []}
+          pax_ao_weekly={paxData.ao_weekly || []}
+          pax_activity_window={paxData.activity_window}
           searchParams={{
             categoryIds,
             categoryMode,
