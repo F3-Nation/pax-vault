@@ -124,7 +124,8 @@ export function LeadersCard({
       <Divider />
       <CardBody className="px-6">
         <ScrollShadow style={{ height }} className="w-full">
-          <div className="space-y-1 text-sm overflow-y-auto">
+          {/* pr-3 keeps the right-hand stats off the scrollbar. */}
+          <div className="space-y-1 text-sm overflow-y-auto pr-3">
             {visibleLeaders.map((leader, index) => (
               <div
                 key={leader.user_id}

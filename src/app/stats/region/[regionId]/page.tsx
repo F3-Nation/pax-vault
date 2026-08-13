@@ -13,8 +13,11 @@ import { RegionalPageWrapper } from "@/components/region/PageWrapper";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { buildBreadcrumb } from "@/lib/breadcrumb";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
+import { getRegionPermissionForSession } from "@/lib/auth/permissions";
 import { parseFilterParams } from "@/lib/filters";
 import { EntityDataUnavailable } from "@/components/EntityDataUnavailable";
+import { PreferencesButton } from "@/components/region/PreferencesButton";
+import { reportError } from "@/lib/observability";
 
 interface PageProps {
   params: Promise<{ regionId: string }>;
@@ -64,6 +67,22 @@ export default async function RegionDetailPage({
     ...filters,
   });
 
+  // Region admins (role_id 3 on this region's org) get an entry point to the
+  // preferences editor. The button is optional chrome, so a failed permission
+  // lookup hides it rather than taking the whole dashboard down — the
+  // preferences page and its API re-check the role either way.
+  let canEditPreferences = false;
+  try {
+    const permission = await getRegionPermissionForSession(Number(regionId));
+    canEditPreferences = permission.isAdmin;
+  } catch (err) {
+    reportError(err, {
+      scope: "stats/region:permission",
+      user: user.email,
+      extra: { regionId },
+    });
+  }
+
   const hasRegionData = !!regionData && Object.keys(regionData).length > 0;
 
   // Show empty state when region data is missing or empty
@@ -98,6 +117,11 @@ export default async function RegionDetailPage({
               : undefined
           }
           linkName={regionData.info?.area_name ?? undefined}
+          action={
+            canEditPreferences ? (
+              <PreferencesButton regionId={Number(regionId)} />
+            ) : undefined
+          }
         />
         <RegionalPageWrapper
           region_id={Number(regionId)}
@@ -109,6 +133,8 @@ export default async function RegionDetailPage({
           region_events={regionData.events || []}
           region_charts={regionData.charts || []}
           region_achievements={regionData.achievements || []}
+          region_ao_breakdown={regionData.aoBreakdown || []}
+          region_preferences={regionData.preferences}
           searchParams={{
             categoryIds,
             categoryMode,

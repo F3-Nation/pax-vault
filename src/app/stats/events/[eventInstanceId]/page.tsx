@@ -15,6 +15,7 @@ import { notFound } from "next/navigation";
 import { requireAuth, getSessionUser } from "@/lib/auth/server";
 import { getEventById, getEventDetails } from "@/lib/bq/events";
 import { cleanEventName } from "@/lib/utils";
+import { parseRegionPreferences } from "@/lib/preferences";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { buildBreadcrumb } from "@/lib/breadcrumb";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
@@ -77,7 +78,13 @@ export default async function EventDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        <EventDetailsBody event={event} details={details} />
+        <EventDetailsBody
+          event={event}
+          details={details}
+          showFartsackGhost={
+            parseRegionPreferences(event.preferencesJson).showFartsackGhostStats
+          }
+        />
       </div>
     </main>
   );

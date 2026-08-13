@@ -19,7 +19,9 @@ import {
   RegionInfo,
   ChartData,
   RegionAchievementPax,
+  RegionAOBreakdown,
 } from "@/lib/types";
+import type { RegionPreferences } from "@/lib/preferences";
 import { SummaryCard } from "./SummaryCard";
 import { LeadersCard } from "../leaders";
 import { KotterCard } from "./KotterCard";
@@ -29,6 +31,7 @@ import { Filter } from "../pageFilter";
 import { useMemo } from "react";
 import { ChartCard } from "./ChartsCard";
 import { AchievementsCard } from "./AchievementsCard";
+import { AOBreakdownCard } from "./AOBreakdownCard";
 
 type RegionalPageWrapperProps = {
   region_id: number;
@@ -40,6 +43,9 @@ type RegionalPageWrapperProps = {
   region_events: EventData[];
   region_charts: ChartData[];
   region_achievements: RegionAchievementPax[];
+  region_ao_breakdown: RegionAOBreakdown[];
+  /** This region's saved preferences; drives opt-in display toggles. */
+  region_preferences: RegionPreferences;
   searchParams: {
     categoryIds?: string | string[];
     categoryMode?: string;
@@ -104,6 +110,8 @@ export function RegionalPageWrapper({
   region_events,
   region_charts,
   region_achievements,
+  region_ao_breakdown,
+  region_preferences,
   searchParams,
 }: RegionalPageWrapperProps) {
   // Memoized query-string passed to events + filter components.
@@ -125,7 +133,11 @@ export function RegionalPageWrapper({
       )}
       {/* Summary + leaders */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
-        <SummaryCard summary={region_summary!} filters={eventsFiltersQuery} />
+        <SummaryCard
+          summary={region_summary!}
+          filters={eventsFiltersQuery}
+          showFartsackGhost={region_preferences.showFartsackGhostStats}
+        />
         <LeadersCard
           leaders={
             region_leaders
@@ -155,10 +167,15 @@ export function RegionalPageWrapper({
           filters={eventsFiltersQuery}
         />
       </div>
-      {/* Upcoming events (full width, above the past-events log) */}
-      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl">
+      {/* Upcoming events beside the AO breakdown. Balanced 2-col peers with
+          top alignment so the shorter card doesn't stretch. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start w-full max-w-6xl">
         <UpcomingEventsCard
           events={region_upcoming || []}
+          filters={eventsFiltersQuery}
+        />
+        <AOBreakdownCard
+          aos={region_ao_breakdown || []}
           filters={eventsFiltersQuery}
         />
       </div>
@@ -169,6 +186,7 @@ export function RegionalPageWrapper({
           thisRegionId={region_id}
           filtersQuery={eventsFiltersQuery}
           filters={eventsFiltersQuery}
+          showFartsackGhost={region_preferences.showFartsackGhostStats}
         />
       </div>
       {/* Page-level filters at bottom of page if no filters are active */}
