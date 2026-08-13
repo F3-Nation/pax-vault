@@ -13,6 +13,7 @@ import {
   PAXInfo,
   PaxSummary,
   PaxAOBreakdown,
+  PaxAOWeeklyActivity,
 } from "@/lib/types";
 import { getPageData } from "@/lib/bq/pax";
 import { cacheStatsData } from "@/lib/cache";
@@ -47,6 +48,10 @@ export async function loadPaxData(
           summary: mergedPlain.summary as PaxSummary,
           events: (mergedPlain.events ?? []) as EventData[],
           ao_breakdown: (mergedPlain.ao_breakdown ?? []) as PaxAOBreakdown[],
+          ao_weekly: (mergedPlain.ao_weekly ?? []) as PaxAOWeeklyActivity[],
+          // Resolved server-side from the filters; the matrix renders exactly
+          // these columns.
+          activity_window: paxData.activity_window ?? null,
         };
 
         mergedSafe.events = (mergedSafe.events ?? []).map((e: EventData) => ({

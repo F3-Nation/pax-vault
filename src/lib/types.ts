@@ -217,6 +217,8 @@ export interface PaxData {
   info: PAXInfo | null; // Information about the pax
   summary: PaxSummary | null; // Summary statistics for the pax
   ao_breakdown: PaxAOBreakdown[] | null; // Breakdown of events and Qs by AO
+  ao_weekly: PaxAOWeeklyActivity[] | null; // AO x week activity within activity_window
+  activity_window: ActivityWindow | null; // Week span the matrix should render
   events: EventData[] | null; // List of event data associated with the pax
 }
 
@@ -262,6 +264,23 @@ export interface PaxSummary {
 }
 
 /* USED FOR PAX AO BREAKDOWN */
+/* WEEK WINDOW SPANNED BY THE PAX ACTIVITY MATRIX */
+export interface ActivityWindow {
+  start: string; // First week column, as its Monday 'YYYY-MM-DD'
+  end: string; // Last week column, as its Monday 'YYYY-MM-DD'
+  isDefault: boolean; // True when no date filter is active (trailing 52 weeks)
+}
+
+/* USED FOR THE PAX ACTIVITY MATRIX (AO x week) */
+export interface PaxAOWeeklyActivity {
+  ao_org_id: number; // AO org id
+  ao_name: string; // AO name
+  region_org_id: number; // Region the AO belongs to
+  region_name: string; // Region name, shown when the PAX posted in more than one
+  week: string; // Week bucket as its Monday, 'YYYY-MM-DD'
+  posts: number; // Posts by this PAX at this AO in that week
+}
+
 export interface PaxAOBreakdown {
   ao_org_id: number; // Unique identifier for the AO organization
   ao_name: string; // Name of the AO organization
