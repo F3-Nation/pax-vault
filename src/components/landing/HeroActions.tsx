@@ -4,10 +4,17 @@
  * Landing-page hero call-to-action.
  *
  * Signed out: kicks off the F3 Nation OAuth flow (preserving `?redirect=`).
- * Signed in:  offers real entry points instead — the Nation dashboard plus the
- *             configured sample PAX / Region. Those `/stats/*` routes sit
- *             behind middleware auth, so they're only shown once a session
- *             exists; otherwise the links would just bounce back here.
+ * Signed in:  offers real entry points instead — "Your Region" and "Your
+ *             Stats", pointing at the session's own home region / PAX page,
+ *             plus the Nation dashboard and configured sample PAX / Region.
+ *             Those `/stats/*` routes sit behind middleware auth, so they're
+ *             only shown once a session exists; otherwise the links would just
+ *             bounce back here.
+ *
+ * The personal ids come off the session (see `/api/auth/me`) and can be absent
+ * — an authorized email with no PAX record, or a PAX with no home region — so
+ * each button renders only when its id resolved, and the Nation dashboard
+ * stands in as the primary CTA when neither did.
  *
  * Renders a fragment (buttons + supporting caption) so the parent's flex gap
  * spaces both consistently.
@@ -48,39 +55,88 @@ export default function HeroActions({
   }
 
   if (user) {
+    const hasPersonalLinks = user.homeRegionId != null || user.paxId != null;
+    const hasSamples = Boolean(samplePaxId || sampleRegionId);
+
     return (
       <>
-        <Button
-          as={Link}
-          href="/stats/nation"
-          size="lg"
-          color="primary"
-          className="w-full font-semibold sm:w-auto"
-        >
-          Open the Nation dashboard
-        </Button>
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          {user.homeRegionId != null && (
+            <Button
+              as={Link}
+              href={`/stats/region/${user.homeRegionId}`}
+              size="lg"
+              color="primary"
+              className="font-semibold"
+            >
+              Your Region
+            </Button>
+          )}
 
-        {(samplePaxId || sampleRegionId) && (
+          {user.paxId != null && (
+            <Button
+              as={Link}
+              href={`/stats/pax/${user.paxId}`}
+              size="lg"
+              color="primary"
+              variant={user.homeRegionId != null ? "bordered" : "solid"}
+              className="font-semibold"
+            >
+              Your Stats
+            </Button>
+          )}
+
+          {!hasPersonalLinks && (
+            <Button
+              as={Link}
+              href="/stats/nation"
+              size="lg"
+              color="primary"
+              className="w-full font-semibold sm:w-auto"
+            >
+              Open the Nation dashboard
+            </Button>
+          )}
+        </div>
+
+        {(hasPersonalLinks || hasSamples) && (
           <p className="text-xs text-default-500">
-            Or jump straight into sample data:{" "}
-            {samplePaxId && (
-              <Link
-                href={`/stats/pax/${samplePaxId}`}
-                className="text-primary hover:underline"
-              >
-                a PAX
-              </Link>
+            {hasPersonalLinks && (
+              <>
+                Or zoom out to the{" "}
+                <Link
+                  href="/stats/nation"
+                  className="text-primary hover:underline"
+                >
+                  Nation dashboard
+                </Link>
+                {hasSamples ? ". " : "."}
+              </>
             )}
-            {samplePaxId && sampleRegionId && " · "}
-            {sampleRegionId && (
-              <Link
-                href={`/stats/region/${sampleRegionId}`}
-                className="text-primary hover:underline"
-              >
-                a region
-              </Link>
+            {hasSamples && (
+              <>
+                {hasPersonalLinks ? "Or jump" : "Jump"} straight into sample
+                data:{" "}
+                {samplePaxId && (
+                  <Link
+                    href={`/stats/pax/${samplePaxId}`}
+                    className="text-primary hover:underline"
+                  >
+                    a PAX
+                  </Link>
+                )}
+                {samplePaxId && sampleRegionId && " · "}
+                {sampleRegionId && (
+                  <Link
+                    href={`/stats/region/${sampleRegionId}`}
+                    className="text-primary hover:underline"
+                  >
+                    a region
+                  </Link>
+                )}
+                .
+              </>
             )}
-            .
           </p>
         )}
       </>

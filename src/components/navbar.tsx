@@ -215,6 +215,45 @@ function DownloadIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+function RegionIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M12 21C12 21 19 15.5 19 10C19 6.13 15.87 3 12 3C8.13 3 5 6.13 5 10C5 15.5 12 21 12 21Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function StatsIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M4 20V10M10 20V4M16 20V13M22 20H2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function ChangelogIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -289,6 +328,22 @@ export default function NavbarClient() {
     await pwaPrompt.userChoice;
     setPwaPrompt(null);
   }, [isIOS, onInstallOpen, pwaPrompt]);
+
+  // The signed-in user's own region / PAX pages. Both ids come off the session
+  // (`/api/auth/me`) and can be absent — an authorized email with no PAX
+  // record, or a PAX with no home region — so each entry hides when unresolved.
+  const homeRegionId = user?.homeRegionId ?? null;
+  const ownPaxId = user?.paxId ?? null;
+
+  const handleYourRegion = useCallback(() => {
+    if (homeRegionId == null) return;
+    router.push(`/stats/region/${homeRegionId}`);
+  }, [homeRegionId, router]);
+
+  const handleYourStats = useCallback(() => {
+    if (ownPaxId == null) return;
+    router.push(`/stats/pax/${ownPaxId}`);
+  }, [ownPaxId, router]);
 
   const handleChangelog = useCallback(() => {
     router.push("/changelog");
@@ -366,6 +421,22 @@ export default function NavbarClient() {
         </Button>
       </DropdownTrigger>
       <DropdownMenu aria-label="Feature menu">
+        {isAuthed && homeRegionId != null ? (
+          <DropdownItem key="your-region" onPress={handleYourRegion}>
+            <div className="flex items-center gap-2">
+              <RegionIcon className="h-4 w-4" />
+              <span>Your Region</span>
+            </div>
+          </DropdownItem>
+        ) : null}
+        {isAuthed && ownPaxId != null ? (
+          <DropdownItem key="your-stats" onPress={handleYourStats}>
+            <div className="flex items-center gap-2">
+              <StatsIcon className="h-4 w-4" />
+              <span>Your Stats</span>
+            </div>
+          </DropdownItem>
+        ) : null}
         {themeMounted ? (
           <DropdownItem key="theme" onPress={handleToggleTheme}>
             <div className="flex items-center gap-2">

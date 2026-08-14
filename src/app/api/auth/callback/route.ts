@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { exchangeCodeForToken, getUserInfo } from "@/lib/auth/oauth";
 import { isAuthorizedEmail } from "@/lib/auth/allowlist";
-import { getPaxIdByEmail } from "@/lib/bq/pax";
+import { getPaxIdentityByEmail, type PaxIdentity } from "@/lib/bq/pax";
 import { createSessionValue } from "@/lib/auth/session";
 import {
   SESSION_COOKIE_MAX_AGE,
@@ -109,17 +109,23 @@ export async function GET(request: NextRequest) {
     return errorRedirect(baseUrl, "allowlist_error", returnTo);
   }
 
+  // Resolve the signed-in user's own PAX record once, here: it decides the
+  // post-login landing page AND gets stamped into the session so the
+  // "Your Stats" / "Your Region" shortcuts need no further BigQuery calls.
+  let identity: PaxIdentity | null = null;
+  let identityResolved = false;
+  try {
+    identity = await getPaxIdentityByEmail(userInfo.email, userInfo.email);
+    identityResolved = true;
+  } catch (err) {
+    // Leave the session unmarked so `/api/auth/me` can retry the lookup.
+    console.error("PAX identity lookup failed, falling back to default", err);
+  }
+
   // If no explicit returnTo was requested, redirect to the user's own PAX page
   let effectiveReturnTo = returnTo;
-  if (returnTo === "/stats/nation") {
-    try {
-      const paxId = await getPaxIdByEmail(userInfo.email, userInfo.email);
-      if (paxId != null) {
-        effectiveReturnTo = `/stats/pax/${paxId}`;
-      }
-    } catch (err) {
-      console.error("PAX id lookup failed, falling back to default", err);
-    }
+  if (returnTo === "/stats/nation" && identity) {
+    effectiveReturnTo = `/stats/pax/${identity.paxId}`;
   }
 
   // Create HMAC session cookie
@@ -127,6 +133,11 @@ export async function GET(request: NextRequest) {
     sub: userInfo.sub,
     email: userInfo.email,
     name: userInfo.name,
+    ...(identity ? { paxId: identity.paxId } : {}),
+    ...(identity?.homeRegionId != null
+      ? { homeRegionId: identity.homeRegionId }
+      : {}),
+    ...(identityResolved ? { paxLookedUp: true } : {}),
   });
 
   const response = NextResponse.redirect(

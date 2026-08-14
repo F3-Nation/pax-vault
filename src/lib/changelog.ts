@@ -37,7 +37,8 @@ export const CHANGELOG: ChangelogRelease[] = [
       {
         tag: "Improved",
         items: [
-          "Signed-in visitors now get real entry points from the home page — the Nation dashboard, plus sample PAX and region links — instead of generic marketing copy.",
+          'Signed-in visitors now get real entry points from the home page — "Your Region" and "Your Stats" buttons that go straight to your own home region and PAX page, plus the Nation dashboard and sample links — instead of generic marketing copy.',
+          'The same "Your Region" and "Your Stats" shortcuts are in the navbar menu, so they\'re one tap away from any page.',
         ],
       },
       {
