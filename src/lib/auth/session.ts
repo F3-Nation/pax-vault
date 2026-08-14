@@ -5,6 +5,21 @@ export interface SessionPayload {
   sub: string;
   email: string;
   name?: string;
+  /**
+   * The signed-in user's own PAX id, resolved at sign-in so the "Your Stats" /
+   * "Your Region" shortcuts don't need a BigQuery round-trip per page load.
+   * Optional: sessions minted before these fields existed won't have them, and
+   * not every authorized email resolves to a PAX record.
+   */
+  paxId?: number;
+  /** Home region of `paxId`, same caveats. */
+  homeRegionId?: number;
+  /**
+   * True once the PAX lookup has run for this session — including when it came
+   * back empty. Without it, an email with no PAX record would re-query
+   * BigQuery on every page load for the life of the session.
+   */
+  paxLookedUp?: boolean;
   iat: number;
 }
 
@@ -18,16 +33,20 @@ function sign(data: string): string {
   return createHmac("sha256", getSecret()).update(data).digest("base64url");
 }
 
+/** Sign an already-complete payload, preserving its `iat`. */
+export function signSessionPayload(payload: SessionPayload): string {
+  const json = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = sign(json);
+  return `${json}.${signature}`;
+}
+
 export function createSessionValue(
   payload: Omit<SessionPayload, "iat">,
 ): string {
-  const full: SessionPayload = {
+  return signSessionPayload({
     ...payload,
     iat: Math.floor(Date.now() / 1000),
-  };
-  const json = Buffer.from(JSON.stringify(full)).toString("base64url");
-  const signature = sign(json);
-  return `${json}.${signature}`;
+  });
 }
 
 export function verifySessionValue(cookie: string): SessionPayload | null {

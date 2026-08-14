@@ -7,6 +7,10 @@ type AuthUser = {
   sub: string;
   email: string;
   name?: string;
+  /** The user's own PAX id; null when their email maps to no PAX record. */
+  paxId?: number | null;
+  /** The user's home region id; null when unknown. */
+  homeRegionId?: number | null;
 };
 
 type AuthContextValue = {

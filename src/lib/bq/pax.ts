@@ -294,25 +294,50 @@ export async function getEvents(
   return results || null;
 }
 
-export async function getPaxIdByEmail(
+/** The signed-in user's own PAX record, as far as we can resolve it. */
+export type PaxIdentity = {
+  paxId: number;
+  /** Null when the PAX has no pv_pax row yet, or no home region set. */
+  homeRegionId: number | null;
+};
+
+/**
+ * Resolve a signed-in email to that person's own PAX id and home region.
+ *
+ * Powers the "Your Stats" / "Your Region" shortcuts: the email lives in the
+ * auth system, the PAX id in `users`, and the home region in `pv_pax`. The
+ * LEFT JOIN keeps the PAX id usable even when there's no pv_pax row.
+ */
+export async function getPaxIdentityByEmail(
   email: string,
   userIdentifier?: string,
-): Promise<number | null> {
+): Promise<PaxIdentity | null> {
   const normalizedEmail = email.trim().toLowerCase();
-  const query = `-- PAX ID BY EMAIL
-    SELECT id AS user_id
-    FROM \`f3data.public.users\`
-    WHERE email IS NOT NULL
-      AND LOWER(email) = @email
+  const query = `-- PAX IDENTITY BY EMAIL
+    SELECT
+      u.id AS pax_id,
+      p.home_region_id AS home_region_id
+    FROM \`f3data.public.users\` u
+    LEFT JOIN pv_pax p ON p.user_id = u.id
+    WHERE u.email IS NOT NULL
+      AND LOWER(u.email) = @email
     LIMIT 1
   `;
-  const results = await queryBigQuery<{ user_id: number }>(
-    query,
-    userIdentifier,
-    "lookup pax id by email",
-    { email: normalizedEmail },
-  );
-  return results?.[0]?.user_id ?? null;
+  const results = await queryBigQuery<{
+    pax_id: number;
+    home_region_id: number | null;
+  }>(query, userIdentifier, "lookup pax identity by email", {
+    email: normalizedEmail,
+  });
+
+  const row = results?.[0];
+  if (!row || row.pax_id == null) return null;
+
+  return {
+    paxId: Number(row.pax_id),
+    homeRegionId:
+      row.home_region_id == null ? null : Number(row.home_region_id),
+  };
 }
 
 export async function searchUsersByName(
