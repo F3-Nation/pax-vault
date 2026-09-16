@@ -321,6 +321,10 @@ export async function getPaxIdentityByEmail(
     LEFT JOIN pv_pax p ON p.user_id = u.id
     WHERE u.email IS NOT NULL
       AND LOWER(u.email) = @email
+    -- Duplicate user rows sharing an email resolve to the lowest id, matching
+    -- the MIN(id) rule in lib/bq/permissions.ts, so the answer is stable
+    -- across requests (the 8 Box owner check depends on that).
+    ORDER BY u.id
     LIMIT 1
   `;
   const results = await queryBigQuery<{

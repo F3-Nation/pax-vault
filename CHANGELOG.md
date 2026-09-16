@@ -10,6 +10,25 @@ signing up), **fartsack** (signed up but didn't show).
 
 ---
 
+## September 2026 — The 8 Box
+
+**Added**
+
+- **8 Box on your PAX page** — the F3 vision board (Concentrica, 1st/2nd/3rd
+  F, Jester, Mental Sharpness, Date Night, ALR), now in PAX Vault. Open your
+  own PAX page and tap **8 Box**, or use **Your 8 Box** in the menu.
+- **Draft, then publish.** Fill in what you can and save a draft as often as
+  you like — nobody else can see it. When it's ready, publish it as a
+  numbered version. Published versions can't be edited, only deleted, so
+  your history stays honest.
+- **Quarterly history.** Every published version is kept, labelled with its
+  period (the current quarter by default). Delete the ones you don't want.
+- **Share with your shield lock.** Download any version as a PNG, print it
+  to PDF, or turn on a share link so any signed-in PAX can open that version
+  read-only. Turn the link off to revoke it.
+
+---
+
 ## August 2026 — A real front door
 
 **Added**

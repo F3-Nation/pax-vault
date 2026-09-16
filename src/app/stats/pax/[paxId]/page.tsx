@@ -15,6 +15,7 @@ import { buildBreadcrumb } from "@/lib/breadcrumb";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import { parseFilterParams } from "@/lib/filters";
 import { EntityDataUnavailable } from "@/components/EntityDataUnavailable";
+import { EightBoxButton } from "@/components/pax/eightbox/EightBoxButton";
 
 interface PageProps {
   params: Promise<{ paxId: string }>;
@@ -68,6 +69,12 @@ export default async function PaxDetailPage({
 
   const hasPaxData = !!paxData && Object.keys(paxData).length > 0;
 
+  // "Is this my own page?" — session fast path only. This page is the hot
+  // path, so it never pays for the BigQuery fallback that the 8 Box pages
+  // use; a session minted before `paxId` existed is backfilled by
+  // `/api/auth/me` on the client, so the button appears on the next load.
+  const isOwner = user.paxId != null && user.paxId === Number(paxId);
+
   // Show empty state when pax data is missing or empty
   if (!hasPaxData) {
     return <EntityDataUnavailable entity="PAX" entityPlural="PAX" />;
@@ -97,6 +104,9 @@ export default async function PaxDetailPage({
           name={paxData.info?.f3_name ?? undefined}
           link={`/stats/region/${paxData.info?.home_region_id ?? undefined}`}
           linkName={paxData.info?.home_region_name ?? undefined}
+          action={
+            isOwner ? <EightBoxButton paxId={Number(paxId)} /> : undefined
+          }
         />
         <PAXPageWrapper
           pax_id={Number(paxId)}

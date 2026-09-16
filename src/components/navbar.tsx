@@ -16,6 +16,7 @@ import { Modal, ModalBody, ModalContent, ModalHeader } from "@heroui/modal";
 import { useDisclosure } from "@heroui/use-disclosure";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { MoonIcon, SunIcon } from "@/components/icons";
+import { EightBoxIcon } from "@/components/pax/eightbox/EightBoxButton";
 import SearchModal from "@/components/search-modal";
 
 type BeforeInstallPromptEvent = Event & {
@@ -345,6 +346,11 @@ export default function NavbarClient() {
     router.push(`/stats/pax/${ownPaxId}`);
   }, [ownPaxId, router]);
 
+  const handleYourEightBox = useCallback(() => {
+    if (ownPaxId == null) return;
+    router.push(`/stats/pax/${ownPaxId}/8box`);
+  }, [ownPaxId, router]);
+
   const handleChangelog = useCallback(() => {
     router.push("/changelog");
   }, [router]);
@@ -434,6 +440,14 @@ export default function NavbarClient() {
             <div className="flex items-center gap-2">
               <StatsIcon className="h-4 w-4" />
               <span>Your Stats</span>
+            </div>
+          </DropdownItem>
+        ) : null}
+        {isAuthed && ownPaxId != null ? (
+          <DropdownItem key="your-8box" onPress={handleYourEightBox}>
+            <div className="flex items-center gap-2">
+              <EightBoxIcon className="h-4 w-4" />
+              <span>Your 8 Box</span>
             </div>
           </DropdownItem>
         ) : null}

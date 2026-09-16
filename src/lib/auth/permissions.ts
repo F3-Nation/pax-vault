@@ -17,6 +17,7 @@ import {
   getRegionPermission,
   type RegionPermission,
 } from "@/lib/bq/permissions";
+import { getPaxIdentityByEmail } from "@/lib/bq/pax";
 
 /** Permission result for a signed-out or unknown user. */
 export function noRegionPermission(): RegionPermission {
@@ -40,3 +41,38 @@ export const getRegionPermissionForSession = cache(
     return getRegionPermission(user.email, regionId);
   },
 );
+
+/**
+ * The signed-in user's own PAX id (`f3data.public.users.id`), or null.
+ *
+ * Fast path: the session cookie carries `paxId` when it was resolved at
+ * sign-in (or backfilled by `/api/auth/me`). Sessions minted before that
+ * field existed fall back to one BigQuery lookup by email. A session marked
+ * `paxLookedUp` with no `paxId` is an authorized email with no PAX record —
+ * that is a definitive null, not a reason to query again.
+ *
+ * Throws if the fallback lookup fails; null means "not resolvable", never
+ * "lookup broke".
+ */
+export const getOwnPaxIdForSession = cache(async (): Promise<number | null> => {
+  const user = await getSessionUser();
+  if (!user) return null;
+
+  if (typeof user.paxId === "number" && Number.isInteger(user.paxId)) {
+    return user.paxId;
+  }
+  if (user.paxLookedUp) return null;
+
+  const identity = await getPaxIdentityByEmail(user.email, user.email);
+  return identity?.paxId ?? null;
+});
+
+/**
+ * True when the session user IS the PAX with this id — the gate for
+ * owner-only surfaces such as the 8 Box. Pages use it to decide what to
+ * render; the API routes re-run it as the real enforcement.
+ */
+export async function isOwnPax(paxId: number): Promise<boolean> {
+  if (!Number.isInteger(paxId) || paxId <= 0) return false;
+  return (await getOwnPaxIdForSession()) === paxId;
+}
