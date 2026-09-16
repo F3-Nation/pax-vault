@@ -36,6 +36,17 @@ The `f3data` project has three datasets, all in `us-central1`:
 | `pv_pax`      | PAX search                         | User metadata                                              |
 | `pv_aos`      | AO pages                           | AO metadata                                                |
 
+## App-owned tables (writable)
+
+The service account is read-only across `f3data` except for a **table-level** `roles/bigquery.dataEditor` grant on each of these. Never grant at dataset level — that would open every `pv_*` view to writes.
+
+| Table                    | Written by                  | Shape / notes                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pv_regions_preferences` | `src/lib/bq/preferences.ts` | One row per region, MERGE upsert. See `auth.md` → Region Preferences.                                                                                                                                                                                                                                                                                                   |
+| `pv_pax_eight_box`       | `src/lib/bq/eightBox.ts`    | 8 Box boards (`json_content` = `{version, word, boxes:{<box>:{fields, items}}}`, sub-fields declared in `src/lib/eightBox.ts`): one `draft` row per PAX (MERGE keyed on `pax_id + status='draft'`) plus immutable `published` rows with a per-PAX `version`. DELETE is a hard delete. DDL + grant command in `scripts/sql/pv_pax_eight_box.sql`. See `auth.md` → 8 Box. |
+
+Both tables are provisioned out of band (no migration runner). Writes go through `queryBigQuery()` as parameterized DML; DML-written rows are immediately UPDATE/DELETE-able (the streaming-buffer restriction applies only to streaming inserts). Timestamps are returned via `FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%E3SZ', …)` so `new Date()` parses them the same on server and client.
+
 ## Query Pattern
 
 Pax-vault uses a single-query-per-page pattern. Each page makes one BQ query with CTEs that returns STRUCTs and ARRAYs. Never split into multiple queries.

@@ -7,7 +7,7 @@ import { createHmac } from "crypto";
  * (Replicated here because Playwright does not resolve the app's "@/" alias.
  * Keep in sync with createSessionValue / SESSION_COOKIE_NAME.)
  */
-function mintSessionValue(email: string): string {
+function mintSessionValue(email: string, paxId?: number): string {
   const secret = process.env.SESSION_SECRET;
   if (!secret) {
     throw new Error("SESSION_SECRET is required (load it from .env.local)");
@@ -16,6 +16,10 @@ function mintSessionValue(email: string): string {
     sub: email,
     email,
     name: "Smoke Test",
+    // Mirrors what the OAuth callback stamps: when a paxId is given the
+    // session is "this PAX", otherwise it's an authorized email with no PAX
+    // record (so owner-only surfaces like the 8 Box stay hidden).
+    ...(paxId != null ? { paxId, paxLookedUp: true } : { paxLookedUp: true }),
     iat: Math.floor(Date.now() / 1000),
   };
   const json = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -27,12 +31,15 @@ function mintSessionValue(email: string): string {
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "https://localhost:3001";
 const SAMPLE_REGION = process.env.SAMPLE_REGION;
+const SAMPLE_PAX = process.env.SAMPLE_PAX
+  ? Number(process.env.SAMPLE_PAX)
+  : undefined;
 
-async function signIn(context: BrowserContext) {
+async function signIn(context: BrowserContext, paxId?: number) {
   await context.addCookies([
     {
       name: "__session",
-      value: mintSessionValue("smoke@pax-vault.test"),
+      value: mintSessionValue("smoke@pax-vault.test", paxId),
       domain: new URL(BASE_URL).hostname,
       path: "/",
       httpOnly: true,
@@ -61,6 +68,32 @@ test.describe("pax-vault smoke", () => {
     await expect(page).toHaveURL(new RegExp(`/stats/region/${SAMPLE_REGION}`));
     // Some dashboard chrome should render once the data resolves.
     await expect(page.getByText(/Summary|Leaders/i).first()).toBeVisible({
+      timeout: 15000,
+    });
+  });
+
+  // 8 Box: read-only checks of the owner gate. Never writes (no draft save,
+  // publish, or delete) — these run against real BigQuery data.
+  test("own 8 Box page renders for its owner", async ({ page, context }) => {
+    test.skip(!SAMPLE_PAX, "SAMPLE_PAX not set in .env.local");
+    await signIn(context, SAMPLE_PAX);
+    await page.goto(`/stats/pax/${SAMPLE_PAX}/8box`);
+    await expect(page.getByText(/8 Box/i).first()).toBeVisible({
+      timeout: 15000,
+    });
+    // Either an existing board/history or the first-run empty state — both
+    // are owner-only content; the "private" card must NOT appear.
+    await expect(page.getByText(/This 8 Box is private/i)).toHaveCount(0);
+  });
+
+  test("someone else's 8 Box shows the private card", async ({
+    page,
+    context,
+  }) => {
+    test.skip(!SAMPLE_PAX, "SAMPLE_PAX not set in .env.local");
+    await signIn(context); // authorized email, no PAX record
+    await page.goto(`/stats/pax/${SAMPLE_PAX}/8box`);
+    await expect(page.getByText(/This 8 Box is private/i)).toBeVisible({
       timeout: 15000,
     });
   });

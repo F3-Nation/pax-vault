@@ -109,26 +109,56 @@ Because preferences are baked into those cached page payloads, saving invalidate
 
 **Write access**: `pax-vault-bigquery-prod` is read-only across `f3data` _except_ for a table-level `roles/bigquery.dataEditor` grant on `paxVault.pv_regions_preferences` (granted 2026-08-13). The grant is scoped to that one table on purpose — dataset-level would open every `pv_*` view to writes. Local and prod share this service account, so one grant covers both.
 
-If a future preferences table (e.g. the unused `pv_pax_preferences`) needs writes, it needs its own grant. `isWritePermissionError()` stays as the guard for that case: it turns `Access Denied: bigquery.tables.updateData` into an actionable 503 naming the missing grant, instead of a generic 500.
+Any further writable table needs its own grant (`pv_pax_eight_box` has one; see below). `isWritePermissionError()` is the shared guard: it turns `Access Denied: bigquery.tables.updateData` into an actionable 503 naming the missing grant, instead of a generic 500.
+
+### 8 Box (owner-only)
+
+The F3 "8-Block" vision board a PAX fills in for himself and shares with his shield lock. Unlike region preferences, the authorization question is not a role but **identity**: is the session user the PAX in the URL?
+
+```
+session.paxId (stamped at sign-in / backfilled by /api/auth/me)
+  → else, if !paxLookedUp: getPaxIdentityByEmail(email)  (one BigQuery lookup)
+  → getOwnPaxIdForSession() === paxId  ⇒  isOwnPax(paxId)
+```
+
+`getOwnPaxIdForSession()` (`src/lib/auth/permissions.ts`) is wrapped in React `cache()` and, like the region helper, **propagates** BigQuery failures rather than returning "not the owner". The PAX stats page (`/stats/pax/[id]`, the hot path) uses only the session fast path to decide whether to show the "8 Box" button; the 8 Box pages use the full helper.
+
+**Enforcement is server-side, twice.** Pages gate for UX (`/stats/pax/[id]/8box`, `/8box/edit` render a "private" card for non-owners); every write route re-runs `isOwnPax` and returns 403:
+
+| Route                                   | Action                                                              |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| `PUT  /api/pax/[id]/8box/draft`         | Upsert the PAX's single draft (an all-blank draft is allowed)       |
+| `POST /api/pax/[id]/8box/publish`       | Save + publish as version `max + 1` in one MERGE (content required) |
+| `PATCH /api/pax/[id]/8box/[versionId]`  | `{ shared: boolean }` — share link on/off; 409 for a draft          |
+| `DELETE /api/pax/[id]/8box/[versionId]` | Hard-delete a draft ("Discard") or a published version              |
+
+**Lifecycle.** At most one `draft` per PAX (the MERGE key, not a constraint). Publishing flips that row to `published`, assigns `version` and `published_at`, and it becomes immutable. "Edit" afterwards starts a new draft prefilled from the latest published version. Deleting a version never renumbers the others. Hard deletes rely on BigQuery time travel (7 days) as the only undo.
+
+**Share links.** `/stats/pax/[id]/8box/[versionId]` is viewable by the owner always, and by **any signed-in user** while that version's `shared_at` is set. An unknown id, a draft, or an unshared version viewed by someone else is a **404** (not 403), so the URL never confirms a private board exists. Anonymous visitors are bounced by `middleware.ts` to sign in and returned to the board afterwards. Exports (PNG download, print-to-PDF) are client-side and available to anyone who can view the board.
+
+**Write access**: table-level `roles/bigquery.dataEditor` on `paxVault.pv_pax_eight_box` for `pax-vault-bigquery-prod`. DDL and the exact `bq add-iam-policy-binding` command live in `scripts/sql/pv_pax_eight_box.sql`. Until granted, every write returns the 503 from `isWritePermissionError()`.
 
 ## Source Files
 
-| File                                 | Purpose                                                                          |
-| ------------------------------------ | -------------------------------------------------------------------------------- |
-| `src/lib/auth/oauth.ts`              | OAuth config builder, token exchange, userinfo fetch (uses `f3-nation-auth-sdk`) |
-| `src/lib/auth/session.ts`            | HMAC sign/verify for `__session` cookie                                          |
-| `src/lib/auth/server.ts`             | `getSessionUser()`, `requireAuth()` (server components)                          |
-| `src/lib/auth/AuthProvider.tsx`      | Client-side auth context (`useAuth()` hook)                                      |
-| `src/lib/auth/constants.ts`          | Cookie name, TTL                                                                 |
-| `src/lib/auth/allowlist.ts`          | BigQuery email allowlist check                                                   |
-| `src/lib/auth/permissions.ts`        | `getRegionPermissionForSession()` — session-aware, request-cached role check     |
-| `src/lib/bq/permissions.ts`          | `getRegionPermission()` — email -> user id -> `role_id = 3` on the region org    |
-| `src/lib/bq/preferences.ts`          | Region preferences read + MERGE upsert; `isWritePermissionError()`               |
-| `src/lib/preferences.ts`             | Preference schema, defaults, coercion, (de)serialization                         |
-| `src/app/api/auth/login/route.ts`    | Builds OAuth authorize URL, sets CSRF + PKCE cookies, redirects                  |
-| `src/app/api/auth/callback/route.ts` | Handles OAuth callback: validates state, exchanges code, creates session         |
-| `src/app/api/auth/me/route.ts`       | Returns current user (client-side session check)                                 |
-| `src/app/api/auth/logout/route.ts`   | Clears session cookie                                                            |
+| File                                 | Purpose                                                                                                                                   |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/auth/oauth.ts`              | OAuth config builder, token exchange, userinfo fetch (uses `f3-nation-auth-sdk`)                                                          |
+| `src/lib/auth/session.ts`            | HMAC sign/verify for `__session` cookie                                                                                                   |
+| `src/lib/auth/server.ts`             | `getSessionUser()`, `requireAuth()` (server components)                                                                                   |
+| `src/lib/auth/AuthProvider.tsx`      | Client-side auth context (`useAuth()` hook)                                                                                               |
+| `src/lib/auth/constants.ts`          | Cookie name, TTL                                                                                                                          |
+| `src/lib/auth/allowlist.ts`          | BigQuery email allowlist check                                                                                                            |
+| `src/lib/auth/permissions.ts`        | `getRegionPermissionForSession()` (role check), `getOwnPaxIdForSession()` / `isOwnPax()` (identity check) — session-aware, request-cached |
+| `src/lib/bq/permissions.ts`          | `getRegionPermission()` — email -> user id -> `role_id = 3` on the region org                                                             |
+| `src/lib/bq/preferences.ts`          | Region preferences read + MERGE upsert; `isWritePermissionError()`                                                                        |
+| `src/lib/preferences.ts`             | Preference schema, defaults, coercion, (de)serialization                                                                                  |
+| `src/lib/eightBox.ts`                | 8 Box schema (the eight boxes), coercion, write validation                                                                                |
+| `src/lib/bq/eightBox.ts`             | 8 Box reads + draft MERGE, publish MERGE, share UPDATE, DELETE                                                                            |
+| `src/app/api/pax/[paxId]/8box/*`     | 8 Box write routes (draft, publish, per-version share/delete) + shared helpers                                                            |
+| `src/app/api/auth/login/route.ts`    | Builds OAuth authorize URL, sets CSRF + PKCE cookies, redirects                                                                           |
+| `src/app/api/auth/callback/route.ts` | Handles OAuth callback: validates state, exchanges code, creates session                                                                  |
+| `src/app/api/auth/me/route.ts`       | Returns current user (client-side session check)                                                                                          |
+| `src/app/api/auth/logout/route.ts`   | Clears session cookie                                                                                                                     |
 
 ## Local Dev Setup
 
