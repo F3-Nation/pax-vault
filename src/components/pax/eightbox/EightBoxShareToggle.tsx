@@ -65,8 +65,8 @@ export function EightBoxShareToggle({ paxId, versionId, sharedAt }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-col gap-2 md:items-end md:text-right">
+      <div className="flex flex-wrap items-center gap-3 md:justify-end">
         <Switch
           size="sm"
           isSelected={shared}

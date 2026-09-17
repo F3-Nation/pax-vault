@@ -149,10 +149,7 @@ const ex: Record<string, CSSProperties> = {
     flexDirection: "column",
     alignItems: "center",
     gap: 0,
-    padding: "4px 24px",
-    border: `2px solid ${C.text}`,
-    borderRadius: 12,
-    minWidth: 180,
+    padding: "0 24px",
   },
   grid: {
     display: "grid",
@@ -327,7 +324,7 @@ function ScreenBoard({ content }: Pick<EightBoxBoardProps, "content">) {
       {top.map((def) => (
         <ScreenBox key={def.key} def={def} values={content.boxes[def.key]} />
       ))}
-      <div className="col-span-full flex flex-col items-center gap-0.5 rounded-xl border-2 border-foreground/80 px-4 py-3 text-center">
+      <div className="col-span-full flex flex-col items-center gap-0.5 px-4 py-2 text-center">
         <span className="text-[11px] uppercase tracking-[0.2em] text-foreground/50">
           Word for the Box
         </span>
