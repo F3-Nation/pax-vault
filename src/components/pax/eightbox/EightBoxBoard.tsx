@@ -1,8 +1,9 @@
 /**
  * EightBoxBoard
  *
- * The 2×4 grid of boxes with the "Word for the Box" in the middle, rendered
- * two ways from one set of props:
+ * The 2×4 grid of boxes plus the "Word for the Box", rendered two ways from
+ * one set of props (the screen variant puts the Word in a band between the
+ * rows; the export variant puts it in the header line):
  *
  * - `screen`: HeroUI cards with theme tokens, responsive, used on the pages.
  * - `export`: a fixed 1200px board with INLINE HEX STYLES ONLY. This is the
@@ -133,16 +134,26 @@ const ex: Record<string, CSSProperties> = {
     lineHeight: 1.4,
   },
   header: {
-    display: "flex",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    gap: 16,
+    display: "grid",
+    gridTemplateColumns: "1fr auto 1fr",
+    alignItems: "center",
+    gap: 24,
     marginBottom: 24,
     paddingBottom: 16,
     borderBottom: `2px solid ${C.text}`,
   },
   name: { fontSize: 32, fontWeight: 700, margin: 0 },
   meta: { fontSize: 16, color: C.muted, margin: 0, textAlign: "right" },
+  headerWord: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 0,
+    padding: "4px 24px",
+    border: `2px solid ${C.text}`,
+    borderRadius: 12,
+    minWidth: 180,
+  },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
@@ -176,29 +187,20 @@ const ex: Record<string, CSSProperties> = {
     overflowWrap: "anywhere",
   },
   boxEmpty: { fontSize: 13, margin: 0, color: C.muted, fontStyle: "italic" },
-  wordBand: {
-    gridColumn: "1 / -1",
-    textAlign: "center",
-    padding: "14px 16px",
-    border: `2px solid ${C.text}`,
-    borderRadius: 12,
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-  },
   wordCaption: {
-    fontSize: 11,
+    fontSize: 10,
     letterSpacing: 2,
     textTransform: "uppercase",
     color: C.muted,
     margin: 0,
   },
   word: {
-    fontSize: 36,
+    fontSize: 28,
     fontWeight: 800,
     letterSpacing: 1,
     textTransform: "uppercase",
     margin: 0,
+    whiteSpace: "nowrap",
   },
   footer: {
     marginTop: 24,
@@ -250,25 +252,20 @@ function ExportBoard({
   version,
   publishedAt,
 }: Omit<EightBoxBoardProps, "variant">) {
-  const top = EIGHT_BOX_DEFINITIONS.slice(0, 4);
-  const bottom = EIGHT_BOX_DEFINITIONS.slice(4);
   return (
     <div data-eightbox-export="" style={ex.root}>
       <div style={ex.header}>
         <h1 style={ex.name}>{f3Name}</h1>
+        <div style={ex.headerWord}>
+          <p style={ex.wordCaption}>Word for the Box</p>
+          <p style={ex.word}>{content.word || "—"}</p>
+        </div>
         <p style={ex.meta}>
           8 Box · {eightBoxMetaLine(period, version, publishedAt)}
         </p>
       </div>
       <div style={ex.grid}>
-        {top.map((def) => (
-          <ExportBox key={def.key} def={def} values={content.boxes[def.key]} />
-        ))}
-        <div style={ex.wordBand}>
-          <p style={ex.wordCaption}>Word for the Box</p>
-          <p style={ex.word}>{content.word || "—"}</p>
-        </div>
-        {bottom.map((def) => (
+        {EIGHT_BOX_DEFINITIONS.map((def) => (
           <ExportBox key={def.key} def={def} values={content.boxes[def.key]} />
         ))}
       </div>
