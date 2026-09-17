@@ -3,15 +3,14 @@
 /**
  * EightBoxPreviewModal
  *
- * Shows the editor's current, unsaved board exactly as the PNG / print will
- * render it: the same fixed-width `export` node, scaled down to fit the
- * modal. What you see is what you get — the Download button captures this
+ * Shows the editor's current, unsaved board exactly as the PNG / PDF / print
+ * will render it: the same fixed-width `export` node, scaled down to fit the
+ * modal. What you see is what you get — the export buttons rasterize this
  * very node, so overflow, wrapping, and truncation problems show up here
  * before anything is published.
  */
 
 import { useLayoutEffect, useRef, useState } from "react";
-import { Alert } from "@heroui/alert";
 import { Button } from "@heroui/button";
 import {
   Modal,
@@ -20,10 +19,9 @@ import {
   ModalFooter,
   ModalHeader,
 } from "@heroui/modal";
-import { reportError } from "@/lib/observability";
-import { downloadEightBoxPng, eightBoxPngFilename } from "@/lib/eightBoxPng";
 import type { EightBoxContent } from "@/lib/eightBox";
 import { EightBoxBoard } from "./EightBoxBoard";
+import { EightBoxExportButtons } from "./EightBoxExportButtons";
 
 const EXPORT_WIDTH = 1200;
 
@@ -49,11 +47,6 @@ export function EightBoxPreviewModal({
   const boardHostRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [boardHeight, setBoardHeight] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<{
-    message: string;
-    errorId: string;
-  } | null>(null);
 
   // Fit the 1200px board to the modal's width and reserve the scaled height,
   // re-measuring whenever the modal or the board's content changes size.
@@ -79,27 +72,6 @@ export function EightBoxPreviewModal({
     return () => observer.disconnect();
   }, [isOpen, content, period]);
 
-  async function handleDownload() {
-    const node = boardHostRef.current?.querySelector<HTMLElement>(
-      "[data-eightbox-export]",
-    );
-    if (!node) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await downloadEightBoxPng(
-        node,
-        eightBoxPngFilename(f3Name, period, version),
-        `${f3Name} — 8 Box`,
-      );
-    } catch (err) {
-      const errorId = reportError(err, { scope: "client/eightbox-preview" });
-      setError({ message: "Could not create the image.", errorId });
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <Modal
       isOpen={isOpen}
@@ -112,18 +84,11 @@ export function EightBoxPreviewModal({
         <ModalHeader className="flex flex-col gap-0.5">
           <span>Preview</span>
           <span className="text-sm font-normal text-foreground/60">
-            Exactly what the PNG and the printout will look like, scaled to fit.
-            Nothing is saved from here.
+            Exactly what the PNG, the PDF, and the printout will look like,
+            scaled to fit. Nothing is saved from here.
           </span>
         </ModalHeader>
         <ModalBody className="gap-3">
-          {error && (
-            <Alert
-              color="danger"
-              title="Download failed"
-              description={`${error.message} (reference: ${error.errorId})`}
-            />
-          )}
           <div
             ref={frameRef}
             className="w-full overflow-hidden rounded-lg border border-default-200 bg-white"
@@ -147,19 +112,26 @@ export function EightBoxPreviewModal({
             </div>
           </div>
         </ModalBody>
-        <ModalFooter>
-          <Button variant="flat" onPress={() => onOpenChange(false)}>
+        <ModalFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Button
+            variant="flat"
+            className="self-start"
+            onPress={() => onOpenChange(false)}
+          >
             Close
           </Button>
-          <Button
-            color="primary"
-            variant="flat"
-            onPress={handleDownload}
-            isLoading={busy}
-            isDisabled={busy}
-          >
-            Download PNG
-          </Button>
+          <EightBoxExportButtons
+            getNode={() =>
+              boardHostRef.current?.querySelector<HTMLElement>(
+                "[data-eightbox-export]",
+              ) ?? null
+            }
+            f3Name={f3Name}
+            period={period}
+            version={version}
+            size="md"
+            scope="preview"
+          />
         </ModalFooter>
       </ModalContent>
     </Modal>
