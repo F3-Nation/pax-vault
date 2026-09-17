@@ -16,12 +16,20 @@
  * each button renders only when its id resolved, and the Nation dashboard
  * stands in as the primary CTA when neither did.
  *
+ * Already signed in AND carrying `?redirect=` (the middleware bounces an
+ * unauthenticated `/stats/*` request here with that param): forward straight
+ * to the requested page instead of showing the landing page. This is what
+ * makes a shared 8 Box link self-healing when the first request arrived
+ * without the session cookie (e.g. a link tapped in another app on iOS) —
+ * the follow-up request to `/` is same-site, carries the cookie, and we send
+ * the user on.
+ *
  * Renders a fragment (buttons + supporting caption) so the parent's flex gap
  * spaces both consistently.
  */
 
-import { useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@heroui/button";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -39,6 +47,7 @@ export default function HeroActions({
   sampleRegionId,
 }: HeroActionsProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { user, loading } = useAuth();
 
   const redirectTo = useMemo(
@@ -46,7 +55,15 @@ export default function HeroActions({
     [searchParams],
   );
 
-  if (loading) {
+  // Signed in with a pending destination: go there. `replace` keeps the
+  // landing page out of the back stack.
+  useEffect(() => {
+    if (!loading && user && redirectTo) {
+      router.replace(redirectTo);
+    }
+  }, [loading, user, redirectTo, router]);
+
+  if (loading || (user && redirectTo)) {
     return (
       <Button size="lg" color="primary" isLoading className="w-full sm:w-56">
         Checking session…
