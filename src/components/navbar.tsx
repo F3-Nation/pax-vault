@@ -309,7 +309,13 @@ export default function NavbarClient() {
   const { resolvedTheme, setTheme } = useTheme();
 
   const handleSignIn = useCallback(() => {
-    router.push("/#signin");
+    // Keep `?redirect=` (set by the middleware bounce) so signing in from the
+    // navbar still lands the user on the page they were sent here from.
+    const search =
+      typeof window !== "undefined" && window.location.pathname === "/"
+        ? window.location.search
+        : "";
+    router.push(`/${search}#signin`);
   }, [router]);
 
   const handleSignOut = useCallback(async () => {
