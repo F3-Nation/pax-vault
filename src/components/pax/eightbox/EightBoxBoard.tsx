@@ -6,7 +6,7 @@
  *
  * - `screen`: HeroUI cards with theme tokens, responsive, used on the pages.
  * - `export`: a fixed 1200px board with INLINE HEX STYLES ONLY. This is the
- *   node captured for the PNG download and shown by the print stylesheet, so
+ *   node rasterized for the PNG download and the printout, so
  *   it must look identical in light and dark mode and must not depend on any
  *   CSS variable or class the capture library would have to resolve. No
  *   <img> either — a cross-origin avatar would taint the canvas.

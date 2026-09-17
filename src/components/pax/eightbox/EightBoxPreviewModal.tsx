@@ -21,7 +21,11 @@ import {
   ModalHeader,
 } from "@heroui/modal";
 import { reportError } from "@/lib/observability";
-import { downloadEightBoxPng, eightBoxPngFilename } from "@/lib/eightBoxPng";
+import {
+  downloadEightBoxPng,
+  eightBoxPngFilename,
+  printEightBoxNode,
+} from "@/lib/eightBoxPng";
 import type { EightBoxContent } from "@/lib/eightBox";
 import { EightBoxBoard } from "./EightBoxBoard";
 
@@ -49,7 +53,7 @@ export function EightBoxPreviewModal({
   const boardHostRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [boardHeight, setBoardHeight] = useState(0);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<null | "download" | "print">(null);
   const [error, setError] = useState<{
     message: string;
     errorId: string;
@@ -84,7 +88,7 @@ export function EightBoxPreviewModal({
       "[data-eightbox-export]",
     );
     if (!node) return;
-    setBusy(true);
+    setBusy("download");
     setError(null);
     try {
       await downloadEightBoxPng(
@@ -96,7 +100,24 @@ export function EightBoxPreviewModal({
       const errorId = reportError(err, { scope: "client/eightbox-preview" });
       setError({ message: "Could not create the image.", errorId });
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  }
+
+  async function handlePrint() {
+    const node = boardHostRef.current?.querySelector<HTMLElement>(
+      "[data-eightbox-export]",
+    );
+    if (!node) return;
+    setBusy("print");
+    setError(null);
+    try {
+      await printEightBoxNode(node, `${f3Name} — 8 Box`);
+    } catch (err) {
+      const errorId = reportError(err, { scope: "client/eightbox-preview" });
+      setError({ message: "Could not open the print dialog.", errorId });
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -120,7 +141,7 @@ export function EightBoxPreviewModal({
           {error && (
             <Alert
               color="danger"
-              title="Download failed"
+              title="Export failed"
               description={`${error.message} (reference: ${error.errorId})`}
             />
           )}
@@ -152,11 +173,19 @@ export function EightBoxPreviewModal({
             Close
           </Button>
           <Button
+            variant="bordered"
+            onPress={handlePrint}
+            isLoading={busy === "print"}
+            isDisabled={busy !== null}
+          >
+            Print / Save as PDF
+          </Button>
+          <Button
             color="primary"
             variant="flat"
             onPress={handleDownload}
-            isLoading={busy}
-            isDisabled={busy}
+            isLoading={busy === "download"}
+            isDisabled={busy !== null}
           >
             Download PNG
           </Button>

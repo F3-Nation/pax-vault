@@ -94,3 +94,74 @@ export async function downloadEightBoxPng(
   const blob = await renderEightBoxPng(node);
   await deliverEightBoxPng(blob, filename, title);
 }
+
+/**
+ * Print a rendered board PNG via a hidden same-origin iframe.
+ *
+ * Printing the live DOM node proved fragile: it lives inside cards with
+ * `overflow: hidden` / `position: relative`, and print-media CSS that tries
+ * to lift it out clips it to a blank page in Chrome. Rasterizing first and
+ * printing the image makes the printout byte-identical to the download and
+ * independent of page layout, theme, or browser print quirks.
+ *
+ * Resolves once the print dialog has been requested. The iframe is removed
+ * after printing (or after a generous timeout — Safari does not reliably fire
+ * `afterprint`).
+ */
+export async function printEightBoxPng(
+  blob: Blob,
+  title: string,
+): Promise<void> {
+  const url = URL.createObjectURL(blob);
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText =
+    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none";
+  iframe.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>${title.replace(/[<>&]/g, "")}</title><style>
+    @page { size: landscape; margin: 10mm; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    img { display: block; width: 100%; height: auto; }
+  </style></head><body><img alt="8 Box"></body></html>`;
+
+  await new Promise<void>((resolve, reject) => {
+    iframe.onload = () => {
+      const win = iframe.contentWindow;
+      const img = win?.document.querySelector("img");
+      if (!win || !img) {
+        reject(new Error("Print frame did not initialize"));
+        return;
+      }
+      img.onload = () => {
+        // Let layout settle before printing, then print.
+        win.requestAnimationFrame(() => {
+          try {
+            win.focus();
+            win.print();
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        });
+      };
+      img.onerror = () => reject(new Error("Print image failed to load"));
+      img.src = url;
+    };
+    document.body.appendChild(iframe);
+  });
+
+  const cleanup = () => {
+    URL.revokeObjectURL(url);
+    iframe.remove();
+  };
+  iframe.contentWindow?.addEventListener("afterprint", cleanup, { once: true });
+  setTimeout(cleanup, 60_000);
+}
+
+/** Render + print in one step. */
+export async function printEightBoxNode(
+  node: HTMLElement,
+  title: string,
+): Promise<void> {
+  const blob = await renderEightBoxPng(node);
+  await printEightBoxPng(blob, title);
+}
