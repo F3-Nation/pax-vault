@@ -26,6 +26,11 @@ signing up), **fartsack** (signed up but didn't show).
 - **Share with your shield lock.** Download any version as a PNG, print it
   to PDF, or turn on a share link so any signed-in PAX can open that version
   read-only. Turn the link off to revoke it.
+- **"Why it matters" video on the home page** — a 45-second, captioned
+  walkthrough of what PAX Vault is for: the view for region leadership, for
+  Site Qs, and for every PAX, and how the data helps leaders pick up the six
+  and celebrate milestones. No sign-in needed to watch. (Like the previews,
+  it uses made-up names and numbers.)
 
 ---
 

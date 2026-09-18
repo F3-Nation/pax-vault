@@ -33,6 +33,7 @@ export const CHANGELOG: ChangelogRelease[] = [
           "Draft, then publish. Fill in what you can and save a draft as often as you like — nobody else can see it. When it's ready, publish it as a numbered version. Published versions can't be edited, only deleted, so your history stays honest.",
           "Quarterly history. Every published version is kept, labelled with its period (the current quarter by default). Delete the ones you don't want.",
           "Share with your shield lock. Download any version as a PNG, print it to PDF, or turn on a share link so any signed-in PAX can open that version read-only. Turn the link off to revoke it.",
+          '"Why it matters" video on the home page — a 45-second, captioned walkthrough of what PAX Vault is for: the view for region leadership, for Site Qs, and for every PAX, and how the data helps leaders pick up the six and celebrate milestones. No sign-in needed to watch. (Like the previews, it uses made-up names and numbers.)',
         ],
       },
     ],

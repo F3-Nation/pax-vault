@@ -27,6 +27,7 @@ import { Divider } from "@heroui/divider";
 import AuthCard from "@/components/auth/AuthCard";
 import HeroActions from "@/components/landing/HeroActions";
 import { HierarchyDiagram } from "@/components/landing/HierarchyDiagram";
+import { PromoVideo } from "@/components/landing/PromoVideo";
 import {
   AchievementsPreview,
   FiltersPreview,
@@ -197,6 +198,24 @@ export default function App() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* The why — promo video                                            */}
+      {/* ---------------------------------------------------------------- */}
+      <section id="why" className="w-full max-w-6xl scroll-mt-20 px-4 pb-14">
+        <div className="mb-6 text-center">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Why it matters, in 45 seconds
+          </h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-default-600">
+            Every workout leaves a row of data. PAX Vault turns those rows into
+            a story — so region leadership, Site Qs, and every PAX can pick up
+            the six and celebrate the milestones.
+          </p>
+        </div>
+
+        <PromoVideo />
       </section>
 
       {/* ---------------------------------------------------------------- */}

@@ -40,6 +40,10 @@ const withPWACustom = withPWA({
   disable: isDev,
   register: true,
   skipWaiting: true,
+  // Keep the landing promo video out of the precache — otherwise every PWA
+  // install downloads it up front. It's still runtime-cached once played.
+  // (`!noprecache/**/*` is next-pwa's default, restated because this replaces it.)
+  publicExcludes: ["!noprecache/**/*", "!promo/**/*"],
 });
 
 export default withPWACustom(nextConfig);
