@@ -297,16 +297,16 @@ export async function getEvents(
 /** The signed-in user's own PAX record, as far as we can resolve it. */
 export type PaxIdentity = {
   paxId: number;
-  /** Null when the PAX has no pv_pax row yet, or no home region set. */
+  /** Null when the PAX has no home region set. */
   homeRegionId: number | null;
 };
 
 /**
  * Resolve a signed-in email to that person's own PAX id and home region.
  *
- * Powers the "Your Stats" / "Your Region" shortcuts: the email lives in the
- * auth system, the PAX id in `users`, and the home region in `pv_pax`. The
- * LEFT JOIN keeps the PAX id usable even when there's no pv_pax row.
+ * Powers the "Your Stats" / "Your Region" shortcuts: the email comes from the
+ * auth system, and `pv_pax` carries the email, PAX id, and home region. A
+ * user with no pv_pax row resolves to null (no identity).
  */
 export async function getPaxIdentityByEmail(
   email: string,
@@ -315,16 +315,15 @@ export async function getPaxIdentityByEmail(
   const normalizedEmail = email.trim().toLowerCase();
   const query = `-- PAX IDENTITY BY EMAIL
     SELECT
-      u.id AS pax_id,
-      p.home_region_id AS home_region_id
-    FROM \`f3data.public.users\` u
-    LEFT JOIN pv_pax p ON p.user_id = u.id
-    WHERE u.email IS NOT NULL
-      AND LOWER(u.email) = @email
+      user_id AS pax_id,
+      home_region_id
+    FROM pv_pax
+    WHERE email IS NOT NULL
+      AND LOWER(email) = @email
     -- Duplicate user rows sharing an email resolve to the lowest id, matching
     -- the MIN(id) rule in lib/bq/permissions.ts, so the answer is stable
     -- across requests (the 8 Box owner check depends on that).
-    ORDER BY u.id
+    ORDER BY user_id
     LIMIT 1
   `;
   const results = await queryBigQuery<{

@@ -65,13 +65,15 @@ See `../.context/oauth-clients.md` for the full client registry.
 
 Authentication says _who you are_; region admin rights say _what you can change_. They are separate systems — the session cookie carries no roles.
 
-Roles live in `f3data.public.roles_x_users_x_org` (`role_id`, `user_id`, `org_id`). `role_id = 3` is `admin` in `f3data.public.roles`. Admin grants are held per-org, and ~96% are on `org_type = 'region'` orgs, so for a region page the `org_id` **is** the `region_id`.
+Roles originate in `f3data.public.roles_x_users_x_org` (`role_id`, `user_id`, `org_id`), but the app never reads that table. The "PaxVault PAX" scheduled query (`scripts/sql/pv_pax.sql`) copies every grant into `paxVault.pv_pax.roles` — an `ARRAY<STRUCT<role_id, role_name, org_id, org_name, org_type>>`, unfiltered — and the lookup does the matching. `role_id = 3` is `admin`. Admin grants are held per-org, and ~96% are on `org_type = 'region'` orgs, so for a region page the `org_id` **is** the `region_id`.
 
-Because the session only carries an email, every check resolves `email → f3data.public.users.id` first:
+Because the session only carries an email, every check resolves `email → pv_pax.user_id` (= `public.users.id`) first, all within `pv_pax`:
 
 ```
-session email → public.users.id → roles_x_users_x_org (role_id=3, org_id=regionId) → isAdmin
+session email → pv_pax row(s) → UNNEST(roles) (role_id=3, org_id=regionId) → isAdmin
 ```
+
+**Role changes lag by up to 6 hours** — the `pv_pax` refresh cadence. That includes revocations: a removed admin keeps region-admin rights here until the next refresh. A user with no `pv_pax` row (no valid email) resolves to `userId: null, isAdmin: false`.
 
 `getRegionPermissionForSession(regionId)` wraps this in React `cache()`, so a request that gates a button and loads preferences pays one BigQuery round trip.
 
@@ -178,5 +180,5 @@ npm run dev   # starts https://localhost:3001 (--experimental-https --port 3001)
 
 - **`secure: process.env.NODE_ENV === "production"`**: OAuth flow cookies (`oauth_csrf`, `oauth_code_verifier`) and the session cookie are only `secure` in production. In local dev (`NODE_ENV=development`), they work over HTTPS without the `secure` flag, which means they also work if you accidentally hit `http://localhost:3001` — but the OAuth redirect won't work without HTTPS because the redirect URI is registered as `https://`.
 - **Cookie name `__session`**: Firebase App Hosting strips all cookies except those prefixed with `__`. This name is required for prod.
-- **Allowlist**: Even after successful OAuth, the callback checks the user's email against a BigQuery allowlist. If you authenticate but get redirected to `/?error=not_authorized`, your email isn't in the allowlist.
+- **Allowlist**: Even after successful OAuth, the callback checks the user's email against a BigQuery allowlist — any row in `paxVault.pv_pax` with that email (override the table with `AUTH_EMAIL_TABLE`). `pv_pax` holds every `public.users` row with a well-formed email and is rebuilt every 6 hours, so a brand-new F3 user gets `/?error=not_authorized` until the next refresh. If you authenticate but get redirected there, your email isn't in `pv_pax`.
 - **State expiry**: The OAuth state parameter expires after 10 minutes. If you take too long on the auth provider login page, you'll get `expired_state` error on callback.

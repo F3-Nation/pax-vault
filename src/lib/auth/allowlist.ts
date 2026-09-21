@@ -1,6 +1,10 @@
 import { queryBigQuery } from "@/lib/db";
 
-const DEFAULT_AUTH_TABLE = "f3data.public.users";
+// Unqualified: `queryBigQuery` binds `paxVault` as the default dataset. pv_pax
+// holds one row per `public.users` row with a non-null, well-formed email (see
+// scripts/sql/pv_pax.sql), refreshed every 6 hours — so a brand-new F3 user can
+// sign in only after the next refresh.
+const DEFAULT_AUTH_TABLE = "pv_pax";
 
 function getAuthTable() {
   const raw = process.env.AUTH_EMAIL_TABLE?.trim();
