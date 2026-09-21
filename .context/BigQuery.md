@@ -23,18 +23,34 @@ The `f3data` project has three datasets, all in `us-central1`:
 | `public`    | Base tables (orgs, events, event_instances, users, attendance, etc.)                           |
 | `analytics` | Analytics data                                                                                 |
 
-**Important**: Pax-vault queries run against `paxVault`, not `public`. The `pv_*` views in `paxVault` are built on top of the base tables in `public`.
+**Important**: Pax-vault queries run against `paxVault`, not `public` — no app query references `f3data.public` (each `lib/bq` / allowlist test asserts this). Anything the app needs from a base table gets added to a `pv_*` table's scheduled query first. The `pv_*` views in `paxVault` are built on top of the base tables in `public`.
 
 ## Views
 
-| View          | Used by                            | Purpose                                                    |
-| ------------- | ---------------------------------- | ---------------------------------------------------------- |
-| `pv_regions`  | Region search, region page info    | Region metadata (id, name, logo, sector, AOs, types, tags) |
-| `pv_events`   | Region page events/summary/leaders | Event data with attendance, types, tags arrays             |
-| `pv_upcoming` | Region page upcoming section       | Scheduled future events                                    |
-| `pv_kotter`   | Region page kotter list            | PAX activity/retention status                              |
-| `pv_pax`      | PAX search                         | User metadata                                              |
-| `pv_aos`      | AO pages                           | AO metadata                                                |
+| View          | Used by                                                                                                                                              | Purpose                                                                                                                                                                                                                           |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pv_regions`  | Region search, region page info                                                                                                                      | Region metadata (id, name, logo, sector, AOs, types, tags)                                                                                                                                                                        |
+| `pv_events`   | Region page events/summary/leaders, event details                                                                                                    | Event data with attendance, types, tags arrays, plus the event-detail columns (see below)                                                                                                                                         |
+| `pv_upcoming` | Region page upcoming section                                                                                                                         | Scheduled future events                                                                                                                                                                                                           |
+| `pv_kotter`   | Region page kotter list                                                                                                                              | PAX activity/retention status                                                                                                                                                                                                     |
+| `pv_pax`      | PAX search, sign-in allowlist (`isAuthorizedEmail`), signed-in identity lookup (`getPaxIdentityByEmail`), region admin check (`getRegionPermission`) | User metadata, incl. `email` (session email → PAX id + home region) and `roles` (every role grant, copied from `public.roles_x_users_x_org`). Refreshed every 6h by the "PaxVault PAX" scheduled query — `scripts/sql/pv_pax.sql` |
+| `pv_aos`      | AO pages                                                                                                                                             | AO metadata                                                                                                                                                                                                                       |
+
+### `pv_events` refresh + detail columns
+
+`pv_events` is a real table (not a view), maintained by two BigQuery scheduled queries in `f3data` / `us-central1`:
+
+| Scheduled query         | Cadence         | How                                                                                                   |
+| ----------------------- | --------------- | ----------------------------------------------------------------------------------------------------- |
+| `PaxVault Event Import` | Daily 06:30 UTC | Full rebuild, `WRITE_TRUNCATE` into `paxVault.pv_events` — the table schema is whatever this SELECTs. |
+| `PaxVault Events Merge` | Hourly          | Script: `MERGE` of events/attendance changed in the last 2h, plus orphan cleanup of hard deletes.     |
+
+Both copy `description`, `preblast`, `backblast` (STRING) and `preblast_rich`, `backblast_rich`, `meta` (JSON) straight from `public.event_instances`. `getEventDetails()` in `src/lib/bq/events.ts` reads them from `pv_events`, so:
+
+- Backblast/preblast edits surface within the hourly merge window, not instantly.
+- Details only exist for events that are in `pv_events` (active, `pax_count` set, not `exclude_from_pax_vault`); anything else returns null.
+- A column must be added to the **import first** (then run it) and the merge second — the merge fails on columns the table doesn't have yet, and the import's `WRITE_TRUNCATE` drops any column it doesn't select.
+- `pv_events` is not clustered, so a `WHERE event_id = …` lookup scans the full selected columns (the detail columns are ~1 GB). Clustering by `event_id` would need the import converted to a `CREATE OR REPLACE TABLE … CLUSTER BY` script.
 
 ## App-owned tables (writable)
 

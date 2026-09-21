@@ -1,28 +1,28 @@
 /**
- * Org-level permission lookups against the F3 Nation role tables.
+ * Org-level permission lookups against the F3 Nation role grants.
  *
- * Roles live in `f3data.public.roles_x_users_x_org` (role_id, user_id, org_id).
+ * Grants are read from `pv_pax.roles`, an ARRAY<STRUCT<role_id, role_name,
+ * org_id, org_name, org_type>> that the "PaxVault PAX" scheduled query
+ * (`scripts/sql/pv_pax.sql`) copies from `f3data.public.roles_x_users_x_org`
+ * every 6 hours — so a granted or revoked role takes up to that long to land.
+ * The array holds every grant unfiltered; the match happens here.
  * `role_id = 3` is "admin" in `f3data.public.roles`, and the overwhelming
  * majority of admin grants are held against `org_type = 'region'` orgs — so for
  * a region page the org_id being checked *is* the region id.
  *
  * The session cookie only carries the user's email (see `lib/auth/session.ts`),
- * so every check first resolves email -> `f3data.public.users.id`.
+ * so every check first resolves email -> `pv_pax.user_id`
+ * (= `f3data.public.users.id`).
  */
 import { queryBigQuery } from "@/lib/db";
 
 /** `f3data.public.roles.id` for the "admin" role. */
 export const ADMIN_ROLE_ID = 3;
 
-// Fully-qualified because these live in the `public` dataset, not the
-// `paxVault` default dataset that `queryBigQuery` binds.
-const USERS_TABLE = "`f3data.public.users`";
-const ROLES_TABLE = "`f3data.public.roles_x_users_x_org`";
-
 export interface RegionPermission {
   /**
    * `f3data.public.users.id` for the session email, or null when the email
-   * matches no user row. Needed for `pv_regions_preferences.updated_user_id`.
+   * matches no pv_pax row. Needed for `pv_regions_preferences.updated_user_id`.
    */
   userId: number | null;
   /** True when that user holds role_id 3 against this region's org_id. */
@@ -53,25 +53,24 @@ export async function getRegionPermission(
   const query = `-- REGION ADMIN CHECK
     WITH
       matched_users AS (
-        SELECT id
-        FROM ${USERS_TABLE}
+        SELECT
+          user_id AS id,
+          EXISTS (
+            SELECT 1
+            FROM UNNEST(roles) r
+            WHERE r.org_id = @regionId
+              AND r.role_id = @adminRoleId
+          ) AS is_admin
+        FROM pv_pax
         WHERE email IS NOT NULL
           AND LOWER(email) = @email
-      ),
-      admin_users AS (
-        SELECT mu.id
-        FROM matched_users mu
-        JOIN ${ROLES_TABLE} r
-          ON r.user_id = mu.id
-        WHERE r.org_id = @regionId
-          AND r.role_id = @adminRoleId
       )
+    -- Aggregate with no GROUP BY: always exactly one row, NULL/FALSE when the
+    -- email matches nobody.
     SELECT
-      COALESCE(
-        (SELECT MIN(id) FROM admin_users),
-        (SELECT MIN(id) FROM matched_users)
-      ) AS user_id,
-      (SELECT COUNT(1) FROM admin_users) > 0 AS is_admin
+      COALESCE(MIN(IF(is_admin, id, NULL)), MIN(id)) AS user_id,
+      COALESCE(LOGICAL_OR(is_admin), FALSE) AS is_admin
+    FROM matched_users
   `;
 
   const results = await queryBigQuery<{
