@@ -33,16 +33,16 @@ describe("bq/events.ts", () => {
     vi.clearAllMocks();
   });
 
-  it("builds a query against event_instances with id filter and limit", async () => {
-    (queryBigQuery as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
-      [],
-    );
+  it("builds a query against pv_events with a parameterized id filter and limit", async () => {
+    const mock = queryBigQuery as unknown as ReturnType<typeof vi.fn>;
+    mock.mockResolvedValue([]);
 
     await getEventDetails(999);
 
-    const [q, , , params] = lastCall();
-    expect(q).toContain("FROM f3data.public.event_instances");
-    expect(q).toContain("WHERE id = @eventInstanceId");
+    const q = lastQuery();
+    expect(q).toContain("FROM pv_events");
+    expect(q).not.toContain("f3data.public");
+    expect(q).toContain("WHERE event_id = @eventInstanceId");
     expect(q).toContain("LIMIT 1");
     expect(params).toEqual({ eventInstanceId: 999 });
   });

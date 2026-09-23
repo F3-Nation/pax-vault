@@ -108,7 +108,10 @@ export async function getEventById(
  *
  * Notes:
  * - `meta` is stored as JSON in BigQuery and parsed into an object here.
- * - Returns null if the event does not exist.
+ * - Reads the detail columns the pv_events import/merge scheduled queries copy
+ *   from `event_instances`, so edits show up within the hourly merge window.
+ * - Returns null if the event does not exist in pv_events (inactive, no
+ *   pax_count, or flagged `exclude_from_pax_vault`).
  */
 export async function getEventDetails(
   eventInstanceId: number,
@@ -117,15 +120,15 @@ export async function getEventDetails(
   // Intentionally selecting rich + plain text variants; consumers decide which to render.
   const query = `-- EVENT DETAILS
     SELECT
-      id, 
-      description, 
-      preblast, 
-      preblast_rich, 
-      backblast, 
-      backblast_rich, 
+      event_id AS id,
+      description,
+      preblast,
+      preblast_rich,
+      backblast,
+      backblast_rich,
       JSON_QUERY(meta, '$') as meta
-    FROM f3data.public.event_instances
-    WHERE id = @eventInstanceId
+    FROM pv_events
+    WHERE event_id = @eventInstanceId
     LIMIT 1
   `;
 
