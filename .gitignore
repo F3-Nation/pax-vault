@@ -16,6 +16,7 @@
 # next.js
 /.next/
 /out/
+.slim/deepwork/
 
 # production
 /build
@@ -60,3 +61,5 @@ certificates
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+.gcs/*

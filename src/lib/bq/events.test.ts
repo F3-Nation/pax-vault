@@ -10,12 +10,22 @@ vi.mock("@/lib/db", () => {
 import { queryBigQuery } from "@/lib/db";
 import { getEventDetails } from "./events";
 
-function lastQuery(): string {
+function lastCall(): [
+  string,
+  string | undefined,
+  string | undefined,
+  Record<string, unknown> | undefined,
+] {
   const calls = (queryBigQuery as unknown as ReturnType<typeof vi.fn>).mock
     .calls;
   if (!calls.length)
     throw new Error("Expected queryBigQuery to have been called");
-  return String(calls[calls.length - 1]?.[0] ?? "");
+  return calls[calls.length - 1] as [
+    string,
+    string | undefined,
+    string | undefined,
+    Record<string, unknown> | undefined,
+  ];
 }
 
 describe("bq/events.ts", () => {
@@ -30,10 +40,11 @@ describe("bq/events.ts", () => {
 
     await getEventDetails(999);
 
-    const q = lastQuery();
+    const [q, , , params] = lastCall();
     expect(q).toContain("FROM f3data.public.event_instances");
-    expect(q).toContain("WHERE id = 999");
+    expect(q).toContain("WHERE id = @eventInstanceId");
     expect(q).toContain("LIMIT 1");
+    expect(params).toEqual({ eventInstanceId: 999 });
   });
 
   it("returns null when no event is found", async () => {

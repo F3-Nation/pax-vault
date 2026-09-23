@@ -1,5 +1,7 @@
 import { queryBigQuery } from "@/lib/db";
 import { EventData, EventDetails } from "@/lib/types";
+import { getDuckDbRuntime } from "@/lib/duckdb/factory";
+import { DuckDbQueryAdapter, selectDuckDbOrLegacy } from "@/lib/duckdb/query";
 
 /**
  * Fetch a single event's core data (name, date, AO/region, types, tags, and
@@ -14,13 +16,54 @@ export async function getEventById(
   eventInstanceId: number,
   userIdentifier?: string,
 ): Promise<(EventData & { preferencesJson: string | null }) | null> {
-  // Preferences come from a LEFT JOIN, not a scalar subquery: BigQuery rejects
-  // a correlated subquery that references another table ("Correlated
-  // subqueries that reference other tables are not supported unless they can
-  // be de-correlated"). The join keeps it to one round trip, and LEFT means an
-  // event whose region never saved preferences still returns its row, with
-  // preferencesJson NULL so the caller applies defaults.
-  const query = `-- EVENT BY ID
+  return selectDuckDbOrLegacy({
+    capability: "events",
+    env: process.env,
+    duckdb: async () => {
+      const events = await new DuckDbQueryAdapter(
+        getDuckDbRuntime(),
+      ).execute<EventData>(
+        `SELECT
+        event_id AS event_instance_id, event_date, event_name, pax_count,
+        fng_count, ao_org_id, ao_name, region_org_id, region_name,
+        area_org_id, area_name, sector_org_id, sector_name,
+        first_f_ind, second_f_ind, third_f_ind, types, tags,
+        list_filter(attendance, x -> x.fartsack IS NOT TRUE) AS attendance,
+        list_filter(attendance, x -> x.fartsack IS TRUE) AS fartsacks
+       FROM pv_events
+       WHERE event_id = ?
+       LIMIT 1`,
+        [eventInstanceId],
+      );
+      const event = events[0];
+      if (!event) return null;
+
+      // Preferences are intentionally still read from BigQuery: they are user
+      // settings, not part of the DuckDB release.
+      const preferences = await queryBigQuery<{
+        preferencesJson: string | null;
+      }>(
+        `SELECT json_config AS preferencesJson
+       FROM pv_regions_preferences
+       WHERE region_id = @regionId
+       LIMIT 1`,
+        userIdentifier,
+        `fetch preferences for event ${eventInstanceId}`,
+        { regionId: event.region_org_id },
+      );
+      return {
+        ...event,
+        preferencesJson: preferences[0]?.preferencesJson ?? null,
+      };
+    },
+    legacy: async () => {
+      // Preferences come from a LEFT JOIN, not a scalar subquery: BigQuery rejects
+      // a correlated subquery that references another table ("Correlated
+      // subqueries that reference other tables are not supported unless they can
+      // be de-correlated"). The join keeps it to one round trip, and LEFT means an
+      // event whose region never saved preferences still returns its row, with
+      // preferencesJson NULL so the caller applies defaults.
+      const query = `-- EVENT BY ID
     SELECT
       e.event_id as event_instance_id,
       e.event_date,
@@ -45,15 +88,19 @@ export async function getEventById(
     FROM pv_events e
     LEFT JOIN pv_regions_preferences p
       ON p.region_id = e.region_org_id
-    WHERE e.event_id = ${eventInstanceId}
+    WHERE e.event_id = @eventInstanceId
     LIMIT 1;
   `;
 
-  const results = await queryBigQuery<
-    EventData & { preferencesJson: string | null }
-  >(query, userIdentifier, `fetch event by id ${eventInstanceId}`);
+      const results = await queryBigQuery<
+        EventData & { preferencesJson: string | null }
+      >(query, userIdentifier, `fetch event by id ${eventInstanceId}`, {
+        eventInstanceId,
+      });
 
-  return results?.[0] || null;
+      return results?.[0] || null;
+    },
+  });
 }
 
 /**
@@ -78,7 +125,7 @@ export async function getEventDetails(
       backblast_rich, 
       JSON_QUERY(meta, '$') as meta
     FROM f3data.public.event_instances
-    WHERE id = ${eventInstanceId}
+    WHERE id = @eventInstanceId
     LIMIT 1
   `;
 
@@ -86,6 +133,7 @@ export async function getEventDetails(
     query,
     userIdentifier,
     `fetch details for event instance ${eventInstanceId}`,
+    { eventInstanceId },
   );
 
   // Parse JSON meta safely if present.

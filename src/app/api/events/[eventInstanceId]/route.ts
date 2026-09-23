@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { getEventDetails } from "@/lib/bq/events";
 import { getSessionUser } from "@/lib/auth/server";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 
 export async function GET(
   _req: Request,
@@ -33,7 +34,21 @@ export async function GET(
   }
 
   // Fetch event details from the BigQuery data layer.
-  const event = await getEventDetails(eventId, user.email);
+  let event;
+  try {
+    event = await getEventDetails(eventId, user.email);
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError) {
+      return NextResponse.json(
+        { error: "Event data is temporarily unavailable." },
+        { status: 503 },
+      );
+    }
+    return NextResponse.json(
+      { error: "Event lookup failed." },
+      { status: 500 },
+    );
+  }
 
   // Valid id, but no matching event exists.
   if (!event) {

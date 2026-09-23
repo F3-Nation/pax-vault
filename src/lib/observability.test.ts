@@ -43,7 +43,8 @@ describe("reportError", () => {
     expect(spy).toHaveBeenCalledTimes(1);
     const payload = JSON.parse(String(spy.mock.calls[0]?.[0]));
     expect(payload.scope).toBe("api/test");
-    expect(payload.user).toBe("u@x.com");
+    expect(payload.user).toBeUndefined();
+    expect(payload.userHash).toMatch(/^[0-9a-f]{8}$/);
     expect(payload.message).toBe("explode");
     expect(payload.level).toBe("error");
   });
