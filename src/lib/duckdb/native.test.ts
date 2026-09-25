@@ -19,6 +19,18 @@ const config: DuckDbConfig = {
   maxReleaseBytes: 1000000,
   maxObjectBytes: 100000,
 };
+const fixturePointer = {
+  contractVersion: "pv-release.v1",
+  releaseId: "native-fixture",
+  prefix: "gs://bucket/releases/native-fixture/",
+  manifestUri: "gs://bucket/releases/native-fixture/release.json",
+  manifestGeneration: "1",
+  manifestSha256: "a".repeat(64),
+  schemaVersion: "pv-release.v1",
+  createdAtUtc: "2026-01-01T00:00:00Z",
+  producerRevision: "native-test",
+  releaseSequence: 1,
+};
 
 describe("native DuckDB candidate", () => {
   it("opens a generated Parquet fixture read-only and queries it", async () => {
@@ -58,6 +70,7 @@ describe("native DuckDB candidate", () => {
       writeConnection.closeSync();
       writer.closeSync();
       const release = {
+        pointer: fixturePointer,
         parquetPaths,
       } as unknown as ReleaseFiles;
       const handle = await nativeCandidateOpener.open(dbPath, release, config);
@@ -84,6 +97,51 @@ describe("native DuckDB candidate", () => {
           large_count: 9223372036854775807n,
         },
       ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects physical Parquet columns hidden by the registry projection", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pax-duckdb-native-extra-"));
+    const dbPath = join(dir, "release.duckdb");
+    try {
+      const { DuckDBInstance } = await import("@duckdb/node-api");
+      const writer = await DuckDBInstance.create(join(dir, "writer.duckdb"));
+      const connection = await writer.connect();
+      const columns = Object.entries(DUCKDB_SCHEMA_REGISTRY.pv_pax.columns);
+      const parquetPaths: string[] = [];
+      for (const [index, hasExtraColumn] of [false, true].entries()) {
+        const parquet = join(dir, `pv_pax-${index}.parquet`);
+        const select = columns
+          .map(([name, spec]) => {
+            const expression =
+              name === "user_id"
+                ? "CAST(1 AS INTEGER)"
+                : name === "f3_name"
+                  ? "'fixture'"
+                  : spec.logicalType.endsWith("[]")
+                    ? `[]::${spec.logicalType}`
+                    : `CAST(NULL AS ${spec.logicalType})`;
+            return `${expression} AS "${name}"`;
+          })
+          .concat(hasExtraColumn ? [`'unexpected' AS hidden_field`] : [])
+          .join(", ");
+        await connection.run(
+          `COPY (SELECT ${select}) TO '${parquet.replaceAll("'", "''")}' (FORMAT PARQUET)`,
+        );
+        parquetPaths.push(parquet);
+      }
+      connection.closeSync();
+      writer.closeSync();
+
+      const release = {
+        pointer: fixturePointer,
+        parquetPaths: new Map([["pv_pax", parquetPaths]]),
+      } as unknown as ReleaseFiles;
+      await expect(
+        nativeCandidateOpener.open(dbPath, release, config),
+      ).rejects.toThrow(/physical schema does not match registry/);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

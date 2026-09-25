@@ -16,13 +16,18 @@ ticket. Do not replace placeholders in this document with guessed values.
 Before scheduling a rollout, the release owner and platform/SRE must attach
 evidence that:
 
-- [ ] The candidate producer release contains exactly the configured dataset
-      allowlist, immutable generation-pinned objects, complete manifests,
-      schema fingerprints, source snapshot/read timestamp, and required
-      query-parity goldens.
-- [ ] Every golden was generated from the **same BigQuery snapshot and UTC
-      read timestamp** recorded in the release metadata. A live-view comparison
-      is not sufficient.
+- [ ] The candidate producer release contains exactly the version-specific
+      allowlist (nine v2 datasets, including `pv_territories`; eight for v1
+      rollback), immutable generation-pinned objects, complete manifests,
+      ordered-column fingerprints, and contract-appropriate read metadata.
+- [ ] For v2, release and entries use
+      `ordered-sequential-per-dataset` plus matching `sourceOrder`; every entry
+      and manifest carries its dataset's UTC read timestamp. Do not require a
+      shared snapshot, release timestamp, unique timestamps, or producer read
+      order inferred from registry traversal.
+- [ ] The fixed `candidate_transport_check` count golden is treated as a
+      transport/count check only, not query-parity evidence. Source-query parity
+      evidence and bounded cross-dataset drift checks remain a producer gate.
 - [ ] The candidate is supported by the compatibility registry of the new
       revision and every revision that remains rollback-eligible.
 - [ ] The consumer has passed corruption, generation-change, pointer-race,
@@ -30,9 +35,11 @@ evidence that:
       tests.
 - [ ] Native DuckDB packaging and startup extraction have been tested in the
       deployed Node runtime; no Edge/runtime path imports the native adapter.
-- [ ] The measured release/database footprint fits the selected Cloud Run
-      memory and ephemeral-storage limits, with startup and refresh budgets
-      recorded.
+- [ ] The 328.61 MB compressed Parquet release (including the 322.88 MB events
+      object) fits the configured 536,870,912-byte release and 402,653,184-byte
+      per-object budgets. Measure active plus staging databases, download
+      buffers, startup, and revision overlap against Cloud Run memory and
+      ephemeral-storage limits; compressed budgets do not prove runtime capacity.
 - [ ] BigQuery remains healthy for the capabilities that remain BQ-owned and
       is available as the explicitly controlled cutback target for migrated
       capabilities. This is not silent fallback behavior.
@@ -47,6 +54,15 @@ validation owner has accepted the evidence.
 
 The serving runtime uses ADC and the GCS SDK. It does not use HMAC keys,
 DuckDB `httpfs`, embedded credentials, or request-time remote scans.
+
+For the checked-in f3-analytics deployment, configure bucket
+`f3-analytics-nonprod`, release prefix `pax-vault/releases`, and control object
+`pax-vault/current.json`. The checked-in pointer is local mirror evidence only;
+record live GCS reads/generations and CAS evidence separately. Keep auth,
+permissions, and identity lookups on live BigQuery `pv_pax`; event details read
+live BigQuery `pv_events` so v1 rollback remains functional. Preferences and
+8-box reads/writes remain BigQuery, and scheduled ETL still reads `public.*`.
+Private `pv_pax` email/roles are never emitted by analytical projections.
 
 The platform/SRE owner must identify, without inventing values:
 
@@ -76,7 +92,7 @@ identities:
 1. Confirm the effective IAM policy at the intended bucket and project scope;
    record principal, role, scope, and reviewer.
 2. From the deployed runtime (or an equivalent identity-faithful smoke job),
-   read `<BUCKET>/current.json`, read its referenced manifest, and read one
+   read `<RELEASE_BUCKET>/pax-vault/current.json`, read its referenced manifest, and read one
    generation-pinned object from every required dataset. Record success and
    the object generations, but never record tokens or credentials.
 3. Confirm a write/delete attempt by the serving identity is denied. Confirm a
@@ -91,23 +107,27 @@ identities:
 Attach the IAM policy export, successful read output, denied-operation output,
 and identity-faithful smoke-test run to the change ticket.
 
-## 3. Producer publication and snapshot-golden gate
+## 3. Producer publication and source-evidence gate
 
 The producer owner must provide a release handoff before application rollout:
 
 - `<RELEASE_ID>`, `<RELEASE_SEQUENCE>`, `<POINTER_OBJECT_GENERATION>`,
   `<MANIFEST_SHA256>`;
-- exact source snapshot identifier and `sourceReadTimestampUtc`;
+- contract version and source metadata: v1 source snapshot/read timestamp, or
+  v2 read policy/order plus each dataset entry/manifest UTC timestamp;
 - manifest/object generations, CRC32C values, sizes, row counts, schema
   fingerprints, and supported contract/schema versions; and
 - the immutable URI, generation, query, canonicalization identifier, and
   digest for each required golden.
 
-The producer snapshot and golden artifacts are a release requirement, not an
-optional test convenience. Reject the release if any golden was computed from
-a different snapshot/read timestamp, if a golden is missing, or if the
-producer cannot reproduce the canonical artifact. Never mutate a published
-prefix; an incomplete prefix is not a rollback target.
+For v2, do not claim one shared snapshot: producer reads are sequential and can
+observe cross-dataset drift. `candidate_transport_check` establishes count
+transport only. Require separate producer source-query parity evidence and
+bounded drift checks before production claims; stronger parity goldens are a
+future gate. Reject invalid policy/order/timestamp metadata, missing or
+unreproducible transport goldens, or inconsistent per-dataset entry/manifest
+metadata. Preserve v1 snapshot validation for rollback releases. Never mutate a
+published prefix; an incomplete prefix is not a rollback target.
 
 ## 4. Feature-flag rollout and BigQuery cutback
 
@@ -132,7 +152,8 @@ the flag state and observed release tag at each step:
 
 1. **Off/shadow:** keep BigQuery serving. Reconcile and stage DuckDB, run
    generation-pinned validation, and compare DuckDB results with the matching
-   BigQuery snapshot/goldens. Investigate every parity diff.
+   available source-parity evidence and transport checks. Investigate every
+   parity diff; count transport alone does not establish query parity.
 2. **Enable one capability:** enable `<FLAG_FOR_CAPABILITY>` only after the
    parity and readiness gates pass. Keep auth, permissions, preferences,
    eight-box, event-detail, and other BQ-owned boundaries on BigQuery as
@@ -192,7 +213,7 @@ The release owner performs this operation; a second operator reviews it.
 1. Identify `<TARGET_RETAINED_RELEASE_ID>` and verify it is complete,
    previously valid, within retention, and supported by every serving and
    rollback-eligible revision.
-2. Read `<RELEASE_BUCKET>/current.json` and record its **GCS object
+2. Read `<RELEASE_BUCKET>/pax-vault/current.json` and record its **GCS object
    generation** `<OBSERVED_POINTER_GENERATION>`. Do not use metageneration or
    `releaseSequence` as the CAS token.
 3. Validate the target pointer content, manifest SHA-256, manifest generation,
@@ -274,7 +295,8 @@ timestamp. Use test identities and non-sensitive queries.
 - [ ] Mixed paths obtain BQ-owned preferences/identity/detail data from
       BigQuery and DuckDB-owned analytical data from the pinned release.
 - [ ] Empty, malformed, boundary-date, NULL/list, and filter/limit cases
-      match the approved snapshot goldens.
+      match approved producer parity evidence; v2 count goldens alone are not
+      sufficient for source-query parity.
 - [ ] A forced refresh failure serves LKG within age and returns stable-
       dependency 503 after expiry; it never silently falls back to BQ.
 - [ ] Flag disable returns the capability to BigQuery and is visible in
@@ -297,9 +319,10 @@ timestamp, owner, and environment is incomplete.
       validation owners.
 - [ ] Candidate release ID/sequence, pointer generation before/after, manifest
       SHA-256, contract/schema registry version, and retention decision.
-- [ ] Producer snapshot ID, UTC read timestamp, complete dataset manifest
-      inventory, object generations/CRC32C, and snapshot-matched golden list
-      with digests.
+- [ ] Version-specific producer metadata (v1 snapshot/read timestamp or v2
+      order/policy and every dataset timestamp), complete dataset inventory,
+      object generations/CRC32C, transport golden list/digests, and separate
+      source-parity/drift evidence or explicit open-gate record.
 - [ ] Staging native boot, ADC read/deny, refresh/LKG, resource peak, query,
       and flag cutback results with timestamps and request IDs.
 - [ ] Production equivalents, including active release ID/sequence and

@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock BigQuery helper
-vi.mock("@/lib/db", () => {
-  return {
-    queryBigQuery: vi.fn(),
-  };
-});
+const { bigQueryMock } = vi.hoisted(() => ({
+  bigQueryMock: vi.fn(),
+}));
+
+vi.mock("@/lib/db", () => ({ queryBigQuery: bigQueryMock }));
 
 import { queryBigQuery } from "@/lib/db";
 import { getEventDetails } from "./events";
@@ -39,7 +38,7 @@ describe("bq/events.ts", () => {
 
     await getEventDetails(999);
 
-    const q = lastQuery();
+    const [q, , , params] = lastCall();
     expect(q).toContain("FROM pv_events");
     expect(q).not.toContain("f3data.public");
     expect(q).toContain("WHERE event_id = @eventInstanceId");

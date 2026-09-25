@@ -118,6 +118,9 @@ export async function getEventDetails(
   userIdentifier?: string,
 ): Promise<EventDetails | null> {
   // Intentionally selecting rich + plain text variants; consumers decide which to render.
+  // Keep details explicitly BigQuery-owned: the v1 release lacks v2-only content
+  // fields, and this service must remain rollback-compatible. Do not catch and
+  // fall back between data sources here.
   const query = `-- EVENT DETAILS
     SELECT
       event_id AS id,
@@ -138,15 +141,15 @@ export async function getEventDetails(
     `fetch details for event instance ${eventInstanceId}`,
     { eventInstanceId },
   );
+  return normalizeEventDetailsMeta(results?.[0] ?? null);
+}
 
-  // Parse JSON meta safely if present.
-  if (results?.[0]?.meta) {
-    try {
-      results[0].meta = JSON.parse(results[0].meta as unknown as string);
-    } catch {
-      // If parsing fails, leave meta as-is rather than throwing.
-    }
+function normalizeEventDetailsMeta(event: EventDetails | null): EventDetails | null {
+  if (typeof event?.meta !== "string") return event;
+  try {
+    event.meta = JSON.parse(event.meta) as EventDetails["meta"];
+  } catch {
+    // Preserve malformed metadata as-is, matching the historical BigQuery path.
   }
-
-  return results?.[0] || null;
+  return event;
 }

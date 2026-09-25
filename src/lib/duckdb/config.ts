@@ -70,12 +70,12 @@ export function readDuckDbConfig(
     maxReleaseBytes: positive(
       "DUCKDB_MAX_RELEASE_BYTES",
       env.DUCKDB_MAX_RELEASE_BYTES,
-      256 * 1024 * 1024,
+      512 * 1024 * 1024,
     ),
     maxObjectBytes: positive(
       "DUCKDB_MAX_OBJECT_BYTES",
       env.DUCKDB_MAX_OBJECT_BYTES,
-      128 * 1024 * 1024,
+      384 * 1024 * 1024,
     ),
   };
 }

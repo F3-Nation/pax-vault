@@ -41,6 +41,19 @@ import { searchUsersByName } from "@/lib/bq/pax";
 
 const SOURCE_SNAPSHOT = "phase2-native-fixture-snapshot-2026-01-01";
 const SOURCE_READ_AT = "2026-01-01T00:00:00.000Z";
+// Mirrors DATE_DIFF(CURRENT_DATE(), first_event_date, DAY) in the legacy
+// PAX summary query. This is intentionally relative to today's UTC date rather
+// than a fixed value, while retaining the query's exclusive day denominator.
+const paxEffectivePercentage =
+  (2 /
+    ((Date.UTC(
+      new Date().getUTCFullYear(),
+      new Date().getUTCMonth(),
+      new Date().getUTCDate(),
+    ) -
+      Date.UTC(2024, 0, 1)) /
+      86_400_000)) *
+  100;
 const GOLDEN_EVENT = {
   event_instance_id: 2,
   event_date: "2024-01-03T00:00:00.000Z",
@@ -182,7 +195,7 @@ const PAX_PAGE_GOLDEN = {
     last_q_ao_id: 7,
     last_q_ao_name: "Bravo AO",
     unique_pax_when_q: 0,
-    effective_percentage: 0.2012072434607646,
+    effective_percentage: paxEffectivePercentage,
   },
   ao_breakdown: [
     {
@@ -219,9 +232,11 @@ describe("migrated service functions on the pinned native release fixture", () =
   let dir: string;
   let native: DuckDBConnection;
   let instance: { closeSync: () => void };
+  let executedSql: string[];
 
   beforeEach(async () => {
     process.env.DUCKDB_ENABLED = "true";
+    executedSql = [];
     dir = await mkdtemp(join(tmpdir(), "pax-service-parity-"));
     const api = await import("@duckdb/node-api");
     const db = await api.DuckDBInstance.create(join(dir, "release.duckdb"));
@@ -256,6 +271,7 @@ describe("migrated service functions on the pinned native release fixture", () =
     `);
     const connection: DuckDbQueryConnection = {
       query: async <T>(sql: string, params?: unknown[]) => {
+        executedSql.push(sql);
         const result = await native.runAndReadAll(sql, params as never);
         await result.readAll();
         return result.getRowObjectsJS() as T[];
@@ -431,6 +447,149 @@ describe("migrated service functions on the pinned native release fixture", () =
     expect(SOURCE_SNAPSHOT).toBe("phase2-native-fixture-snapshot-2026-01-01");
     expect(SOURCE_READ_AT).toBe("2026-01-01T00:00:00.000Z");
     expect(queryBigQuery).toHaveBeenCalled();
+  });
+
+  it("executes a region page without filters on native DuckDB", async () => {
+    const region = await getRegionPage(1, "fixture@example.com");
+
+    expect(region.summary).toMatchObject({
+      event_count: 3,
+      unique_pax: 1,
+      unique_qs: 1,
+      fng_count: 1,
+    });
+    expect(region.events).toHaveLength(3);
+    expect(region.events?.[0]).toMatchObject({ event_instance_id: 3 });
+    expect(region.leaders).toEqual([
+      expect.objectContaining({
+        user_id: 10,
+        posts: 2,
+        all_posts: 2,
+        all_qs: 2,
+      }),
+    ]);
+    // The only BigQuery request in this native path is the intentional
+    // preference lookup; native query failures do not retry the legacy path.
+    expect(queryBigQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("bounds leader totals by page filters while computing career totals in DuckDB", async () => {
+    const recentDate = new Date(Date.now() - 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const qValues = ["0", "NULL", "2", "-1"];
+    for (let i = 0; i < 22; i++) {
+      const extraAttendance =
+        i === 0
+          ? ", {user_id:10,f3_name:'Ace',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL}, {user_id:10,f3_name:'Ace',q_ind:NULL,fartsack:NULL,ghost:false,avatar_url:NULL}"
+          : i === 1
+            ? ", {user_id:10,f3_name:'Ace',q_ind:-1,fartsack:true,ghost:false,avatar_url:NULL}"
+            : "";
+      await native.run(`
+        INSERT INTO pv_events VALUES (
+          ${100 + i}, DATE '${recentDate}', 'Career ${i}', 1, 0, 7, 'Bravo AO',
+          1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 0, 0, 0, [], [],
+          [{user_id:10,f3_name:'Ace',q_ind:${qValues[i % qValues.length]},fartsack:false,ghost:false,avatar_url:NULL}, {user_id:NULL,f3_name:NULL,q_ind:2,fartsack:false,ghost:false,avatar_url:NULL}${extraAttendance}]
+        )
+      `);
+    }
+    await native.run(`
+      INSERT INTO pv_pax VALUES
+        (0,'Zero',1,'Alpha Region',NULL,'active',NULL,[],[],[],[]),
+        (NULL,'Null ID',1,'Alpha Region',NULL,'active',NULL,[],[],[],[])
+    `);
+    await native.run(`
+      INSERT INTO pv_events VALUES (
+        200, DATE '2022-01-01', 'Nationwide', 1, 0, NULL, NULL, 9, 'Other Region',
+        NULL, NULL, NULL, NULL, 0, 0, 0, [], [],
+        [{user_id:10,f3_name:'Ace',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL},
+         {user_id:10,f3_name:'Ace',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL},
+         {user_id:10,f3_name:'Ace',q_ind:1,fartsack:true,ghost:false,avatar_url:NULL},
+         {user_id:NULL,f3_name:NULL,q_ind:1,fartsack:false,ghost:false,avatar_url:NULL}]
+      )
+    `);
+    await native.run(`
+      INSERT INTO pv_events VALUES
+        (200, DATE '2022-01-01', 'Duplicate event id', 1, 0, NULL, NULL, 9, 'Other Region',
+         NULL, NULL, NULL, NULL, 0, 0, 0, [], [],
+         [{user_id:10,f3_name:'Ace',q_ind:0,fartsack:false,ghost:false,avatar_url:NULL}]),
+        (201, DATE '2024-01-04', 'Filtered foreign region', 1, 0, NULL, NULL, 9, 'Other Region',
+         NULL, NULL, NULL, NULL, 0, 0, 0, [], [],
+         [{user_id:10,f3_name:'Ace',q_ind:2,fartsack:false,ghost:false,avatar_url:NULL},
+          {user_id:10,f3_name:'Ace',q_ind:0,fartsack:false,ghost:false,avatar_url:NULL},
+          {user_id:10,f3_name:'Ace',q_ind:NULL,fartsack:NULL,ghost:false,avatar_url:NULL},
+          {user_id:10,f3_name:'Ace',q_ind:-1,fartsack:false,ghost:false,avatar_url:NULL},
+          {user_id:10,f3_name:'Ace',q_ind:2,fartsack:true,ghost:false,avatar_url:NULL}]),
+        (202, NULL, 'Null date', 1, 0, NULL, NULL, 9, 'Other Region',
+         NULL, NULL, NULL, NULL, 0, 0, 0, [], [],
+         [{user_id:10,f3_name:'Ace',q_ind:-1,fartsack:NULL,ghost:false,avatar_url:NULL}])
+    `);
+
+    const region = await getRegionPage(1, "fixture@example.com", {
+      startDate: "2024-01-01",
+      endDate: "2024-01-05",
+    });
+
+    expect(region.leaders).toEqual([
+      expect.objectContaining({
+        user_id: 10,
+        posts: 2,
+        all_posts: 6,
+        all_qs: 4,
+      }),
+    ]);
+    expect(region.achievements).toEqual([
+      expect.objectContaining({
+        user_id: 10,
+        region_posts: 24,
+        region_qs: 13,
+        all_posts: 28,
+        all_qs: 18,
+        fng_date: "2022-01-01",
+        last_region_event_date: recentDate,
+      }),
+    ]);
+    expect(
+      region.achievements?.some((p: { user_id: number }) => p.user_id === 0),
+    ).toBe(false);
+    expect(
+      executedSql.some((sql) => /targets\(user_id\).*VALUES/is.test(sql)),
+    ).toBe(true);
+    const groupedLeadersSql = executedSql.find((sql) =>
+      /target_events AS/i.test(sql),
+    );
+    expect(groupedLeadersSql).toMatch(/UNNEST\(list_transform\(list_filter\(/i);
+    expect(groupedLeadersSql).toMatch(/struct_pack\(/i);
+    expect(groupedLeadersSql).toMatch(/a\.user_id IS NOT NULL/i);
+    expect(groupedLeadersSql).toMatch(/a\.fartsack IS NOT TRUE/i);
+    expect(groupedLeadersSql).toMatch(/COALESCE\(a\.q_ind, 0\) <> 0/i);
+    expect(groupedLeadersSql).not.toMatch(/CROSS JOIN UNNEST/i);
+    const postsSql = executedSql.find((sql) =>
+      /UNNEST\(list_distinct\(list_transform/is.test(sql),
+    );
+    const qsSql = executedSql.find((sql) =>
+      /COALESCE\(a\.q_ind, 0\) <> 0/is.test(sql),
+    );
+    expect(postsSql).toBeDefined();
+    expect(qsSql).toBeDefined();
+    expect(executedSql.indexOf(postsSql!)).toBeLessThan(
+      executedSql.indexOf(qsSql!),
+    );
+    expect(postsSql).toMatch(/GROUP BY event_users\.user_id/i);
+    expect(postsSql).not.toMatch(/row_number|event_row_id/i);
+    expect(
+      executedSql.some((sql) =>
+        /scoped_pax AS \([\s\S]*user_id IS NOT NULL/i.test(sql),
+      ),
+    ).toBe(true);
+    expect(
+      executedSql.some((sql) =>
+        /SELECT event_id AS event_instance_id, event_date, region_org_id, attendance FROM pv_events$/is.test(
+          sql,
+        ),
+      ),
+    ).toBe(false);
+    expect(queryBigQuery).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -7,6 +7,13 @@ describe("DuckDB configuration", () => {
       readDuckDbConfig({ NODE_ENV: "test", DUCKDB_ENABLED: "false" }).enabled,
     ).toBe(false);
   });
+  it("defaults download budgets to fit the current large v2 artifacts", () => {
+    const config = readDuckDbConfig({ NODE_ENV: "test" });
+    expect(config.maxObjectBytes).toBe(384 * 1024 * 1024);
+    expect(config.maxReleaseBytes).toBe(512 * 1024 * 1024);
+    expect(config.maxObjectBytes).toBeGreaterThan(322_875_432);
+    expect(config.maxReleaseBytes).toBeGreaterThan(328_610_338);
+  });
   it("rejects an enabled configuration without a safe bucket", () => {
     expect(() =>
       readDuckDbConfig({

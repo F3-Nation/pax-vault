@@ -10,44 +10,43 @@ The normative migration requirements are in
 [`duckdb-migration-plan.md`](./duckdb-migration-plan.md). This document turns
 those requirements into an implementable producer interface.
 
-## 1. What the checked-in sample has, and what it does not
+## 1. Current producer artifact and evidence boundary
 
-The sample under
-`.gcs/f3-analytics/parquets/releases/20260919T122348.105104Z-a9031809a896437ba37f6e32088e1c37/`
-already demonstrates:
+The checked-in local mirror `.gcs/f3-analytics/pax-vault/current.json` points
+to a `pv-release.v2` candidate in bucket `f3-analytics-nonprod`, under
+`pax-vault/releases`; the control object is `pax-vault/current.json`. This is a
+local artifact mirror, not evidence of a live GCS generation/CAS operation or
+production publication. The v2 contract is adopted, and v1 remains supported
+for application rollback.
 
-- an immutable-looking, unique release prefix;
-- one Parquet object and one `manifest.json` below each dataset directory;
-- per-file `uri`, `generation`, `size`, and `crc32c`;
-- dataset `row_count`, `byte_count`, `file_count`, `schema_version`, and a
-  `source_read_timestamp`;
-- a release-level `release.json` listing dataset manifest URIs and manifest
-  generations;
-- the datasets `pv_pax`, `pv_events`, `pv_regions`, `pv_areas`, `pv_sectors`,
-  `pv_aos`, `pv_upcoming`, and `pv_kotter` (plus `pv_territories`).
+The v2 candidate includes exactly nine datasets:
+`pv_pax`, `pv_events`, `pv_regions`, `pv_areas`, `pv_sectors`, `pv_aos`,
+`pv_upcoming`, `pv_kotter`, and `pv_territories`. Schema versions are v2 for
+`pv_pax`, `pv_events`, `pv_areas`, and `pv_sectors`, and v1 for the other five.
+V2 columns are ordered arrays; their order is part of the canonical fingerprint.
+The release and entries record `sourceReadPolicy=ordered-sequential-per-dataset`
+and `sourceOrder`; each entry and manifest records its own UTC
+`sourceReadTimestampUtc`. V2 intentionally has no shared source snapshot or
+release-level read timestamp. Sequential reads can observe cross-dataset drift.
 
-It is **not yet a serving-contract release**. In particular, the sample has
-no fixed `current.json`, no contract metadata or monotonic
-`releaseSequence`, no SHA-256 for the canonical manifest, no schema/column
-fingerprints, no required query-parity goldens, and no producer evidence that
-all object generations were read back and validated before publication. Its
-per-dataset manifests and `release.json` are useful inputs, but must be
-extended or regenerated to meet the schemas below. `pv_territories` must not be
-published to a consumer allowlist unless that dataset is explicitly added to a
-consumer-supported registry.
+The `candidate_transport_check` golden is a fixed row-count query and establishes
+transport/count consistency only. It is not source-query parity evidence. Local
+hashes, CRCs, canonical JSON, native schemas/rows, and count goldens were checked;
+producer source-query parity, bounded drift evidence, live GCS CAS/readback, and
+Cloud Run capacity remain open acceptance gates.
 
 ## 2. Immutable layout and object set
 
 Use one configured bucket and this layout:
 
 ```text
-gs://BUCKET/releases/<releaseId>/release.json
-gs://BUCKET/releases/<releaseId>/pv_pax/manifest.json
-gs://BUCKET/releases/<releaseId>/pv_pax/partitions/pv_pax-0.parquet
-gs://BUCKET/releases/<releaseId>/pv_events/manifest.json
-gs://BUCKET/releases/<releaseId>/pv_events/partitions/pv_events-0.parquet
+gs://BUCKET/pax-vault/releases/<releaseId>/release.json
+gs://BUCKET/pax-vault/releases/<releaseId>/pv_pax/manifest.json
+gs://BUCKET/pax-vault/releases/<releaseId>/pv_pax/partitions/pv_pax-0.parquet
+gs://BUCKET/pax-vault/releases/<releaseId>/pv_events/manifest.json
+gs://BUCKET/pax-vault/releases/<releaseId>/pv_events/partitions/pv_events-0.parquet
 ... one directory for every allowlisted dataset ...
-gs://BUCKET/current.json
+gs://BUCKET/pax-vault/current.json
 ```
 
 `releaseId` is unique, immutable, and safe as a path component (for example,
@@ -57,17 +56,20 @@ prefix; reject `..`, alternate buckets, absolute/path-escaped names, unknown
 files, duplicate datasets, and duplicate object entries. `current.json` is the
 only mutable object.
 
-The required dataset allowlist for the current migration is:
+The v2 dataset allowlist is:
 `pv_pax`, `pv_events`, `pv_regions`, `pv_areas`, `pv_sectors`, `pv_aos`,
-`pv_upcoming`, and `pv_kotter`. A release must contain exactly the configured
-allowlist, not merely a subset. Additional datasets, including the sample's
-`pv_territories`, require an allowlist and schema-registry change first.
+`pv_upcoming`, `pv_kotter`, and `pv_territories`. A v2 release must contain
+exactly these nine datasets, not merely a subset. Keep the separate eight
+dataset v1 registry available for rollback; do not infer that v2 `pv_pax` email
+or roles are authorized for analytical projection or identity use.
 
 ## 3. Required release and dataset manifests
 
-`release.json` is an immutable release index. It must identify the release,
-contract, source snapshot, and every dataset manifest. Example (illustrative
-values):
+`release.json` is an immutable release index. It identifies the release,
+contract, and every dataset manifest. A v1 release carries its single source
+snapshot/read timestamp as shown below. V2 instead carries sequential-read
+policy and order, with read timestamps per dataset entry; it must not claim a
+shared snapshot or release-level read timestamp.
 
 ```json
 {
@@ -79,7 +81,7 @@ values):
   "sourceReadTimestampUtc": "2026-09-19T12:23:48.191387Z",
   "datasets": {
     "pv_pax": {
-      "manifestUri": "gs://BUCKET/releases/RELEASE/pv_pax/manifest.json",
+      "manifestUri": "gs://BUCKET/pax-vault/releases/RELEASE/pv_pax/manifest.json",
       "manifestGeneration": "1789820643043457",
       "schemaVersion": "pv_pax.v1"
     }
@@ -91,8 +93,36 @@ The example abbreviates the dataset map; production output must list every
 allowlisted dataset and no others. `release.json` itself is not the pointer,
 and it must not contain a self-referential hash.
 
+V2 release metadata has this version-specific shape (dataset map abbreviated):
+
+```json
+{
+  "contractVersion": "pv-release.v2",
+  "releaseId": "RELEASE",
+  "createdAtUtc": "2026-09-23T13:57:10.752636+00:00",
+  "producerRevision": "gha-35868031634-1",
+  "sourceReadPolicy": "ordered-sequential-per-dataset",
+  "sourceOrder": "20260923T135502.435915Z",
+  "datasets": {
+    "pv_pax": {
+      "manifestUri": "gs://BUCKET/pax-vault/releases/RELEASE/pv_pax/manifest.json",
+      "manifestGeneration": "1790171725923504",
+      "schemaVersion": "pv_pax.v2",
+      "sourceReadPolicy": "ordered-sequential-per-dataset",
+      "sourceReadTimestampUtc": "2026-09-23T13:55:10.721532+00:00",
+      "sourceOrder": "20260923T135502.435915Z"
+    }
+  }
+}
+```
+
+Every v2 dataset entry carries its own source read timestamp and the release
+source order/policy. Do not require timestamps to be unique or infer that
+registry traversal order is producer read order.
+
 Each dataset must have `manifest.json`, with all object metadata required to
-pin and validate reads:
+pin and validate reads. The following example is v1; its object-shaped columns
+and source snapshot fields remain supported for rollback:
 
 ```json
 {
@@ -108,7 +138,7 @@ pin and validate reads:
   "goldens": [
     {
       "name": "pv_pax.basic",
-      "uri": "gs://BUCKET/releases/RELEASE/pv_pax/goldens/basic.json",
+      "uri": "gs://BUCKET/pax-vault/releases/RELEASE/pv_pax/goldens/basic.json",
       "generation": "1789820642862753",
       "sizeBytes": 19,
       "query": "SELECT COUNT(*) AS row_count FROM pv_pax",
@@ -119,7 +149,7 @@ pin and validate reads:
   ],
   "objects": [
     {
-      "uri": "gs://BUCKET/releases/RELEASE/pv_pax/partitions/pv_pax-0.parquet",
+      "uri": "gs://BUCKET/pax-vault/releases/RELEASE/pv_pax/partitions/pv_pax-0.parquet",
       "generation": "1789820642862752",
       "sizeBytes": 4397550,
       "crc32c": "BpfXxg==",
@@ -132,10 +162,15 @@ pin and validate reads:
 Use the exact GCS object generation returned after each upload. Include all
 Parquet files if a dataset is partitioned. Every object path must be unique,
 under the dataset release prefix, and its `sizeBytes`/`rowCount` must sum to
-the manifest's `totalSizeBytes`/`rowCount`. The manifest's `columns` object
+the manifest's `totalSizeBytes`/`rowCount`. The v1 manifest's `columns` object
 must exactly match the consumer's executable v1 registry (column names,
-DuckDB logical types, and nullability), and `schemaFingerprintSha256` is the
-SHA-256 of its canonical bytes. Each release dataset must have at least one
+DuckDB logical types, and nullability). V2 manifests instead carry an ordered
+array of `{name, logicalType, nullable}` objects; preserve array order when
+computing `schemaFingerprintSha256`. V2 manifests carry `sourceReadPolicy`,
+`sourceOrder`, and per-dataset `sourceReadTimestampUtc`, and omit
+`sourceSnapshot`. V2 `pv_pax` includes email/roles and `pv_events` includes six
+event-content fields, three with JSON type; never expose these private fields
+through analytical projections. Each release dataset must have at least one
 golden. A golden is not a name/hash assertion only: its immutable `uri` and
 generation are downloaded generation-pinned by the consumer and it must carry
 `sizeBytes`, the exact registry verification `query`, and an unambiguous
@@ -162,7 +197,8 @@ rollback-eligible application revision is listed with its exact pointer schema,
 release contract, and per-dataset schema versions. It also specifies columns,
 types/nullability, non-negative row-count policy, and deterministic verification
 query specifications. Unknown schema versions, missing goldens,
-column/fingerprint mismatches, source snapshot/read-timestamp mismatches,
+column/fingerprint mismatches, v1 source snapshot/read-timestamp mismatches,
+v2 release-entry/manifest per-dataset timestamp or order mismatches,
 duplicate object paths, and aggregate size/count mismatches are rejected.
 
 ## 4. `current.json`, hashes, and canonical bytes
@@ -173,8 +209,8 @@ The fixed pointer must have at least this shape:
 {
   "contractVersion": "pv-release.v1",
   "releaseId": "20260919T122348.105104Z-a9031809a896437ba37f6e32088e1c37",
-  "prefix": "gs://BUCKET/releases/20260919T122348.105104Z-a9031809a896437ba37f6e32088e1c37/",
-  "manifestUri": "gs://BUCKET/releases/RELEASE/release.json",
+  "prefix": "gs://BUCKET/pax-vault/releases/20260919T122348.105104Z-a9031809a896437ba37f6e32088e1c37/",
+  "manifestUri": "gs://BUCKET/pax-vault/releases/RELEASE/release.json",
   "manifestGeneration": "1789820696000000",
   "manifestSha256": "<sha256-of-release-json-canonical-bytes>",
   "schemaVersion": "pv-release.v1",
@@ -189,7 +225,10 @@ match the object actually read by the producer. The pointer has **no
 `pointerSha256`**. The GCS object generation returned for `current.json` is
 the pointer-content version and is the CAS/read pin. GCS metageneration is
 metadata state, not `releaseSequence`, and is not a substitute for content
-CAS.
+CAS. A v2 pointer also contains both `sourceOrder` and `sourceHighWaterOrder`;
+validate both tokens, link pointer `sourceOrder` to release `sourceOrder`, and
+do not assume the pointer orders must be equal. The checked-in pointer uses
+`pv-release.v2`.
 
 Canonical JSON means UTF-8, one JSON value, object keys sorted recursively by
 Unicode code point, no insignificant whitespace, no BOM, and deterministic
@@ -217,6 +256,12 @@ object and hashing the downloaded bytes. There is no self hash in any object.
    generation. A failed precondition is not publication: re-read the pointer,
    choose the next sequence, and retry. Never overwrite a release prefix.
 
+For the checked-in v2 contract, the fixed golden name is
+`candidate_transport_check`, with query `SELECT COUNT(*) AS row_count FROM
+<dataset>`. It validates expected row-count transport only; it is not a
+source-query parity golden. V2 golden metadata requires SHA-256 and CRC32C.
+Source parity and bounded drift evidence are outstanding producer gates.
+
 Consumers download the pointer, then the manifest and every Parquet object
 with generation-pinned GCS reads. They stream objects directly into a unique
 candidate directory and enforce configured maximum release and per-object byte
@@ -235,13 +280,15 @@ rollback-eligible. Publishing is blocked if any serving or rollback-eligible
 revision cannot read the candidate. Additive fields require consumer tolerance;
 renames/removals require a new contract version and coordinated rollout.
 
-Every release must record the exact source snapshot identifier and UTC read
-timestamp used to produce it. Produce parity goldens from that same snapshot,
-not from a later live view. Goldens must cover rows, ordering, NULLs, empty
-arrays, JSON parsing, aggregates, date boundaries, filters, limits, and error
-behavior for each migrated entity/query path. Store their names and SHA-256s in
-the dataset manifest and retain the reproducible golden inputs or an immutable
-reference to them.
+V1 releases record their source snapshot and UTC read timestamp. V2 releases
+must preserve the producer's ordered sequential read policy, shared `sourceOrder`
+token and each dataset's own UTC read timestamp, without inventing a common
+snapshot. Sequential reads can observe cross-dataset drift; producer source
+parity evidence and bounded drift checks remain required before production
+claims. The current fixed count golden is transport-only. Stronger parity
+goldens covering rows, ordering, NULLs, empty arrays, JSON parsing, aggregates,
+date boundaries, filters, limits, and error behavior for each migrated query
+path are a future release-acceptance gate.
 
 ## 7. Retention, rollback, and incomplete releases
 
@@ -267,7 +314,11 @@ or reordered; consumers always reconcile from `current.json`.
 - [ ] Publish exactly the consumer allowlist; register any new dataset first.
 - [ ] Generate complete per-dataset manifests and `release.json`.
 - [ ] Record object generations, CRC32C, byte sizes, row counts, schema
-      fingerprints, snapshot, read timestamp, and parity goldens.
+      fingerprints, contract-appropriate source metadata, and goldens. V2
+      records per-dataset read timestamps/order; do not claim a shared snapshot.
+- [ ] For the PAX deployment, enforce 402,653,184-byte maximum compressed
+      object and 536,870,912-byte maximum compressed release limits; measure
+      active-plus-staging database memory/storage separately.
 - [ ] Canonicalize JSON and compute SHA-256 over the exact uploaded bytes.
 - [ ] Validate all objects and manifests by generation-pinned read before CAS.
 - [ ] Enforce supported pointer/manifest/dataset schema registry compatibility.
@@ -283,11 +334,13 @@ or reordered; consumers always reconcile from `current.json`.
 The producer handoff is accepted only when these tests pass against a GCS
 test bucket (or an equivalent generation-faithful emulator):
 
-1. A complete release is reproducibly generated twice from the same snapshot;
-   canonical manifest bytes and SHA-256 are identical.
+1. A complete release is reproducibly generated twice from a repeatable source
+   input; canonical manifest bytes and SHA-256 are identical. For v2, preserve
+   per-dataset read metadata and do not assert a shared source snapshot.
 2. The sample-shaped release is rejected when it lacks pointer metadata,
-   manifest SHA-256/schema fingerprints/goldens, or has the unallowlisted
-   `pv_territories` dataset.
+   manifest SHA-256/schema fingerprints/goldens, or an extra dataset outside
+   the contract-version-specific allowlist. V2 includes `pv_territories`;
+   v1 retains its eight-dataset allowlist for rollback.
 3. Missing dataset, extra file, duplicate dataset, path traversal, wrong
    bucket, unknown schema version, and malformed canonical JSON are rejected.
 4. Changing a Parquet byte, size, CRC32C, generation, row count, schema, or
@@ -302,7 +355,8 @@ test bucket (or an equivalent generation-faithful emulator):
    an incomplete or deleted release cannot be referenced.
 9. Registry tests reject candidates unsupported by any serving or
    rollback-eligible revision and accept declared additive-compatible changes.
-10. Snapshot/read-timestamp and every required query golden are present and
-    match the producer's recorded source snapshot.
+10. V1 snapshot/read-timestamp metadata is consistent. V2 policy/order and
+    per-dataset entry/manifest timestamps are valid and consistent; source
+    parity and bounded cross-dataset drift evidence are reviewed separately.
 
 Validation owner: parent.

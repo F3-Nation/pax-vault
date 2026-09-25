@@ -5,7 +5,7 @@ import { DuckDbConfig } from "./config";
 import { DuckDbUnavailableError, DuckDbReleaseError } from "./errors";
 import { GcsReleaseRepository, ReleaseFiles } from "./gcs";
 import { assertDuckDbServerRuntime } from "./server";
-import { DUCKDB_SCHEMA_REGISTRY } from "./constants";
+import { schemaFor } from "./constants";
 import {
   canonicalDuckDbRows,
   canonicalJson,
@@ -46,11 +46,38 @@ export const nativeCandidateOpener: CandidateOpener = {
       const stagingConnection = await writable.connect();
       try {
         for (const [dataset, paths] of release.parquetPaths) {
+          const schema = schemaFor(dataset, release.pointer.contractVersion);
+          const columns = Array.isArray(schema.columns)
+            ? schema.columns
+            : Object.entries(schema.columns).map(([name, spec]) => ({
+                name,
+                ...spec,
+              }));
           const files = paths
             .map((path) => `'${path.replaceAll("'", "''")}'`)
             .join(",");
+          const expected = columns.map((column) => [
+            column.name,
+            column.logicalType,
+            column.nullable ? "YES" : "NO",
+          ]);
+          for (const path of paths) {
+            const physicalDescription = await stagingConnection.runAndReadAll(
+              `DESCRIBE SELECT * FROM read_parquet('${path.replaceAll("'", "''")}')`,
+            );
+            await physicalDescription.readAll();
+            const physical = physicalDescription
+              .getRows()
+              .map((row) => [String(row[0]), String(row[1]), String(row[2])]);
+            if (JSON.stringify(physical) !== JSON.stringify(expected))
+              throw new DuckDbReleaseError(
+                `${dataset} Parquet partition physical schema does not match registry`,
+              );
+          }
           await stagingConnection.run(
-            `CREATE VIEW "${dataset}" AS SELECT * FROM read_parquet([${files}])`,
+            `CREATE VIEW "${dataset}" AS SELECT ${columns
+              .map((column) => `"${column.name.replaceAll('"', '""')}"`)
+              .join(", ")} FROM read_parquet([${files}])`,
           );
         }
       } finally {
@@ -67,6 +94,13 @@ export const nativeCandidateOpener: CandidateOpener = {
       const connection = await instance.connect();
       try {
         for (const dataset of release.parquetPaths.keys()) {
+          const schema = schemaFor(dataset, release.pointer.contractVersion);
+          const columns = Array.isArray(schema.columns)
+            ? schema.columns
+            : Object.entries(schema.columns).map(([name, spec]) => ({
+                name,
+                ...spec,
+              }));
           await connection.run(`SELECT * FROM "${dataset}" LIMIT 0`);
           const description = await connection.runAndReadAll(
             `DESCRIBE "${dataset}"`,
@@ -75,25 +109,30 @@ export const nativeCandidateOpener: CandidateOpener = {
           const actual = description
             .getRows()
             .map((row) => [String(row[0]), String(row[1]), String(row[2])]);
-          const expected = Object.entries(
-            DUCKDB_SCHEMA_REGISTRY[dataset].columns,
-          ).map(([name, spec]) => [
-            name,
-            spec.logicalType,
-            spec.nullable ? "YES" : "NO",
+          const expected = columns.map((column) => [
+            column.name,
+            column.logicalType,
+            column.nullable ? "YES" : "NO",
           ]);
           if (JSON.stringify(actual) !== JSON.stringify(expected))
             throw new DuckDbReleaseError(
               `${dataset} Parquet schema does not match registry`,
             );
-          const actualSchema = Object.fromEntries(
-            actual.map(([name, logicalType, nullable]) => [
-              name,
-              { logicalType, nullable: nullable === "YES" },
-            ]),
-          );
+          const actualSchema = Array.isArray(schema.columns)
+            ? actual.map(([name, logicalType, nullable]) => ({
+                name,
+                logicalType,
+                nullable: nullable === "YES",
+              }))
+            : Object.fromEntries(
+                actual.map(([name, logicalType, nullable]) => [
+                  name,
+                  { logicalType, nullable: nullable === "YES" },
+                ]),
+              );
           if (
-            sha256(canonicalJson(actualSchema)) !== schemaFingerprint(dataset)
+            sha256(canonicalJson(actualSchema)) !==
+              schemaFingerprint(dataset, release.pointer.contractVersion)
           )
             throw new DuckDbReleaseError(
               `${dataset} actual schema fingerprint mismatch`,
@@ -126,8 +165,7 @@ export const nativeCandidateOpener: CandidateOpener = {
               throw new DuckDbReleaseError(
                 `${dataset} aggregate row count mismatch`,
               );
-            for (const specification of DUCKDB_SCHEMA_REGISTRY[dataset]
-              .goldenSpecifications) {
+            for (const specification of schema.goldenSpecifications) {
               const reader = await connection.runAndReadAll(
                 specification.query,
               );

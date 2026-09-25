@@ -18,8 +18,9 @@ import {
   validateUri,
   crc32cFinish,
   crc32cUpdate,
+  crc32cBase64,
 } from "./validation";
-import { DUCKDB_DATASETS, DuckDbDataset } from "./constants";
+import { datasetsFor, DuckDbDataset } from "./constants";
 import { assertDuckDbServerRuntime } from "./server";
 
 export interface GcsObject {
@@ -227,6 +228,8 @@ export class GcsReleaseRepository {
     const release = validateRelease(
       parseJson(releaseObject.bytes, "release.json"),
     );
+    if (pointer.contractVersion !== release.contractVersion)
+      throw new DuckDbReleaseError("pointer/release contractVersion mismatch");
     if (release.releaseId !== pointer.releaseId)
       throw new DuckDbReleaseError("pointer/release id mismatch");
     const manifests = new Map<DuckDbDataset, DatasetManifest>();
@@ -234,7 +237,8 @@ export class GcsReleaseRepository {
     const goldens = new Map<DuckDbDataset, Map<string, Buffer>>();
     let totalBytes = 0;
     const releasePaths = new Set<string>();
-    for (const dataset of DUCKDB_DATASETS) {
+    const datasets = datasetsFor(pointer.contractVersion);
+    for (const dataset of datasets) {
       const entry = release.datasets[dataset];
       const datasetPrefix = `gs://${this.config.bucket}/${this.config.prefix}/${pointer.releaseId}/${dataset}/`;
       if (entry.manifestUri !== `${datasetPrefix}manifest.json`)
@@ -256,6 +260,10 @@ export class GcsReleaseRepository {
         parseJson(manifestObject.bytes, `${dataset} manifest`),
         dataset,
       );
+      if (manifest.contractVersion !== release.contractVersion)
+        throw new DuckDbReleaseError(
+          `${dataset} manifest/release contractVersion mismatch`,
+        );
       if (manifest.schemaVersion !== entry.schemaVersion)
         throw new DuckDbReleaseError(
           `${dataset} release and manifest schemaVersion mismatch`,
@@ -265,15 +273,56 @@ export class GcsReleaseRepository {
           `${dataset} manifest generation changed`,
           "pointer-generation-race",
         );
-      if (
-        manifest.sourceSnapshot !== release.sourceSnapshot ||
-        manifest.sourceReadTimestampUtc !== release.sourceReadTimestampUtc
-      )
-        throw new DuckDbReleaseError(
-          `${dataset} source snapshot metadata mismatch`,
-        );
+      if (pointer.contractVersion === "pv-release.v1") {
+        if (
+          manifest.sourceSnapshot !== release.sourceSnapshot ||
+          manifest.sourceReadTimestampUtc !== release.sourceReadTimestampUtc
+        )
+          throw new DuckDbReleaseError(
+            `${dataset} source snapshot metadata mismatch`,
+          );
+      } else {
+        const entry = release.datasets[dataset] as typeof release.datasets[typeof dataset] & {
+          sourceOrder?: string;
+          sourceReadPolicy?: string;
+          sourceReadTimestampUtc?: string;
+        };
+        const releaseMetadata = release as typeof release & {
+          sourceReadPolicy?: string;
+          sourceOrder?: string;
+        };
+        const manifestMetadata = manifest as typeof manifest & {
+          sourceReadPolicy?: string;
+          sourceOrder?: string;
+        };
+        const pointerMetadata = pointer as typeof pointer & {
+          sourceOrder?: string;
+          sourceHighWaterOrder?: string;
+        };
+        if (
+          releaseMetadata.sourceReadPolicy !==
+            "ordered-sequential-per-dataset" ||
+          !releaseMetadata.sourceOrder ||
+          entry.sourceReadPolicy !== releaseMetadata.sourceReadPolicy ||
+          !entry.sourceReadTimestampUtc ||
+          entry.sourceReadTimestampUtc !== manifest.sourceReadTimestampUtc ||
+          manifestMetadata.sourceReadPolicy !==
+            releaseMetadata.sourceReadPolicy ||
+          manifestMetadata.sourceOrder !== releaseMetadata.sourceOrder ||
+          !entry.sourceOrder ||
+          entry.sourceOrder !== releaseMetadata.sourceOrder ||
+          entry.sourceOrder !== pointerMetadata.sourceOrder
+        )
+          throw new DuckDbReleaseError(
+            `${dataset} sequential source metadata mismatch`,
+          );
+      }
       const outputPaths: string[] = [];
       for (const [index, file] of manifest.objects.entries()) {
+        if (!file.uri.startsWith(datasetPrefix))
+          throw new DuckDbReleaseError(
+            `${dataset} object URI is outside its exact dataset prefix`,
+          );
         validateUri(
           file.uri,
           this.config.bucket,
@@ -331,6 +380,10 @@ export class GcsReleaseRepository {
           const parquetObject = await this.client.read(
             file.uri,
             file.generation,
+            Math.min(
+              this.config.maxObjectBytes,
+              this.config.maxReleaseBytes - (totalBytes - file.sizeBytes),
+            ),
           );
           if (parquetObject.generation !== file.generation)
             throw new DuckDbReleaseError(
@@ -351,6 +404,17 @@ export class GcsReleaseRepository {
       }
       const datasetGoldens = new Map<string, Buffer>();
       for (const golden of manifest.goldens) {
+        if (
+          pointer.contractVersion === "pv-release.v2" &&
+          (!golden.sha256 || !("crc32c" in golden) || !golden.crc32c)
+        )
+          throw new DuckDbReleaseError(
+            `${dataset} v2 golden requires SHA-256 and CRC32C`,
+          );
+        if (!golden.uri.startsWith(datasetPrefix))
+          throw new DuckDbReleaseError(
+            `${dataset} golden URI is outside its exact dataset prefix`,
+          );
         validateUri(
           golden.uri,
           this.config.bucket,
@@ -395,6 +459,12 @@ export class GcsReleaseRepository {
         totalBytes += golden.sizeBytes;
         if (golden.sha256 && sha256(goldenObject.bytes) !== golden.sha256)
           throw new DuckDbReleaseError(`${dataset} golden hash mismatch`);
+        if (
+          "crc32c" in golden &&
+          golden.crc32c !== undefined &&
+          crc32cBase64(goldenObject.bytes) !== golden.crc32c
+        )
+          throw new DuckDbReleaseError(`${dataset} golden CRC32C mismatch`);
         if (
           golden.canonicalValue !== undefined &&
           !canonicalJson(

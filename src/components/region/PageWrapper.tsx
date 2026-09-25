@@ -29,7 +29,6 @@ import { UpcomingEventsCard } from "../upcomingEvents";
 import { EventsCard } from "../events";
 import { Filter } from "../pageFilter";
 import { useMemo } from "react";
-import { ChartCard } from "./ChartsCard";
 import { AchievementsCard } from "./AchievementsCard";
 import { AOBreakdownCard } from "./AOBreakdownCard";
 
@@ -108,7 +107,6 @@ export function RegionalPageWrapper({
   region_leaders,
   region_upcoming,
   region_events,
-  region_charts,
   region_achievements,
   region_ao_breakdown,
   region_preferences,
@@ -150,10 +148,6 @@ export function RegionalPageWrapper({
           page="region"
           filters={eventsFiltersQuery}
         />
-      </div>
-      {/* Charting */}
-      <div className="grid grid-cols-1 gap-6 w-full max-w-6xl hidden">
-        <ChartCard charts={region_charts || []} />
       </div>
       {/* Drill-down: who to celebrate (Achievements) and who's drifting (Kotter).
           Balanced 2-col peers so neither stretches to leave dead space. */}

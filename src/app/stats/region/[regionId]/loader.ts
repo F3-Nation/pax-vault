@@ -19,7 +19,7 @@ import {
   RegionAchievementPax,
   RegionAOBreakdown,
 } from "@/lib/types";
-import { DuckDbDependencyError } from "@/lib/duckdb/errors";
+import { DuckDbDependencyError, DuckDbQueryError } from "@/lib/duckdb/errors";
 import { getPageData } from "@/lib/bq/regions";
 import { parseRegionPreferences } from "@/lib/preferences";
 import { cacheStatsData, getStatsReleaseIdentity } from "@/lib/cache";
@@ -90,6 +90,9 @@ export async function loadRegionData(
   } catch (err) {
     if (err instanceof DuckDbDependencyError) throw err;
     console.error(`Error fetching Region data (region=${regionId}):`, err);
+    // A failed DuckDB query is not an empty region. Surface the error rather
+    // than rendering the unavailable state; streamed responses may already be 200.
+    if (err instanceof DuckDbQueryError) throw err;
     return null;
   }
 }

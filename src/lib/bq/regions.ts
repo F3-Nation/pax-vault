@@ -1103,7 +1103,8 @@ async function getRegionPageDuckDbParity(
   opts?: StatsFilters,
 ): Promise<RegionPageData> {
   const f = duckEventFilter(regionId, opts);
-  const [info, raw, upcoming, kotter, all, career, pax] = await Promise.all([
+  const allFilter = duckEventFilter(null, opts);
+  const [info, raw, upcoming, kotter, pax] = await Promise.all([
     executeDuckDb<RegionInfo>(
       `SELECT region_id, region_name, area_id, area_name, logo_url, is_active, aos, types, tags FROM pv_regions WHERE region_id = ? LIMIT 1`,
       [regionId],
@@ -1121,17 +1122,69 @@ async function getRegionPageDuckDbParity(
       [regionId],
     ),
     executeDuckDb<any>(
-      `SELECT event_id AS event_instance_id, event_date, region_org_id, attendance FROM pv_events WHERE ${duckEventFilter(null, opts).where}`,
-      duckEventFilter(null, opts).params,
-    ),
-    executeDuckDb<any>(
-      `SELECT event_id AS event_instance_id, event_date, region_org_id, attendance FROM pv_events`,
-    ),
-    executeDuckDb<any>(
       `SELECT user_id, f3_name, avatar_url, start_date_override FROM pv_pax WHERE home_region_id = ?`,
       [regionId],
     ),
   ]);
+  let career: any[] = [];
+  if (pax.some((p: any) => p.user_id != null)) {
+    const careerPosts = await executeDuckDb<any>(
+      `WITH scoped_pax AS (
+         SELECT DISTINCT user_id FROM pv_pax
+         WHERE home_region_id = ? AND user_id IS NOT NULL
+       ), event_users AS (
+         SELECT
+           UNNEST(list_distinct(list_transform(
+             list_filter(attendance, a -> a.user_id IS NOT NULL AND a.fartsack IS NOT TRUE),
+             a -> a.user_id
+           ))) AS user_id,
+           event_date,
+           region_org_id
+         FROM pv_events
+       )
+       SELECT event_users.user_id,
+         count(*) AS all_posts,
+         count(*) FILTER (WHERE region_org_id = ?) AS region_posts,
+         min(event_date) AS first_event_date,
+         max(event_date) FILTER (WHERE region_org_id = ?) AS last_region_event_date
+       FROM event_users
+       JOIN scoped_pax USING (user_id)
+       GROUP BY event_users.user_id`,
+      [regionId, regionId, regionId],
+    );
+    const careerQs = await executeDuckDb<any>(
+      `WITH scoped_pax AS (
+         SELECT DISTINCT user_id FROM pv_pax
+         WHERE home_region_id = ? AND user_id IS NOT NULL
+       ), event_qs AS (
+         SELECT
+           UNNEST(list_transform(list_filter(
+             attendance,
+             a -> a.user_id IS NOT NULL AND a.fartsack IS NOT TRUE AND COALESCE(a.q_ind, 0) <> 0
+           ), a -> a.user_id)) AS user_id,
+           region_org_id
+         FROM pv_events
+       )
+       SELECT event_qs.user_id,
+         count(*) AS all_qs,
+         count(*) FILTER (WHERE region_org_id = ?) AS region_qs
+       FROM event_qs
+       JOIN scoped_pax USING (user_id)
+       GROUP BY event_qs.user_id`,
+      [regionId, regionId],
+    );
+    const qByUser = new Map<number, any>(
+      careerQs.map((row) => [Number(row.user_id), row]),
+    );
+    career = careerPosts.map((row) => {
+      const q = qByUser.get(Number(row.user_id));
+      return {
+        ...row,
+        all_qs: Number(q?.all_qs ?? 0),
+        region_qs: Number(q?.region_qs ?? 0),
+      };
+    });
+  }
   const display = raw.slice(0, 100).map((e: any) => ({
     ...e,
     attendance: (e.attendance ?? []).filter((a: any) => a.fartsack !== true),
@@ -1188,13 +1241,42 @@ async function getRegionPageDuckDbParity(
     if (a.q_ind) x.qs++;
     leaderMap.set(id, x);
   }
-  for (const x of leaderMap.values())
-    for (const e of all)
-      for (const a of attended(e))
-        if (Number(a.user_id) === x.user_id) {
-          x.all_posts!++;
-          if (a.q_ind) x.all_qs!++;
-        }
+  const leaderList = [...leaderMap.values()]
+    .sort((a, b) => b.posts - a.posts || b.qs - a.qs)
+    .slice(0, 100);
+  if (leaderList.length) {
+    const targets = leaderList.map((leader) => leader.user_id);
+    const groupedLeaders = await executeDuckDb<any>(
+      `WITH filtered_events AS (
+         SELECT attendance FROM pv_events${allFilter.where ? ` WHERE ${allFilter.where}` : ""}
+       ), targets(user_id) AS (VALUES ${targets.map(() => "(CAST(? AS INTEGER))").join(",")})
+       , target_events AS (
+         SELECT
+           UNNEST(list_transform(list_filter(
+             attendance,
+             a -> a.user_id IS NOT NULL AND a.fartsack IS NOT TRUE
+           ), a -> struct_pack(
+             user_id := a.user_id,
+             is_q := COALESCE(a.q_ind, 0) <> 0
+           ))) AS attendee
+         FROM filtered_events
+       )
+       SELECT targets.user_id,
+         count(*) AS all_posts,
+         count(*) FILTER (WHERE target_events.attendee.is_q) AS all_qs
+       FROM target_events
+       JOIN targets ON targets.user_id = target_events.attendee.user_id
+       GROUP BY targets.user_id`,
+      [...allFilter.params, ...targets],
+    );
+    for (const row of groupedLeaders) {
+      const leader = leaderMap.get(Number(row.user_id));
+      if (leader) {
+        leader.all_posts = Number(row.all_posts ?? 0);
+        leader.all_qs = Number(row.all_qs ?? 0);
+      }
+    }
+  }
   const now = Date.now(),
     active = new Set<number>();
   for (const { e, a } of rows)
@@ -1310,13 +1392,11 @@ async function getRegionPageDuckDbParity(
     info: info[0] ?? null,
     events: display,
     summary,
-    leaders: [...leaderMap.values()]
-      .sort((a, b) => b.posts - a.posts || b.qs - a.qs)
-      .slice(0, 100),
+    leaders: leaderList,
     upcoming,
     kotter,
     charts: [...charts.values()].sort((a, b) => a.date.localeCompare(b.date)),
-    achievements: buildRegionAchievements(pax, career, regionId),
+    achievements: buildRegionAchievementsFromTotals(pax, career),
     aoBreakdown: [...breakdown.values()].sort(
       (a, b) => b.beatdowns - a.beatdowns || a.ao_name.localeCompare(b.ao_name),
     ),
@@ -1329,41 +1409,120 @@ export function buildRegionAchievements(
   allEvents: any[],
   regionId: number,
 ): RegionAchievementPax[] {
+  const attended = (e: any) =>
+    (e.attendance ?? []).filter((a: any) => a.fartsack !== true);
+  const byUser = new Map<
+    number,
+    {
+      allPosts: number;
+      allQs: number;
+      regionPosts: number;
+      regionQs: number;
+      first: string | null;
+      last: string | null;
+    }
+  >();
+  for (const p of pax) {
+    if (p.user_id == null) continue;
+    const id = Number(p.user_id);
+    if (!Number.isNaN(id) && !byUser.has(id))
+      byUser.set(id, {
+        allPosts: 0,
+        allQs: 0,
+        regionPosts: 0,
+        regionQs: 0,
+        first: null,
+        last: null,
+      });
+  }
+  for (const e of allEvents) {
+    // Null-dated source rows still contribute attendance totals, but do not
+    // participate in earliest/last-date calculations (matching SQL MIN/MAX).
+    const eventDate =
+      e.event_date == null ? null : String(e.event_date).slice(0, 10);
+    const inRegion = Number(e.region_org_id) === regionId;
+    const qCounts = new Map<number, number>();
+    for (const a of attended(e)) {
+      if (a.user_id == null) continue;
+      const id = Number(a.user_id);
+      const stats = byUser.get(id);
+      if (!stats) continue;
+      // A post is one distinct event per user, regardless of duplicate
+      // attendance rows; Qs retain the legacy per-attendance-row counting.
+      if (!qCounts.has(id)) qCounts.set(id, 0);
+      if (a.q_ind) qCounts.set(id, qCounts.get(id)! + 1);
+    }
+    for (const [id, qCount] of qCounts) {
+      const stats = byUser.get(id)!;
+      stats.allPosts++;
+      stats.allQs += qCount;
+      if (
+        eventDate !== null &&
+        (stats.first === null || eventDate < stats.first)
+      )
+        stats.first = eventDate;
+      if (inRegion) {
+        stats.regionPosts++;
+        stats.regionQs += qCount;
+        if (
+          eventDate !== null &&
+          (stats.last === null || eventDate > stats.last)
+        )
+          stats.last = eventDate;
+      }
+    }
+  }
+  return buildRegionAchievementsFromTotals(pax, byUser);
+}
+
+function buildRegionAchievementsFromTotals(
+  pax: any[],
+  rows: any[] | Map<number, any>,
+): RegionAchievementPax[] {
+  const totals =
+    rows instanceof Map
+      ? rows
+      : new Map<number, any>(
+          rows.map((row) => [
+            Number(row.user_id),
+            {
+              allPosts: Number(row.all_posts ?? 0),
+              allQs: Number(row.all_qs ?? 0),
+              regionPosts: Number(row.region_posts ?? 0),
+              regionQs: Number(row.region_qs ?? 0),
+              first:
+                row.first_event_date == null
+                  ? null
+                  : String(row.first_event_date).slice(0, 10),
+              last:
+                row.last_region_event_date == null
+                  ? null
+                  : String(row.last_region_event_date).slice(0, 10),
+            },
+          ]),
+        );
   const thresholds = [
     25, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
   ];
-  const attended = (e: any) =>
-    (e.attendance ?? []).filter((a: any) => a.fartsack !== true);
   return pax
     .map((p) => {
-      const mine = allEvents.filter((e) =>
-        attended(e).some((a: any) => Number(a.user_id) === Number(p.user_id)),
-      );
-      const region = mine.filter((e) => Number(e.region_org_id) === regionId);
-      const qs = (es: any[]) =>
-        es.reduce(
-          (n, e) =>
-            n +
-            attended(e).filter(
-              (a: any) => Number(a.user_id) === Number(p.user_id) && a.q_ind,
-            ).length,
-          0,
-        );
-      const posts = (es: any[]) => es.length;
-      const rp = posts(region),
-        ap = posts(mine),
-        rq = qs(region),
-        aq = qs(mine);
+      const stats = (p.user_id == null
+        ? undefined
+        : totals.get(Number(p.user_id))) ?? {
+        allPosts: 0,
+        allQs: 0,
+        regionPosts: 0,
+        regionQs: 0,
+        first: null,
+        last: null,
+      };
+      const rp = stats.regionPosts,
+        ap = stats.allPosts,
+        rq = stats.regionQs,
+        aq = stats.allQs;
       const next = (n: number) => thresholds.find((t) => t > n) ?? null;
-      const first =
-        p.start_date_override ??
-        mine.map((e) => String(e.event_date).slice(0, 10)).sort()[0] ??
-        null;
-      const last =
-        region
-          .map((e) => String(e.event_date).slice(0, 10))
-          .sort()
-          .at(-1) ?? null;
+      const first = p.start_date_override ?? stats.first;
+      const last = stats.last;
       let anniversary: string | null = null;
       if (first) {
         const [, month, day] = first.slice(0, 10).split("-").map(Number),
