@@ -449,6 +449,73 @@ describe("migrated service functions on the pinned native release fixture", () =
     expect(queryBigQuery).toHaveBeenCalled();
   });
 
+  it("preserves PAX page membership for true, false, and NULL fartsack flags", async () => {
+    await native.run(`
+      INSERT INTO pv_pax VALUES
+        (42,'Membership Fixture',1,'Alpha Region',NULL,'active',NULL,[],[],[],[]);
+      INSERT INTO pv_events VALUES
+        (4201, DATE '2024-02-01', 'False flag', 1, 0, 7, 'Bravo AO', 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 1, 0, 0, [], [],
+          [{user_id:42,f3_name:'Membership Fixture',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL}]),
+        (4202, DATE '2024-02-02', 'NULL flag', 1, 0, 7, 'Bravo AO', 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 0, 1, 0, [], [],
+          [{user_id:42,f3_name:'Membership Fixture',q_ind:0,fartsack:NULL,ghost:false,avatar_url:NULL}]),
+        (4203, DATE '2024-02-03', 'True flag', 1, 0, 7, 'Bravo AO', 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 0, 0, 1, [], [],
+          [{user_id:42,f3_name:'Membership Fixture',q_ind:1,fartsack:true,ghost:false,avatar_url:NULL}]),
+        (4204, DATE '2024-02-04', 'No attendance', 0, 0, 7, 'Bravo AO', 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 0, 0, 0, [], [], [])
+    `);
+
+    const page = await getPaxPage(42, undefined, {
+      startDate: "2024-02-01",
+      endDate: "2024-02-04",
+    });
+
+    expect(page.info).toMatchObject({
+      user_id: 42,
+      f3_name: "Membership Fixture",
+    });
+    expect(page.summary).toMatchObject({
+      event_count: 2,
+      q_count: 1,
+      fartsack_count: 1,
+      first_event_date: "2024-02-01",
+      last_event_date: "2024-02-02",
+      first_q_date: "2024-02-01",
+      last_q_date: "2024-02-01",
+    });
+    expect(page.events).toHaveLength(2);
+    expect(page.events?.map((event) => event.event_instance_id)).toEqual([
+      4202, 4201,
+    ]);
+    expect(page.events?.[0]).toMatchObject({
+      event_name: "NULL flag",
+      attendance: [expect.objectContaining({ user_id: 42, fartsack: null })],
+      fartsacks: [],
+    });
+    expect(page.events?.[1]).toMatchObject({
+      event_name: "False flag",
+      attendance: [expect.objectContaining({ user_id: 42, fartsack: false })],
+      fartsacks: [],
+    });
+    expect(page.ao_breakdown).toEqual([
+      expect.objectContaining({
+        ao_org_id: 7,
+        total_events: 2,
+        total_q_count: 1,
+      }),
+    ]);
+    expect(page.ao_weekly).toEqual([
+      expect.objectContaining({ ao_org_id: 7, posts: 2 }),
+    ]);
+    const membershipSql = executedSql.find((sql) =>
+      /SELECT event_id AS event_instance_id[\s\S]*FROM pv_events WHERE list_contains/i.test(
+        sql,
+      ),
+    );
+    expect(membershipSql).toMatch(
+      /list_contains\(list_transform\(attendance, a -> a\.user_id\), \?\)/i,
+    );
+    expect(membershipSql).not.toMatch(/UNNEST\(attendance\)/i);
+  });
+
   it("executes a region page without filters on native DuckDB", async () => {
     const region = await getRegionPage(1, "fixture@example.com");
 

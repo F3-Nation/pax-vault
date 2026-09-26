@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { performance } from "node:perf_hooks";
 import { describe, expect, it, vi } from "vitest";
 const { queryBigQuery } = vi.hoisted(() => ({
   queryBigQuery: vi.fn(async () => [
@@ -15,14 +16,18 @@ vi.mock("@/lib/db", () => ({ queryBigQuery }));
 import { DuckDbConfig } from "./config";
 import { GcsClient, GcsObject, GcsReleaseRepository } from "./gcs";
 import { DuckDbReleaseError } from "./errors";
-import { DuckDbRuntime } from "./runtime";
+import { DuckDbQueryConnection, DuckDbRuntime } from "./runtime";
 import { setDuckDbRuntimeForTests } from "./factory";
 import { getEventById } from "../bq/events";
 import {
   getEvents as getRegionEvents,
   getPageData as getRegionPageData,
 } from "../bq/regions";
-import { getEvents as getPaxEvents, searchUsersByName } from "../bq/pax";
+import {
+  getEvents as getPaxEvents,
+  getPageData as getPaxPageData,
+  searchUsersByName,
+} from "../bq/pax";
 import { searchAll } from "../bq/search";
 import {
   DatasetManifest,
@@ -33,6 +38,7 @@ import {
 } from "./validation";
 
 const optedIn = process.env.DUCKDB_TEST_LOCAL_RELEASE === "true";
+const benchmarkOptedIn = optedIn && process.env.DUCKDB_BENCH_PAX === "true";
 const sourceRoot = resolve(process.cwd(), ".gcs/f3-analytics");
 const controlUri = "gs://f3-analytics-nonprod/pax-vault/current.json";
 
@@ -431,6 +437,89 @@ describe("local producer release integration", () => {
           expectOwnProperty(page, "summary", true);
           expect(Boolean(page.summary)).toBe(true);
           expect(queryBigQuery.mock.calls.length).toBe(2);
+
+          if (benchmarkOptedIn) {
+            const repetitions = 5;
+            const timings = {
+              total: [] as number[],
+              info: [] as number[],
+              events: [] as number[],
+              remaining: [] as number[],
+              eventRows: [] as number[],
+            };
+            setDuckDbRuntimeForTests({
+              acquire: async () => {
+                const lease = await runtime.acquire();
+                return {
+                  releaseId: lease.releaseId,
+                  releaseSequence: lease.releaseSequence,
+                  release: () => lease.release(),
+                  withConnection: <T>(
+                    callback: (connection: DuckDbQueryConnection) => Promise<T>,
+                  ) =>
+                    lease.withConnection((connection) =>
+                      callback({
+                        close: () => connection.close(),
+                        query: async <R = unknown>(
+                          sql: string,
+                          params?: unknown[] | Record<string, unknown>,
+                        ): Promise<R[]> => {
+                          const startedAt = performance.now();
+                          const rows = await connection.query<R>(sql, params);
+                          const elapsedMs = performance.now() - startedAt;
+                          if (sql.startsWith("SELECT user_id, f3_name"))
+                            timings.info.push(elapsedMs);
+                          else if (
+                            sql.startsWith(
+                              "SELECT event_id AS event_instance_id",
+                            )
+                          ) {
+                            timings.events.push(elapsedMs);
+                            timings.eventRows.push(rows.length);
+                          }
+                          return rows;
+                        },
+                      }),
+                    ),
+                };
+              },
+              refresh: () => runtime.refresh(),
+              close: () => runtime.close(),
+              status: () => runtime.status(),
+            });
+            try {
+              for (let repetition = 0; repetition < repetitions; repetition++) {
+                const startedAt = performance.now();
+                const result = await getPaxPageData(paxId);
+                const totalMs = performance.now() - startedAt;
+                timings.total.push(totalMs);
+                timings.remaining.push(
+                  totalMs -
+                    (timings.info.at(-1) ?? 0) -
+                    (timings.events.at(-1) ?? 0),
+                );
+                expect(result.info !== null).toBe(true);
+              }
+            } finally {
+              setDuckDbRuntimeForTests(runtime);
+            }
+            const median = (values: number[]) => {
+              const sorted = [...values].sort((left, right) => left - right);
+              return Number(sorted[Math.floor(sorted.length / 2)].toFixed(2));
+            };
+            console.info(
+              `[duckdb-pax-benchmark] ${JSON.stringify({
+                repetitions,
+                medianMs: {
+                  infoSelect: median(timings.info),
+                  eventSelect: median(timings.events),
+                  remaining: median(timings.remaining),
+                  total: median(timings.total),
+                },
+                medianReturnedEventRows: median(timings.eventRows),
+              })}`,
+            );
+          }
         } finally {
           lease.release();
         }

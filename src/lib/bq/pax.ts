@@ -983,12 +983,9 @@ async function getPaxPageDataDuckDb(
   const start = opts?.startDate ?? dates.startDate;
   const end = opts?.endDate ?? dates.endDate;
   const clauses = [
-    `(EXISTS (SELECT 1 FROM UNNEST(attendance) AS u(a)
-             WHERE a.user_id = ? AND a.fartsack IS NOT TRUE)
-      OR EXISTS (SELECT 1 FROM UNNEST(attendance) AS u(a)
-             WHERE a.user_id = ? AND a.fartsack IS TRUE))`,
+    "list_contains(list_transform(attendance, a -> a.user_id), ?)",
   ];
-  const params: unknown[] = [paxId, paxId];
+  const params: unknown[] = [paxId];
   if (start) {
     clauses.push("event_date >= CAST(? AS DATE)");
     params.push(start);
