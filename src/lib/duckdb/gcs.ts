@@ -273,50 +273,41 @@ export class GcsReleaseRepository {
           `${dataset} manifest generation changed`,
           "pointer-generation-race",
         );
-      if (pointer.contractVersion === "pv-release.v1") {
-        if (
-          manifest.sourceSnapshot !== release.sourceSnapshot ||
-          manifest.sourceReadTimestampUtc !== release.sourceReadTimestampUtc
-        )
-          throw new DuckDbReleaseError(
-            `${dataset} source snapshot metadata mismatch`,
-          );
-      } else {
-        const entry = release.datasets[dataset] as typeof release.datasets[typeof dataset] & {
+      const sequentialEntry =
+        entry as (typeof release.datasets)[typeof dataset] & {
           sourceOrder?: string;
           sourceReadPolicy?: string;
           sourceReadTimestampUtc?: string;
         };
-        const releaseMetadata = release as typeof release & {
-          sourceReadPolicy?: string;
-          sourceOrder?: string;
-        };
-        const manifestMetadata = manifest as typeof manifest & {
-          sourceReadPolicy?: string;
-          sourceOrder?: string;
-        };
-        const pointerMetadata = pointer as typeof pointer & {
-          sourceOrder?: string;
-          sourceHighWaterOrder?: string;
-        };
-        if (
-          releaseMetadata.sourceReadPolicy !==
-            "ordered-sequential-per-dataset" ||
-          !releaseMetadata.sourceOrder ||
-          entry.sourceReadPolicy !== releaseMetadata.sourceReadPolicy ||
-          !entry.sourceReadTimestampUtc ||
-          entry.sourceReadTimestampUtc !== manifest.sourceReadTimestampUtc ||
-          manifestMetadata.sourceReadPolicy !==
-            releaseMetadata.sourceReadPolicy ||
-          manifestMetadata.sourceOrder !== releaseMetadata.sourceOrder ||
-          !entry.sourceOrder ||
-          entry.sourceOrder !== releaseMetadata.sourceOrder ||
-          entry.sourceOrder !== pointerMetadata.sourceOrder
-        )
-          throw new DuckDbReleaseError(
-            `${dataset} sequential source metadata mismatch`,
-          );
-      }
+      const releaseMetadata = release as typeof release & {
+        sourceReadPolicy?: string;
+        sourceOrder?: string;
+      };
+      const manifestMetadata = manifest as typeof manifest & {
+        sourceReadPolicy?: string;
+        sourceOrder?: string;
+      };
+      const pointerMetadata = pointer as typeof pointer & {
+        sourceOrder?: string;
+        sourceHighWaterOrder?: string;
+      };
+      if (
+        releaseMetadata.sourceReadPolicy !== "ordered-sequential-per-dataset" ||
+        !releaseMetadata.sourceOrder ||
+        sequentialEntry.sourceReadPolicy !== releaseMetadata.sourceReadPolicy ||
+        !sequentialEntry.sourceReadTimestampUtc ||
+        sequentialEntry.sourceReadTimestampUtc !==
+          manifest.sourceReadTimestampUtc ||
+        manifestMetadata.sourceReadPolicy !==
+          releaseMetadata.sourceReadPolicy ||
+        manifestMetadata.sourceOrder !== releaseMetadata.sourceOrder ||
+        !sequentialEntry.sourceOrder ||
+        sequentialEntry.sourceOrder !== releaseMetadata.sourceOrder ||
+        sequentialEntry.sourceOrder !== pointerMetadata.sourceOrder
+      )
+        throw new DuckDbReleaseError(
+          `${dataset} sequential source metadata mismatch`,
+        );
       const outputPaths: string[] = [];
       for (const [index, file] of manifest.objects.entries()) {
         if (!file.uri.startsWith(datasetPrefix))

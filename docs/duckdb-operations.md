@@ -16,20 +16,21 @@ ticket. Do not replace placeholders in this document with guessed values.
 Before scheduling a rollout, the release owner and platform/SRE must attach
 evidence that:
 
-- [ ] The candidate producer release contains exactly the version-specific
-      allowlist (nine v2 datasets, including `pv_territories`; eight for v1
-      rollback), immutable generation-pinned objects, complete manifests,
-      ordered-column fingerprints, and contract-appropriate read metadata.
+- [ ] The candidate producer release uses the v2 contract and contains exactly
+      its nine datasets, including `pv_territories`, immutable generation-pinned
+      objects, complete manifests, ordered-column fingerprints, and v2 read
+      metadata. Reject v1 release contracts.
 - [ ] For v2, release and entries use
       `ordered-sequential-per-dataset` plus matching `sourceOrder`; every entry
       and manifest carries its dataset's UTC read timestamp. Do not require a
       shared snapshot, release timestamp, unique timestamps, or producer read
       order inferred from registry traversal.
 - [ ] The fixed `candidate_transport_check` count golden is treated as a
-      transport/count check only, not query-parity evidence. Source-query parity
-      evidence and bounded cross-dataset drift checks remain a producer gate.
-- [ ] The candidate is supported by the compatibility registry of the new
-      revision and every revision that remains rollback-eligible.
+      transport/count check only, not query-parity evidence. Producer source
+      parity/conflict checks and source freshness/lag targets are deferred to
+      rollout, not prerequisites for this implementation.
+- [ ] The candidate is supported by the v2-only compatibility registry of the
+      new revision and every serving revision.
 - [ ] The consumer has passed corruption, generation-change, pointer-race,
       failed-ADC, no-LKG, refresh-concurrency, and old/new revision overlap
       tests.
@@ -40,9 +41,9 @@ evidence that:
       per-object budgets. Measure active plus staging databases, download
       buffers, startup, and revision overlap against Cloud Run memory and
       ephemeral-storage limits; compressed budgets do not prove runtime capacity.
-- [ ] BigQuery remains healthy for the capabilities that remain BQ-owned and
-      is available as the explicitly controlled cutback target for migrated
-      capabilities. This is not silent fallback behavior.
+- [ ] BigQuery remains healthy for BQ-owned capabilities and is available as
+      the explicitly controlled cutback target for migrated capabilities. This
+      is not silent fallback behavior.
 - [ ] The reversible per-capability flag names, owners, initial state, and
       change-ticket link are recorded. Use placeholders until assigned:
       `<FLAG_FOR_CAPABILITY>`, `<FLAG_OWNER>`, `<CHANGE_ID>`.
@@ -58,10 +59,15 @@ DuckDB `httpfs`, embedded credentials, or request-time remote scans.
 For the checked-in f3-analytics deployment, configure bucket
 `f3-analytics-nonprod`, release prefix `pax-vault/releases`, and control object
 `pax-vault/current.json`. The checked-in pointer is local mirror evidence only;
-record live GCS reads/generations and CAS evidence separately. Keep auth,
-permissions, and identity lookups on live BigQuery `pv_pax`; event details read
-live BigQuery `pv_events` so v1 rollback remains functional. Preferences and
-8-box reads/writes remain BigQuery, and scheduled ETL still reads `public.*`.
+no DuckDB production release has occurred. Record live GCS reads/generations
+and CAS evidence separately. Auth allowlist, PAX identity, and region permission
+reads use the v2 DuckDB release when `DUCKDB_ENABLED=true` and
+`DUCKDB_AUTH_ENABLED` is unset or true; otherwise they use BigQuery. A custom
+`AUTH_EMAIL_TABLE` is incompatible with DuckDB auth. Errors on the enabled
+DuckDB path do not silently fall back. Event details use the v2 DuckDB release
+when the events capability flag is on, and BigQuery when that flag is off.
+Preferences and 8-box storage/writes remain BigQuery; 8-box owner-display reads
+also remain BigQuery. Scheduled ETL still reads `public.*`.
 Private `pv_pax` email/roles are never emitted by analytical projections.
 
 The platform/SRE owner must identify, without inventing values:
@@ -107,38 +113,47 @@ identities:
 Attach the IAM policy export, successful read output, denied-operation output,
 and identity-faithful smoke-test run to the change ticket.
 
-## 3. Producer publication and source-evidence gate
+## 3. Producer publication and release-integrity handoff
 
 The producer owner must provide a release handoff before application rollout:
 
 - `<RELEASE_ID>`, `<RELEASE_SEQUENCE>`, `<POINTER_OBJECT_GENERATION>`,
   `<MANIFEST_SHA256>`;
-- contract version and source metadata: v1 source snapshot/read timestamp, or
-  v2 read policy/order plus each dataset entry/manifest UTC timestamp;
+- v2 contract version and read policy/order plus each dataset entry/manifest
+  UTC timestamp; reject unsupported v1 release contracts;
 - manifest/object generations, CRC32C values, sizes, row counts, schema
   fingerprints, and supported contract/schema versions; and
 - the immutable URI, generation, query, canonicalization identifier, and
   digest for each required golden.
 
 For v2, do not claim one shared snapshot: producer reads are sequential and can
-observe cross-dataset drift. `candidate_transport_check` establishes count
-transport only. Require separate producer source-query parity evidence and
-bounded drift checks before production claims; stronger parity goldens are a
-future gate. Reject invalid policy/order/timestamp metadata, missing or
-unreproducible transport goldens, or inconsistent per-dataset entry/manifest
-metadata. Preserve v1 snapshot validation for rollback releases. Never mutate a
-published prefix; an incomplete prefix is not a rollback target.
+observe cross-dataset drift. Both BigQuery and DuckDB replicate upstream
+Postgres. `candidate_transport_check` establishes row-count transport only; it
+does not establish source-query parity or freshness. Producer parity/conflict
+checks, bounded drift checks, and freshness/lag targets are deferred to rollout,
+not prerequisites for this implementation, and no such guarantees are asserted
+here. Continue to require release-integrity checks: reject invalid
+policy/order/timestamp metadata, missing or unreproducible transport goldens,
+inconsistent per-dataset entry/manifest metadata, and unsupported v1 release
+contracts. Never mutate a published prefix; an incomplete prefix is not a
+recovery target.
 
 ## 4. Feature-flag rollout and BigQuery cutback
 
 The exact capability flags are `DUCKDB_SEARCH_ENABLED`,
 `DUCKDB_EVENTS_ENABLED`, `DUCKDB_STATS_PAX_ENABLED`,
 `DUCKDB_STATS_REGION_ENABLED`, `DUCKDB_STATS_AREA_ENABLED`,
-`DUCKDB_STATS_SECTOR_ENABLED`, and `DUCKDB_STATS_AO_ENABLED`. An unset
+`DUCKDB_STATS_SECTOR_ENABLED`, `DUCKDB_STATS_AO_ENABLED`, and
+`DUCKDB_AUTH_ENABLED`. An unset
 capability flag inherits `DUCKDB_ENABLED`; an explicit `true` or `false`
 overrides that default. `DUCKDB_ENABLED=false` is the global cutback and
 always wins, including over per-capability `true`. There is no enabled-path
 fallback: DuckDB errors are served as errors.
+
+For auth allowlist, PAX identity, and region permission reads, DuckDB is used
+only when `DUCKDB_ENABLED=true` and `DUCKDB_AUTH_ENABLED` is unset or true;
+when auth is disabled, those reads use BigQuery. `AUTH_EMAIL_TABLE` is
+incompatible with DuckDB auth and must not be configured for that path.
 
 Shadow mode is controlled by `DUCKDB_SHADOW_ENABLED`,
 `DUCKDB_SHADOW_SAMPLE_RATE`, and `DUCKDB_SHADOW_TIMEOUT_MS`. Before a
@@ -152,12 +167,16 @@ the flag state and observed release tag at each step:
 
 1. **Off/shadow:** keep BigQuery serving. Reconcile and stage DuckDB, run
    generation-pinned validation, and compare DuckDB results with the matching
-   available source-parity evidence and transport checks. Investigate every
-   parity diff; count transport alone does not establish query parity.
+   available comparison evidence and transport checks. Source parity/conflict
+   checks and freshness/lag targets are rollout follow-ups, not prerequisites
+   for this implementation; count transport alone establishes counts only.
 2. **Enable one capability:** enable `<FLAG_FOR_CAPABILITY>` only after the
-   parity and readiness gates pass. Keep auth, permissions, preferences,
-   eight-box, event-detail, and other BQ-owned boundaries on BigQuery as
-   defined by the migration matrix.
+   readiness and release-integrity gates pass. Auth allowlist, PAX identity,
+   and region permission reads follow `DUCKDB_ENABLED` plus
+   `DUCKDB_AUTH_ENABLED` (unset/true uses DuckDB; off uses BigQuery; errors do
+   not silently fall back). Keep preferences, 8-box storage/writes, 8-box
+   owner-display reads, and other BQ-owned boundaries on BigQuery. Event detail
+   follows the events flag: v2 DuckDB on, BigQuery off.
 3. **Observe:** watch readiness, refresh/activation errors, 503s, query
    latency/errors, release skew, LKG age, memory, ephemeral storage, and
    shadow parity for the agreed observation window `<OBSERVATION_WINDOW>`.
@@ -210,15 +229,15 @@ evidence capture.
 
 The release owner performs this operation; a second operator reviews it.
 
-1. Identify `<TARGET_RETAINED_RELEASE_ID>` and verify it is complete,
-   previously valid, within retention, and supported by every serving and
-   rollback-eligible revision.
+1. Identify `<TARGET_RETAINED_RELEASE_ID>` and verify it is a complete,
+   previously valid v2 release within retention and supported by every serving
+   revision.
 2. Read `<RELEASE_BUCKET>/pax-vault/current.json` and record its **GCS object
    generation** `<OBSERVED_POINTER_GENERATION>`. Do not use metageneration or
    `releaseSequence` as the CAS token.
 3. Validate the target pointer content, manifest SHA-256, manifest generation,
-   object generations/CRC32C, schema registry, required goldens, and source
-   metadata using generation-pinned reads.
+   object generations/CRC32C, v2 schema registry, required goldens, and source
+   metadata using generation-pinned reads. Reject a v1 release target.
 4. Write the rollback pointer with the target release metadata using
    `ifGenerationMatch=<OBSERVED_POINTER_GENERATION>`. Never overwrite a
    release prefix. If precondition fails, stop, reread the pointer, and obtain
@@ -260,10 +279,10 @@ LKG service. Re-run the relevant smoke tests before closing the incident.
 
 ## 8. Retention and garbage collection
 
-The release owner retains the current release, prior valid release, and every
-object needed by the configured retention window and rollback-eligible
-revisions. Garbage collection is generation-aware and must not delete the
-current or rollback target. Failed/incomplete prefixes are marked abandoned
+The release owner retains the current release, prior valid v2 release, and
+every object needed by the configured retention window and serving revisions.
+Garbage collection is generation-aware and must not delete the current or
+recovery target. Failed/incomplete prefixes are marked abandoned
 and removed only after the producer safety window. Record retention duration
 as `<RELEASE_RETENTION_WINDOW>`; do not infer a bucket lifecycle value.
 
@@ -292,11 +311,14 @@ timestamp. Use test identities and non-sensitive queries.
 
 - [ ] Authenticated PAX, region, area, sector, AO, event, and search paths
       return expected shape/order for the enabled capability.
-- [ ] Mixed paths obtain BQ-owned preferences/identity/detail data from
-      BigQuery and DuckDB-owned analytical data from the pinned release.
-- [ ] Empty, malformed, boundary-date, NULL/list, and filter/limit cases
-      match approved producer parity evidence; v2 count goldens alone are not
-      sufficient for source-query parity.
+- [ ] Mixed paths obtain auth allowlist, PAX identity, and region permissions
+      from v2 DuckDB when the auth flags enable it and from BigQuery when they
+      disable it; DuckDB errors do not silently fall back. Preferences,
+      8-box storage/writes, and 8-box owner-display reads remain BigQuery.
+- [ ] Empty, malformed, boundary-date, NULL/list, and filter/limit cases are
+      checked against the query contract. `candidate_transport_check` verifies
+      row counts only; source parity/conflict checks and freshness/lag targets
+      are deferred to rollout, not treated as established evidence here.
 - [ ] A forced refresh failure serves LKG within age and returns stable-
       dependency 503 after expiry; it never silently falls back to BQ.
 - [ ] Flag disable returns the capability to BigQuery and is visible in
@@ -319,10 +341,10 @@ timestamp, owner, and environment is incomplete.
       validation owners.
 - [ ] Candidate release ID/sequence, pointer generation before/after, manifest
       SHA-256, contract/schema registry version, and retention decision.
-- [ ] Version-specific producer metadata (v1 snapshot/read timestamp or v2
-      order/policy and every dataset timestamp), complete dataset inventory,
-      object generations/CRC32C, transport golden list/digests, and separate
-      source-parity/drift evidence or explicit open-gate record.
+- [ ] V2 producer metadata (read order/policy and every dataset timestamp),
+      complete dataset inventory, object generations/CRC32C, and transport
+      golden list/digests. Source parity/conflict checks, bounded drift checks,
+      and freshness/lag targets are rollout follow-ups, not claimed evidence.
 - [ ] Staging native boot, ADC read/deny, refresh/LKG, resource peak, query,
       and flag cutback results with timestamps and request IDs.
 - [ ] Production equivalents, including active release ID/sequence and
@@ -333,7 +355,7 @@ timestamp, owner, and environment is incomplete.
       503, skew, LKG age, parity, latency/errors, memory, and storage.
 - [ ] App Hosting verified build ID, all-traffic rollout result, and prior
       rollback build ID retained.
-- [ ] Feature-flag state before/after, observation window, parity decision,
+- [ ] Feature-flag state before/after and observation window,
       and explicit BigQuery cutback result (if exercised).
 - [ ] If data rollback occurred: target retained release, reviewer, observed
       pointer generation, CAS result, post-CAS pointer generation/content,

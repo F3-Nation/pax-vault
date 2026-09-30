@@ -132,7 +132,7 @@ export const nativeCandidateOpener: CandidateOpener = {
               );
           if (
             sha256(canonicalJson(actualSchema)) !==
-              schemaFingerprint(dataset, release.pointer.contractVersion)
+            schemaFingerprint(dataset, release.pointer.contractVersion)
           )
             throw new DuckDbReleaseError(
               `${dataset} actual schema fingerprint mismatch`,

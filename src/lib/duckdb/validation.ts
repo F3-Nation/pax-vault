@@ -2,8 +2,6 @@ import { createHash } from "node:crypto";
 import {
   DuckDbDataset,
   DUCKDB_CONTRACT_VERSION,
-  DUCKDB_COMPATIBILITY_REGISTRY,
-  DUCKDB_V2_CONTRACT_VERSION,
   DUCKDB_SOURCE_READ_POLICY,
   datasetsFor,
   schemaFor,
@@ -191,18 +189,9 @@ export function validatePointer(value: unknown): Pointer {
   if (!safeId.test(releaseId))
     throw new DuckDbReleaseError("pointer releaseId is unsafe");
   const contractVersion = string(o, "contractVersion");
-  if (
-    contractVersion !== DUCKDB_CONTRACT_VERSION &&
-    contractVersion !== DUCKDB_V2_CONTRACT_VERSION
-  )
+  if (contractVersion !== DUCKDB_CONTRACT_VERSION)
     throw new DuckDbReleaseError("unsupported pointer contractVersion");
-  if (
-    !DUCKDB_COMPATIBILITY_REGISTRY.servingRevisions.some(
-      (revision) =>
-        revision.pointerSchemaVersion === string(o, "schemaVersion") &&
-        revision.releaseContractVersion === contractVersion,
-    )
-  )
+  if (string(o, "schemaVersion") !== DUCKDB_CONTRACT_VERSION)
     throw new DuckDbReleaseError("unsupported pointer schemaVersion");
   integer(o, "releaseSequence", 0);
   for (const key of [
@@ -221,38 +210,23 @@ export function validatePointer(value: unknown): Pointer {
     );
   if (o.pointerSha256 !== undefined)
     throw new DuckDbReleaseError("pointerSha256 is forbidden");
-  if (contractVersion === DUCKDB_V2_CONTRACT_VERSION) {
-    requiredOrder(o, "sourceOrder");
-    requiredOrder(o, "sourceHighWaterOrder");
-  }
+  requiredOrder(o, "sourceOrder");
+  requiredOrder(o, "sourceHighWaterOrder");
   return o as unknown as Pointer;
 }
 
 export function validateRelease(value: unknown): ReleaseIndex {
   const o = object(value, "release");
-  if (
-    (string(o, "contractVersion") !== DUCKDB_CONTRACT_VERSION &&
-      string(o, "contractVersion") !== DUCKDB_V2_CONTRACT_VERSION) ||
-    !DUCKDB_COMPATIBILITY_REGISTRY.servingRevisions.some(
-      (revision) => revision.releaseContractVersion === o.contractVersion,
-    )
-  )
+  if (string(o, "contractVersion") !== DUCKDB_CONTRACT_VERSION)
     throw new DuckDbReleaseError("unsupported release contractVersion");
   const releaseId = string(o, "releaseId");
   if (!safeId.test(releaseId))
     throw new DuckDbReleaseError("releaseId is unsafe");
   const contractVersion = o.contractVersion as string;
-  const v2 = contractVersion === DUCKDB_V2_CONTRACT_VERSION;
   for (const k of ["createdAtUtc", "producerRevision"]) string(o, k);
-  if (!v2) {
-    string(o, "sourceSnapshot");
-    requiredTimestamp(o, "sourceReadTimestampUtc");
-  }
-  if (v2) {
-    requiredOrder(o, "sourceOrder");
-    if (string(o, "sourceReadPolicy") !== DUCKDB_SOURCE_READ_POLICY)
-      throw new DuckDbReleaseError("unsupported sourceReadPolicy");
-  }
+  requiredOrder(o, "sourceOrder");
+  if (string(o, "sourceReadPolicy") !== DUCKDB_SOURCE_READ_POLICY)
+    throw new DuckDbReleaseError("unsupported sourceReadPolicy");
   const datasets = object(o.datasets, "datasets");
   const supportedDatasets = datasetsFor(contractVersion);
   if (
@@ -271,15 +245,13 @@ export function validateRelease(value: unknown): ReleaseIndex {
       throw new DuckDbReleaseError(
         `${dataset} has an unsupported schemaVersion`,
       );
-    if (v2) {
-      if (requiredOrder(d, "sourceOrder") !== o.sourceOrder)
-        throw new DuckDbReleaseError(
-          `${dataset} sourceOrder does not match release`,
-        );
-      if (string(d, "sourceReadPolicy") !== DUCKDB_SOURCE_READ_POLICY)
-        throw new DuckDbReleaseError(`${dataset} sourceReadPolicy is invalid`);
-      requiredTimestamp(d, "sourceReadTimestampUtc");
-    }
+    if (requiredOrder(d, "sourceOrder") !== o.sourceOrder)
+      throw new DuckDbReleaseError(
+        `${dataset} sourceOrder does not match release`,
+      );
+    if (string(d, "sourceReadPolicy") !== DUCKDB_SOURCE_READ_POLICY)
+      throw new DuckDbReleaseError(`${dataset} sourceReadPolicy is invalid`);
+    requiredTimestamp(d, "sourceReadTimestampUtc");
   }
   return o as unknown as ReleaseIndex;
 }
@@ -290,42 +262,32 @@ export function validateManifest(
 ): DatasetManifest {
   const o = object(value, `${dataset} manifest`);
   if (
-    (string(o, "contractVersion") !== DUCKDB_CONTRACT_VERSION &&
-      string(o, "contractVersion") !== DUCKDB_V2_CONTRACT_VERSION) ||
+    string(o, "contractVersion") !== DUCKDB_CONTRACT_VERSION ||
     o.dataset !== dataset
   )
     throw new DuckDbReleaseError(`${dataset} manifest identity is invalid`);
   const contractVersion = o.contractVersion as string;
   const spec = schemaFor(dataset, contractVersion);
   for (const k of ["schemaVersion", "schemaFingerprintSha256"]) string(o, k);
-  if (contractVersion === DUCKDB_V2_CONTRACT_VERSION) {
-    requiredTimestamp(o, "sourceReadTimestampUtc");
-  } else {
-    string(o, "sourceSnapshot");
-    requiredTimestamp(o, "sourceReadTimestampUtc");
-  }
+  requiredTimestamp(o, "sourceReadTimestampUtc");
   if (o.schemaVersion !== spec.schemaVersion)
     throw new DuckDbReleaseError(
       `${dataset} manifest has an unsupported schemaVersion`,
     );
-  if (contractVersion === DUCKDB_V2_CONTRACT_VERSION) {
-    if (string(o, "sourceReadPolicy") !== DUCKDB_SOURCE_READ_POLICY)
-      throw new DuckDbReleaseError(`${dataset} sourceReadPolicy is invalid`);
-    requiredOrder(o, "sourceOrder");
-    if (!Array.isArray(o.columns))
-      throw new DuckDbReleaseError(`${dataset} columns must be an array`);
-    const names = new Set<string>();
-    for (const column of o.columns) {
-      const c = object(column, `${dataset} column`);
-      const name = string(c, "name");
-      if (names.has(name))
-        throw new DuckDbReleaseError(
-          `${dataset} columns contain duplicate names`,
-        );
-      names.add(name);
-    }
-  } else if (!object(o.columns, `${dataset} columns`)) {
-    throw new DuckDbReleaseError(`${dataset} columns must be an object`);
+  if (string(o, "sourceReadPolicy") !== DUCKDB_SOURCE_READ_POLICY)
+    throw new DuckDbReleaseError(`${dataset} sourceReadPolicy is invalid`);
+  requiredOrder(o, "sourceOrder");
+  if (!Array.isArray(o.columns))
+    throw new DuckDbReleaseError(`${dataset} columns must be an array`);
+  const names = new Set<string>();
+  for (const column of o.columns) {
+    const c = object(column, `${dataset} column`);
+    const name = string(c, "name");
+    if (names.has(name))
+      throw new DuckDbReleaseError(
+        `${dataset} columns contain duplicate names`,
+      );
+    names.add(name);
   }
   if (!canonicalJson(o.columns).equals(canonicalJson(spec.columns)))
     throw new DuckDbReleaseError(
@@ -377,19 +339,17 @@ export function validateManifest(
       (typeof golden.sha256 !== "string" || !hex.test(golden.sha256))
     )
       throw new DuckDbReleaseError(`${dataset} golden sha256 is invalid`);
-    if (contractVersion === DUCKDB_V2_CONTRACT_VERSION) {
-      if (typeof golden.sha256 !== "string" || !hex.test(golden.sha256))
-        throw new DuckDbReleaseError(
-          `${dataset} v2 golden requires a valid sha256`,
-        );
-      if (
-        typeof golden.crc32c !== "string" ||
-        !/^[A-Za-z0-9+/]{6}==$/.test(golden.crc32c)
-      )
-        throw new DuckDbReleaseError(
-          `${dataset} v2 golden requires a valid crc32c`,
-        );
-    }
+    if (typeof golden.sha256 !== "string" || !hex.test(golden.sha256))
+      throw new DuckDbReleaseError(
+        `${dataset} v2 golden requires a valid sha256`,
+      );
+    if (
+      typeof golden.crc32c !== "string" ||
+      !/^[A-Za-z0-9+/]{6}==$/.test(golden.crc32c)
+    )
+      throw new DuckDbReleaseError(
+        `${dataset} v2 golden requires a valid crc32c`,
+      );
   }
   const expectedGoldens = spec.goldenSpecifications
     .map((golden) => golden.name)

@@ -107,9 +107,8 @@ export async function getEventById(
  * Fetch detailed content for a single event instance.
  *
  * Notes:
- * - `meta` is stored as JSON in BigQuery and parsed into an object here.
- * - Reads the detail columns the pv_events import/merge scheduled queries copy
- *   from `event_instances`, so edits show up within the hourly merge window.
+ * - `meta` is parsed into an object when returned as a JSON string.
+ * - Uses the v2 DuckDB release when events are enabled, otherwise BigQuery.
  * - Returns null if the event does not exist in pv_events (inactive, no
  *   pax_count, or flagged `exclude_from_pax_vault`).
  */
@@ -117,34 +116,61 @@ export async function getEventDetails(
   eventInstanceId: number,
   userIdentifier?: string,
 ): Promise<EventDetails | null> {
-  // Intentionally selecting rich + plain text variants; consumers decide which to render.
-  // Keep details explicitly BigQuery-owned: the v1 release lacks v2-only content
-  // fields, and this service must remain rollback-compatible. Do not catch and
-  // fall back between data sources here.
-  const query = `-- EVENT DETAILS
-    SELECT
-      event_id AS id,
-      description,
-      preblast,
-      preblast_rich,
-      backblast,
-      backblast_rich,
-      JSON_QUERY(meta, '$') as meta
-    FROM pv_events
-    WHERE event_id = @eventInstanceId
-    LIMIT 1
-  `;
+  return selectDuckDbOrLegacy({
+    capability: "events",
+    env: process.env,
+    duckdb: async () => {
+      // These detail fields are part of the v2 events release. Do not catch or
+      // fall back to BigQuery if this query fails while the capability is on.
+      const results = await new DuckDbQueryAdapter(
+        getDuckDbRuntime(),
+      ).execute<EventDetails>(
+        `SELECT
+          event_id AS id,
+          description,
+          preblast,
+          preblast_rich,
+          backblast,
+          backblast_rich,
+          meta
+        FROM pv_events
+        WHERE event_id = ?
+        LIMIT 1`,
+        [eventInstanceId],
+      );
+      return normalizeEventDetailsMeta(results?.[0] ?? null);
+    },
+    legacy: async () => {
+      // Intentionally selecting rich + plain text variants; consumers decide
+      // which to render. BigQuery remains the disabled-capability path.
+      const query = `-- EVENT DETAILS
+        SELECT
+          event_id AS id,
+          description,
+          preblast,
+          preblast_rich,
+          backblast,
+          backblast_rich,
+          JSON_QUERY(meta, '$') as meta
+        FROM pv_events
+        WHERE event_id = @eventInstanceId
+        LIMIT 1
+      `;
 
-  const results = await queryBigQuery<EventDetails>(
-    query,
-    userIdentifier,
-    `fetch details for event instance ${eventInstanceId}`,
-    { eventInstanceId },
-  );
-  return normalizeEventDetailsMeta(results?.[0] ?? null);
+      const results = await queryBigQuery<EventDetails>(
+        query,
+        userIdentifier,
+        `fetch details for event instance ${eventInstanceId}`,
+        { eventInstanceId },
+      );
+      return normalizeEventDetailsMeta(results?.[0] ?? null);
+    },
+  });
 }
 
-function normalizeEventDetailsMeta(event: EventDetails | null): EventDetails | null {
+function normalizeEventDetailsMeta(
+  event: EventDetails | null,
+): EventDetails | null {
   if (typeof event?.meta !== "string") return event;
   try {
     event.meta = JSON.parse(event.meta) as EventDetails["meta"];

@@ -17,7 +17,10 @@ export type DuckDbCapability =
   | "stats_region"
   | "stats_area"
   | "stats_sector"
-  | "stats_ao";
+  | "stats_ao"
+  | "auth_allowlist"
+  | "auth_identity"
+  | "auth_region_permission";
 
 const capabilityFlags: Record<DuckDbCapability, string> = {
   search: "DUCKDB_SEARCH_ENABLED",
@@ -27,6 +30,9 @@ const capabilityFlags: Record<DuckDbCapability, string> = {
   stats_area: "DUCKDB_STATS_AREA_ENABLED",
   stats_sector: "DUCKDB_STATS_SECTOR_ENABLED",
   stats_ao: "DUCKDB_STATS_AO_ENABLED",
+  auth_allowlist: "DUCKDB_AUTH_ENABLED",
+  auth_identity: "DUCKDB_AUTH_ENABLED",
+  auth_region_permission: "DUCKDB_AUTH_ENABLED",
 };
 
 /** Global false is an explicit cutback and always wins over capability flags. */
@@ -240,6 +246,7 @@ export async function selectDuckDbOrLegacy<T>(
   const result = await selection.legacy();
   // Shadow is a pre-enable comparison: BigQuery remains the served response.
   if (
+    !selection.capability?.startsWith("auth_") &&
     env.DUCKDB_ENABLED === "true" &&
     shadowEnabled(env) &&
     Math.random() < shadowRate(env)

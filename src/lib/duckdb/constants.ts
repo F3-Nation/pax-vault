@@ -7,69 +7,24 @@ export const DUCKDB_DATASETS = [
   "pv_aos",
   "pv_upcoming",
   "pv_kotter",
-] as const;
-
-export const DUCKDB_V2_DATASETS = [
-  "pv_pax",
-  "pv_events",
-  "pv_regions",
-  "pv_areas",
-  "pv_sectors",
-  "pv_aos",
-  "pv_upcoming",
-  "pv_kotter",
   "pv_territories",
 ] as const;
 
-export type DuckDbDataset = (typeof DUCKDB_V2_DATASETS)[number];
-export type DuckDbV1Dataset = (typeof DUCKDB_DATASETS)[number];
-export type DuckDbContractVersion = "pv-release.v1" | "pv-release.v2";
-export const DUCKDB_CONTRACT_VERSION = "pv-release.v1";
-export const DUCKDB_V2_CONTRACT_VERSION = "pv-release.v2";
+/** @deprecated Use DUCKDB_DATASETS; retained as a source-compatible alias. */
+export const DUCKDB_V2_DATASETS = DUCKDB_DATASETS;
+export type DuckDbDataset = (typeof DUCKDB_DATASETS)[number];
+type DuckDbV1Dataset = Exclude<DuckDbDataset, "pv_territories">;
+export type DuckDbContractVersion = "pv-release.v2";
+export const DUCKDB_CONTRACT_VERSION = "pv-release.v2";
+/** @deprecated Use DUCKDB_CONTRACT_VERSION. */
+export const DUCKDB_V2_CONTRACT_VERSION = DUCKDB_CONTRACT_VERSION;
 export const DUCKDB_SOURCE_READ_POLICY = "ordered-sequential-per-dataset";
-export const DUCKDB_COMPATIBILITY_REGISTRY = {
-  servingRevisions: [
-    {
-      id: "pax-vault-duckdb-phase1",
-      pointerSchemaVersion: "pv-release.v1",
-      releaseContractVersion: "pv-release.v1",
-      datasetSchemaVersions: {
-        pv_pax: "pv_pax.v1",
-        pv_events: "pv_events.v1",
-        pv_regions: "pv_regions.v1",
-        pv_areas: "pv_areas.v1",
-        pv_sectors: "pv_sectors.v1",
-        pv_aos: "pv_aos.v1",
-        pv_upcoming: "pv_upcoming.v1",
-        pv_kotter: "pv_kotter.v1",
-      },
-      rollbackEligible: true,
-    },
-    {
-      id: "pax-vault-duckdb-phase1-v2",
-      pointerSchemaVersion: "pv-release.v2",
-      releaseContractVersion: "pv-release.v2",
-      datasetSchemaVersions: {
-        pv_pax: "pv_pax.v2",
-        pv_events: "pv_events.v2",
-        pv_regions: "pv_regions.v1",
-        pv_areas: "pv_areas.v2",
-        pv_sectors: "pv_sectors.v2",
-        pv_aos: "pv_aos.v1",
-        pv_upcoming: "pv_upcoming.v1",
-        pv_kotter: "pv_kotter.v1",
-        pv_territories: "pv_territories.v1",
-      },
-      rollbackEligible: true,
-    },
-  ],
-} as const;
 
 /**
  * Consumer-owned schema registry. Add a new version only with a coordinated
  * serving/rollback revision; unknown versions are never accepted implicitly.
  */
-export const DUCKDB_SCHEMA_REGISTRY: Readonly<
+const legacySchemaRegistry: Readonly<
   Record<DuckDbV1Dataset, DuckDbSchemaSpec>
 > = {
   pv_pax: schema("pv_pax", [
@@ -299,7 +254,7 @@ function orderedV1Schema(
   dataset: DuckDbV1Dataset,
   version: "v1" | "v2" = "v1",
 ): DuckDbSchemaSpec {
-  const columns = DUCKDB_SCHEMA_REGISTRY[dataset].columns;
+  const columns = legacySchemaRegistry[dataset].columns;
   return orderedSchema(
     dataset,
     version,
@@ -338,9 +293,11 @@ export const DUCKDB_V2_SCHEMA_REGISTRY: Readonly<
   ]),
 };
 
+/** Canonical schema registry for the sole supported release contract. */
+export const DUCKDB_SCHEMA_REGISTRY = DUCKDB_V2_SCHEMA_REGISTRY;
+
 export function datasetsFor(contractVersion: string): readonly DuckDbDataset[] {
   if (contractVersion === DUCKDB_CONTRACT_VERSION) return DUCKDB_DATASETS;
-  if (contractVersion === DUCKDB_V2_CONTRACT_VERSION) return DUCKDB_V2_DATASETS;
   throw new Error(`unsupported DuckDB contract version: ${contractVersion}`);
 }
 
@@ -351,9 +308,7 @@ export function schemaFor(
   const datasets = datasetsFor(contractVersion);
   if (!(datasets as readonly string[]).includes(dataset))
     throw new Error(`${dataset} is not supported by ${contractVersion}`);
-  return contractVersion === DUCKDB_CONTRACT_VERSION
-    ? DUCKDB_SCHEMA_REGISTRY[dataset as DuckDbV1Dataset]
-    : DUCKDB_V2_SCHEMA_REGISTRY[dataset];
+  return DUCKDB_SCHEMA_REGISTRY[dataset];
 }
 
 export interface DuckDbSchemaSpec {

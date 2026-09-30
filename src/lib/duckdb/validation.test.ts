@@ -29,30 +29,50 @@ const base = {
   manifestUri: "gs://bucket/releases/r-1/release.json",
   manifestGeneration: "1",
   manifestSha256: "a".repeat(64),
-  schemaVersion: "pv-release.v1",
+  schemaVersion: DUCKDB_CONTRACT_VERSION,
   createdAtUtc: "2026-01-01T00:00:00Z",
   producerRevision: "test",
   releaseSequence: 1,
+  sourceOrder: "20260101T000000.000000Z",
+  sourceHighWaterOrder: "20260101T000000.000000Z",
 };
-const datasetManifest = (dataset: (typeof DUCKDB_DATASETS)[number]) => ({
-  contractVersion: DUCKDB_CONTRACT_VERSION,
-  dataset,
-  schemaVersion: `${dataset}.v1`,
-  rowCount: 1,
-  totalSizeBytes: 3,
-  schemaFingerprintSha256: "b".repeat(64),
-  sourceSnapshot: "snapshot",
-  sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
-  goldens: [],
-  objects: [
-    {
-      uri: `gs://bucket/releases/r-1/${dataset}/${dataset}.parquet`,
-      generation: "2",
-      sizeBytes: 3,
-      crc32c: crc32cBase64(Buffer.from("abc")),
-    },
-  ],
-});
+const datasetManifest = (dataset: (typeof DUCKDB_DATASETS)[number]) => {
+  const schema = schemaFor(dataset, DUCKDB_CONTRACT_VERSION);
+  const goldenBytes = canonicalJson([[1]]);
+  return {
+    contractVersion: DUCKDB_CONTRACT_VERSION,
+    dataset,
+    schemaVersion: schema.schemaVersion,
+    rowCount: 1,
+    totalSizeBytes: 3,
+    schemaFingerprintSha256: schemaFingerprint(dataset),
+    sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
+    sourceReadPolicy: "ordered-sequential-per-dataset",
+    sourceOrder: "20260101T000000.000000Z",
+    columns: schema.columns,
+    goldens: [
+      {
+        name: schema.goldenSpecifications[0].name,
+        uri: "gs://bucket/golden.json",
+        generation: "1",
+        sizeBytes: goldenBytes.length,
+        query: schema.goldenSpecifications[0].query,
+        canonicalization: "rows-json-v1",
+        sha256: sha256(goldenBytes),
+        crc32c: crc32cBase64(goldenBytes),
+      },
+    ],
+    objects: [
+      {
+        uri: `gs://bucket/releases/r-1/${dataset}/${dataset}.parquet`,
+        generation: "2",
+        sizeBytes: 3,
+        crc32c: crc32cBase64(Buffer.from("abc")),
+        rowCount: 1,
+      },
+    ],
+  };
+};
 
 describe("DuckDB release validation", () => {
   it("accepts a pointer without a self hash and rejects one with it", () => {
@@ -75,14 +95,18 @@ describe("DuckDB release validation", () => {
       ),
     ).toThrow();
   });
-  it("requires exactly the eight current datasets", () => {
+  it("requires exactly the nine current datasets", () => {
+    const order = "20260101T000000.000000Z";
     const datasets = Object.fromEntries(
       DUCKDB_DATASETS.map((d) => [
         d,
         {
           manifestUri: `gs://bucket/releases/r-1/${d}/manifest.json`,
           manifestGeneration: "1",
-          schemaVersion: `${d}.v1`,
+          schemaVersion: schemaFor(d, DUCKDB_CONTRACT_VERSION).schemaVersion,
+          sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
+          sourceReadPolicy: "ordered-sequential-per-dataset",
+          sourceOrder: order,
         },
       ]),
     );
@@ -91,12 +115,12 @@ describe("DuckDB release validation", () => {
       releaseId: "r-1",
       createdAtUtc: "2026-01-01T00:00:00Z",
       producerRevision: "test",
-      sourceSnapshot: "snapshot",
-      sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
+      sourceReadPolicy: "ordered-sequential-per-dataset",
+      sourceOrder: order,
       datasets,
     };
     expect(validateRelease(release).datasets.pv_pax.schemaVersion).toBe(
-      "pv_pax.v1",
+      "pv_pax.v2",
     );
     expect(() =>
       validateRelease({
@@ -104,6 +128,16 @@ describe("DuckDB release validation", () => {
         datasets: { ...datasets, pv_territories: datasets.pv_pax },
       }),
     ).toThrow();
+    expect(() =>
+      validateRelease({ ...release, contractVersion: "pv-release.v1" }),
+    ).toThrow(/unsupported release contractVersion/);
+    expect(() =>
+      validatePointer({
+        ...base,
+        contractVersion: "pv-release.v1",
+        schemaVersion: "pv-release.v1",
+      }),
+    ).toThrow(/unsupported pointer contractVersion/);
   });
   it("rejects unsafe paths and validates size plus CRC32C", () => {
     expect(() =>
@@ -135,7 +169,7 @@ describe("DuckDB release validation", () => {
     ).toThrow();
     expect(() =>
       validateManifest(
-        { ...datasetManifest("pv_pax"), schemaVersion: "pv_pax.v2" },
+        { ...datasetManifest("pv_pax"), schemaVersion: "pv_pax.v1" },
         "pv_pax",
       ),
     ).toThrow(/schemaVersion/);
@@ -150,15 +184,13 @@ describe("DuckDB release validation", () => {
     );
   });
 
-  it("keeps v1 registry intact and describes the nine-dataset v2 contract", () => {
-    expect(DUCKDB_DATASETS).toHaveLength(8);
+  it("describes the sole supported nine-dataset v2 contract", () => {
+    expect(DUCKDB_DATASETS).toHaveLength(9);
     expect(DUCKDB_V2_DATASETS).toHaveLength(9);
-    expect(schemaFor("pv_pax", DUCKDB_CONTRACT_VERSION).schemaVersion).toBe(
-      "pv_pax.v1",
-    );
     expect(schemaFor("pv_pax", DUCKDB_V2_CONTRACT_VERSION).schemaVersion).toBe(
       "pv_pax.v2",
     );
+    expect(() => schemaFor("pv_pax", "pv-release.v1")).toThrow(/unsupported/);
     expect(
       Object.entries(
         schemaFor("pv_events", DUCKDB_V2_CONTRACT_VERSION).columns,
@@ -282,7 +314,7 @@ describe("DuckDB release validation", () => {
       validatePointer({
         ...pointerV2,
         contractVersion: DUCKDB_CONTRACT_VERSION,
-        schemaVersion: DUCKDB_V2_CONTRACT_VERSION,
+        schemaVersion: "pv-release.v1",
       }),
     ).toThrow(/schemaVersion/);
     expect(() =>

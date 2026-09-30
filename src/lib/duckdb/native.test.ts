@@ -5,7 +5,11 @@ import { describe, expect, it } from "vitest";
 import { DuckDbConfig } from "./config";
 import { ReleaseFiles } from "./gcs";
 import { nativeCandidateOpener } from "./runtime";
-import { DUCKDB_DATASETS, DUCKDB_SCHEMA_REGISTRY } from "./constants";
+import {
+  DUCKDB_CONTRACT_VERSION,
+  DUCKDB_DATASETS,
+  DUCKDB_SCHEMA_REGISTRY,
+} from "./constants";
 
 const config: DuckDbConfig = {
   enabled: true,
@@ -20,13 +24,13 @@ const config: DuckDbConfig = {
   maxObjectBytes: 100000,
 };
 const fixturePointer = {
-  contractVersion: "pv-release.v1",
+  contractVersion: DUCKDB_CONTRACT_VERSION,
   releaseId: "native-fixture",
   prefix: "gs://bucket/releases/native-fixture/",
   manifestUri: "gs://bucket/releases/native-fixture/release.json",
   manifestGeneration: "1",
   manifestSha256: "a".repeat(64),
-  schemaVersion: "pv-release.v1",
+  schemaVersion: DUCKDB_CONTRACT_VERSION,
   createdAtUtc: "2026-01-01T00:00:00Z",
   producerRevision: "native-test",
   releaseSequence: 1,
@@ -43,9 +47,12 @@ describe("native DuckDB candidate", () => {
       const parquetPaths = new Map<string, string[]>();
       for (const dataset of DUCKDB_DATASETS) {
         const parquet = join(dir, `${dataset}-0.parquet`);
-        const columns = Object.entries(DUCKDB_SCHEMA_REGISTRY[dataset].columns);
+        const columns = DUCKDB_SCHEMA_REGISTRY[dataset].columns as readonly {
+          name: string;
+          logicalType: string;
+        }[];
         const select = columns
-          .map(([name, spec]) => {
+          .map(({ name, logicalType }) => {
             const expression =
               name === "user_id" ||
               name === "event_id" ||
@@ -56,9 +63,9 @@ describe("native DuckDB candidate", () => {
                 ? "CAST(1 AS INTEGER)"
                 : name === "f3_name" || name.endsWith("_name")
                   ? "'fixture'"
-                  : spec.logicalType.endsWith("[]")
-                    ? `[]::${spec.logicalType}`
-                    : `CAST(NULL AS ${spec.logicalType})`;
+                  : logicalType.endsWith("[]")
+                    ? `[]::${logicalType}`
+                    : `CAST(NULL AS ${logicalType})`;
             return `${expression} AS "${name}"`;
           })
           .join(", ");
@@ -109,20 +116,23 @@ describe("native DuckDB candidate", () => {
       const { DuckDBInstance } = await import("@duckdb/node-api");
       const writer = await DuckDBInstance.create(join(dir, "writer.duckdb"));
       const connection = await writer.connect();
-      const columns = Object.entries(DUCKDB_SCHEMA_REGISTRY.pv_pax.columns);
+      const columns = DUCKDB_SCHEMA_REGISTRY.pv_pax.columns as readonly {
+        name: string;
+        logicalType: string;
+      }[];
       const parquetPaths: string[] = [];
       for (const [index, hasExtraColumn] of [false, true].entries()) {
         const parquet = join(dir, `pv_pax-${index}.parquet`);
         const select = columns
-          .map(([name, spec]) => {
+          .map(({ name, logicalType }) => {
             const expression =
               name === "user_id"
                 ? "CAST(1 AS INTEGER)"
                 : name === "f3_name"
                   ? "'fixture'"
-                  : spec.logicalType.endsWith("[]")
-                    ? `[]::${spec.logicalType}`
-                    : `CAST(NULL AS ${spec.logicalType})`;
+                  : logicalType.endsWith("[]")
+                    ? `[]::${logicalType}`
+                    : `CAST(NULL AS ${logicalType})`;
             return `${expression} AS "${name}"`;
           })
           .concat(hasExtraColumn ? [`'unexpected' AS hidden_field`] : [])

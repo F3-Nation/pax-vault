@@ -402,6 +402,39 @@ export async function getPaxIdentityByEmail(
   userIdentifier?: string,
 ): Promise<PaxIdentity | null> {
   const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return null;
+  return selectDuckDbOrLegacy({
+    capability: "auth_identity",
+    env: process.env,
+    duckdb: async () => {
+      const adapter = new DuckDbQueryAdapter(getDuckDbRuntime());
+      const rows = await adapter.execute<{
+        pax_id: number;
+        home_region_id: number | null;
+      }>(
+        `SELECT user_id AS pax_id, home_region_id
+           FROM pv_pax
+          WHERE email IS NOT NULL AND LOWER(email) = ?
+          ORDER BY user_id LIMIT 1`,
+        [normalizedEmail],
+      );
+      const row = rows[0];
+      if (!row || row.pax_id == null) return null;
+      return {
+        paxId: Number(row.pax_id),
+        homeRegionId:
+          row.home_region_id == null ? null : Number(row.home_region_id),
+      };
+    },
+    legacy: () =>
+      getPaxIdentityByEmailBigQuery(normalizedEmail, userIdentifier),
+  });
+}
+
+async function getPaxIdentityByEmailBigQuery(
+  normalizedEmail: string,
+  userIdentifier?: string,
+): Promise<PaxIdentity | null> {
   const query = `-- PAX IDENTITY BY EMAIL
     SELECT
       user_id AS pax_id,

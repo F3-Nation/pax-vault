@@ -32,7 +32,7 @@ const config = (dir: string): DuckDbConfig => ({
 });
 
 describe("complete generation-pinned DuckDB release", () => {
-  it("streams, validates, opens, and queries all eight real Parquet datasets", async () => {
+  it("streams, validates, opens, and queries all nine real Parquet datasets", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pax-duckdb-e2e-"));
     try {
       const { DuckDBInstance } = await import("@duckdb/node-api");
@@ -41,26 +41,35 @@ describe("complete generation-pinned DuckDB release", () => {
       const objects = new Map<string, { bytes: Buffer; generation: string }>();
       const releaseId = "e2e-release";
       const root = `gs://e2e-bucket/releases/${releaseId}`;
+      const sourceOrder = "20260101T000000.000000Z";
       const datasets: Record<
         string,
         {
           manifestUri: string;
           manifestGeneration: string;
           schemaVersion: string;
+          sourceReadTimestampUtc: string;
+          sourceReadPolicy: string;
+          sourceOrder: string;
         }
       > = {};
       for (const dataset of DUCKDB_DATASETS) {
         const parquetPath = join(dir, `${dataset}-0.parquet`);
-        const select = Object.entries(DUCKDB_SCHEMA_REGISTRY[dataset].columns)
-          .map(([name, spec]) => {
+        const select = (
+          DUCKDB_SCHEMA_REGISTRY[dataset].columns as readonly {
+            name: string;
+            logicalType: string;
+          }[]
+        )
+          .map(({ name, logicalType }) => {
             const expression =
               name === "user_id" || name.endsWith("_id")
                 ? "CAST(1 AS INTEGER)"
                 : name === "f3_name" || name.endsWith("_name")
                   ? "'fixture'"
-                  : spec.logicalType.endsWith("[]")
-                    ? `[]::${spec.logicalType}`
-                    : `CAST(NULL AS ${spec.logicalType})`;
+                  : logicalType.endsWith("[]")
+                    ? `[]::${logicalType}`
+                    : `CAST(NULL AS ${logicalType})`;
             return `${expression} AS "${name}"`;
           })
           .join(", ");
@@ -72,7 +81,7 @@ describe("complete generation-pinned DuckDB release", () => {
         const uri = `${root}/${dataset}/partitions/${dataset}-0.parquet`;
         objects.set(uri, { bytes, generation });
         const goldenBytes = canonicalDuckDbRows([[1n]]);
-        const goldenUri = `${root}/${dataset}/goldens/basic.json`;
+        const goldenUri = `${root}/${dataset}/goldens/candidate_transport_check.json`;
         objects.set(goldenUri, {
           bytes: goldenBytes,
           generation: `${2000 + objects.size}`,
@@ -81,6 +90,9 @@ describe("complete generation-pinned DuckDB release", () => {
           manifestUri: `${root}/${dataset}/manifest.json`,
           manifestGeneration: `${3000 + objects.size}`,
           schemaVersion: DUCKDB_SCHEMA_REGISTRY[dataset].schemaVersion,
+          sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
+          sourceReadPolicy: "ordered-sequential-per-dataset",
+          sourceOrder,
         };
         objects.set(datasets[dataset].manifestUri, {
           bytes: Buffer.alloc(0),
@@ -92,7 +104,8 @@ describe("complete generation-pinned DuckDB release", () => {
       for (const dataset of DUCKDB_DATASETS) {
         const parquetUri = `${root}/${dataset}/partitions/${dataset}-0.parquet`;
         const parquet = objects.get(parquetUri)!;
-        const goldenUri = `${root}/${dataset}/goldens/basic.json`;
+        const goldenUri = `${root}/${dataset}/goldens/candidate_transport_check.json`;
+        const schema = DUCKDB_SCHEMA_REGISTRY[dataset];
         const golden = objects.get(goldenUri)!;
         const manifest = {
           contractVersion: DUCKDB_CONTRACT_VERSION,
@@ -102,16 +115,18 @@ describe("complete generation-pinned DuckDB release", () => {
           totalSizeBytes: parquet.bytes.length,
           schemaFingerprintSha256: schemaFingerprint(dataset),
           columns: DUCKDB_SCHEMA_REGISTRY[dataset].columns,
-          sourceSnapshot: "e2e-snapshot",
           sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
+          sourceReadPolicy: "ordered-sequential-per-dataset",
+          sourceOrder,
           goldens: [
             {
-              name: `${dataset}.basic`,
+              name: schema.goldenSpecifications[0].name,
               uri: goldenUri,
               generation: golden.generation,
               sizeBytes: golden.bytes.length,
               sha256: sha256(golden.bytes),
-              query: `SELECT COUNT(*) AS row_count FROM ${dataset}`,
+              crc32c: crc32cBase64(golden.bytes),
+              query: schema.goldenSpecifications[0].query,
               canonicalization: "rows-json-v1",
             },
           ],
@@ -136,8 +151,8 @@ describe("complete generation-pinned DuckDB release", () => {
         releaseId,
         createdAtUtc: "2026-01-01T00:00:00Z",
         producerRevision: "e2e",
-        sourceSnapshot: "e2e-snapshot",
-        sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
+        sourceReadPolicy: "ordered-sequential-per-dataset",
+        sourceOrder,
         datasets,
       };
       const releaseBytes = canonicalJson(release);
@@ -154,6 +169,8 @@ describe("complete generation-pinned DuckDB release", () => {
         createdAtUtc: "2026-01-01T00:00:00Z",
         producerRevision: "e2e",
         releaseSequence: 1,
+        sourceOrder,
+        sourceHighWaterOrder: sourceOrder,
       };
       objects.set("gs://e2e-bucket/current.json", {
         bytes: canonicalJson(pointer),

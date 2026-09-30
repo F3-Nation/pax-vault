@@ -18,7 +18,9 @@ vi.mock("@/lib/duckdb/query", () => ({
     duckdb: () => Promise<unknown>;
     legacy: () => Promise<unknown>;
   }) =>
-    selection.env?.DUCKDB_ENABLED === "true"
+    selection.env?.DUCKDB_ENABLED === "true" &&
+    (!selection.env?.DUCKDB_AUTH_ENABLED ||
+      selection.env.DUCKDB_AUTH_ENABLED === "true")
       ? selection.duckdb()
       : selection.legacy(),
 }));
@@ -78,13 +80,12 @@ describe("PAX backend selection", () => {
       summary: expect.any(Object),
     });
 
-    // Authorization identity deliberately remains BigQuery-owned even when the
-    // read services use DuckDB.
-    bigQuery.mockResolvedValue([]);
+    // Auth identity follows the independent auth capability flag.
+    process.env.DUCKDB_AUTH_ENABLED = "true";
     await expect(
       getPaxIdentityByEmail("fixture@example.com"),
     ).resolves.toBeNull();
-    expect(bigQuery).toHaveBeenCalledOnce();
+    expect(duckQuery).toHaveBeenCalled();
   });
 
   it("goldens native PAX null-AO, fartsack, and FNG semantics", async () => {

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  DUCKDB_CONTRACT_VERSION,
-  DUCKDB_DATASETS,
-  DUCKDB_SCHEMA_REGISTRY,
   DUCKDB_V2_CONTRACT_VERSION,
   DUCKDB_V2_DATASETS,
   schemaFor,
@@ -34,95 +31,7 @@ const config: DuckDbConfig = {
   maxObjectBytes: 100000,
 };
 function fixture() {
-  const objects = new Map<string, { bytes: Buffer; generation: string }>();
-  const releaseId = "r-1";
-  const root = `gs://bucket/releases/${releaseId}`;
-  const datasets = Object.fromEntries(
-    DUCKDB_DATASETS.map((dataset, i) => {
-      const parquet = Buffer.from(dataset);
-      const manifestUri = `${root}/${dataset}/manifest.json`;
-      const manifest = {
-        contractVersion: DUCKDB_CONTRACT_VERSION,
-        dataset,
-        schemaVersion: DUCKDB_SCHEMA_REGISTRY[dataset].schemaVersion,
-        rowCount: 1,
-        totalSizeBytes: parquet.length,
-        schemaFingerprintSha256: schemaFingerprint(dataset),
-        columns: DUCKDB_SCHEMA_REGISTRY[dataset].columns,
-        sourceSnapshot: "snapshot",
-        sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
-        goldens: [
-          {
-            name: `${dataset}.basic`,
-            uri: `${root}/${dataset}/goldens/basic.json`,
-            generation: String(300 + i),
-            sizeBytes: canonicalJson([[1]]).length,
-            query: `SELECT COUNT(*) AS row_count FROM ${dataset}`,
-            canonicalization: "rows-json-v1",
-            sha256: sha256(canonicalJson([[1]])),
-          },
-        ],
-        objects: [
-          {
-            uri: `${root}/${dataset}/partitions/${dataset}-0.parquet`,
-            generation: String(100 + i),
-            sizeBytes: parquet.length,
-            rowCount: 1,
-            crc32c: crc32cBase64(parquet),
-          },
-        ],
-      };
-      objects.set(manifestUri, {
-        bytes: canonicalJson(manifest),
-        generation: String(200 + i),
-      });
-      objects.set(`${root}/${dataset}/goldens/basic.json`, {
-        bytes: canonicalJson([[1]]),
-        generation: String(300 + i),
-      });
-      objects.set(`${root}/${dataset}/partitions/${dataset}-0.parquet`, {
-        bytes: parquet,
-        generation: String(100 + i),
-      });
-      return [
-        dataset,
-        {
-          manifestUri,
-          manifestGeneration: String(200 + i),
-          schemaVersion: DUCKDB_SCHEMA_REGISTRY[dataset].schemaVersion,
-        },
-      ];
-    }),
-  );
-  const release = {
-    contractVersion: DUCKDB_CONTRACT_VERSION,
-    releaseId,
-    createdAtUtc: "2026-01-01T00:00:00Z",
-    producerRevision: "test",
-    sourceSnapshot: "snapshot",
-    sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
-    datasets,
-  };
-  const releaseBytes = canonicalJson(release);
-  const releaseUri = `${root}/release.json`;
-  objects.set(releaseUri, { bytes: releaseBytes, generation: "300" });
-  const pointer = {
-    contractVersion: DUCKDB_CONTRACT_VERSION,
-    releaseId,
-    prefix: `${root}/`,
-    manifestUri: releaseUri,
-    manifestGeneration: "300",
-    manifestSha256: sha256(releaseBytes),
-    schemaVersion: DUCKDB_CONTRACT_VERSION,
-    createdAtUtc: "2026-01-01T00:00:00Z",
-    producerRevision: "test",
-    releaseSequence: 1,
-  };
-  objects.set("gs://bucket/current.json", {
-    bytes: canonicalJson(pointer),
-    generation: "400",
-  });
-  return { objects, pointer };
+  return v2Fixture();
 }
 
 function v2Fixture() {
@@ -232,7 +141,9 @@ function v2Fixture() {
   return { objects, pointer };
 }
 
-function objectMapClient(objects: Map<string, { bytes: Buffer; generation: string }>): GcsClient {
+function objectMapClient(
+  objects: Map<string, { bytes: Buffer; generation: string }>,
+): GcsClient {
   return {
     read: async (uri, generation) => {
       const value = objects.get(uri);
@@ -291,7 +202,7 @@ describe("GCS release repository", () => {
       client.read("gs://bucket/current.json", "8"),
     ).rejects.toBeInstanceOf(DuckDbReleaseError);
   });
-  it("accepts a complete synthetic eight-dataset release", async () => {
+  it("accepts a complete synthetic nine-dataset release", async () => {
     const fixtureData = fixture();
     const client: GcsClient = {
       read: async (uri, generation) => {
@@ -307,8 +218,8 @@ describe("GCS release repository", () => {
       current.pointer,
       current.generation,
     );
-    expect(files.manifests.size).toBe(8);
-    expect(files.parquetPaths.size).toBe(8);
+    expect(files.manifests.size).toBe(DUCKDB_V2_DATASETS.length);
+    expect(files.parquetPaths.size).toBe(DUCKDB_V2_DATASETS.length);
   });
   it("rejects pointer/release contract-version mixing in a v2 artifact", async () => {
     const data = v2Fixture();
@@ -321,12 +232,34 @@ describe("GCS release repository", () => {
       repository.downloadRelease(
         {
           ...current.pointer,
-          contractVersion: DUCKDB_CONTRACT_VERSION,
-          schemaVersion: DUCKDB_CONTRACT_VERSION,
+          contractVersion: "pv-release.v1",
+          schemaVersion: "pv-release.v1",
         },
         current.generation,
       ),
     ).rejects.toThrow(/pointer\/release contractVersion mismatch/);
+  });
+  it("rejects a v1 pointer as an unsupported contract", async () => {
+    const data = v2Fixture();
+    data.objects.set("gs://bucket/current.json", {
+      bytes: canonicalJson({
+        ...data.pointer,
+        contractVersion: "pv-release.v1",
+        schemaVersion: "pv-release.v1",
+      }),
+      generation: "902",
+    });
+    const repository = new GcsReleaseRepository(
+      objectMapClient(data.objects),
+      config,
+    );
+
+    await expect(repository.readPointer()).rejects.toMatchObject({
+      message: "pointer validation failed",
+      cause: expect.objectContaining({
+        message: "unsupported pointer contractVersion",
+      }),
+    });
   });
   it("downloads a v2 release with a later pointer high-water order", async () => {
     const data = v2Fixture();
@@ -357,25 +290,8 @@ describe("GCS release repository", () => {
     const manifestUri = `${root}/manifest.json`;
     const stored = data.objects.get(manifestUri)!;
     const manifest = JSON.parse(stored.bytes.toString("utf8"));
-    const v1Schema = schemaFor(dataset, DUCKDB_CONTRACT_VERSION);
-    const originalGoldenUri = manifest.goldens[0].uri;
-    const v1GoldenUri = `${root}/goldens/${dataset}.basic.json`;
-    const golden = data.objects.get(originalGoldenUri)!;
-    data.objects.delete(originalGoldenUri);
-    data.objects.set(v1GoldenUri, golden);
-    manifest.contractVersion = DUCKDB_CONTRACT_VERSION;
-    manifest.schemaVersion = v1Schema.schemaVersion;
-    manifest.schemaFingerprintSha256 = schemaFingerprint(
-      dataset,
-      DUCKDB_CONTRACT_VERSION,
-    );
-    manifest.columns = v1Schema.columns;
-    manifest.sourceSnapshot = "v1-snapshot";
-    delete manifest.sourceOrder;
-    delete manifest.sourceReadPolicy;
-    manifest.goldens[0].name = `${dataset}.basic`;
-    manifest.goldens[0].uri = v1GoldenUri;
-    manifest.goldens[0].query = v1Schema.goldenSpecifications[0].query;
+    manifest.contractVersion = "pv-release.v1";
+    manifest.schemaVersion = "pv_regions.v1";
     data.objects.set(manifestUri, {
       ...stored,
       bytes: canonicalJson(manifest),
@@ -388,7 +304,7 @@ describe("GCS release repository", () => {
     const current = await repository.readPointer();
     await expect(
       repository.downloadRelease(current.pointer, current.generation),
-    ).rejects.toThrow(/manifest\/release contractVersion mismatch/);
+    ).rejects.toThrow(/manifest identity is invalid/);
   });
   it("rejects v2 release-entry timestamp or order that disagrees with its manifest", async () => {
     for (const mismatch of ["timestamp", "order"] as const) {
@@ -456,7 +372,7 @@ describe("GCS release repository", () => {
   });
   it("rejects a partition URI that escapes its exact dataset prefix", async () => {
     const fixtureData = fixture();
-    const root = "gs://bucket/releases/r-1";
+    const root = "gs://bucket/releases/r-v2";
     const uri = `${root}/pv_pax/manifest.json`;
     const stored = fixtureData.objects.get(uri)!;
     const manifest = JSON.parse(stored.bytes.toString("utf8"));
@@ -481,7 +397,7 @@ describe("GCS release repository", () => {
   });
   it("rejects a golden URI that escapes its exact dataset prefix", async () => {
     const fixtureData = fixture();
-    const root = "gs://bucket/releases/r-1";
+    const root = "gs://bucket/releases/r-v2";
     const uri = `${root}/pv_pax/manifest.json`;
     const stored = fixtureData.objects.get(uri)!;
     const manifest = JSON.parse(stored.bytes.toString("utf8"));

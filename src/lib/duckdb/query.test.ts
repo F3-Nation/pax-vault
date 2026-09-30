@@ -57,6 +57,36 @@ describe("DuckDB query adapter", () => {
     expect(duckdb).toHaveBeenCalledOnce();
   });
 
+  it("routes auth capabilities through DUCKDB_AUTH_ENABLED", async () => {
+    const duckdb = vi.fn().mockResolvedValue("duck");
+    const legacy = vi.fn().mockResolvedValue("bq");
+    const select = (env: NodeJS.ProcessEnv) =>
+      selectDuckDbOrLegacy({
+        env,
+        capability: "auth_identity",
+        duckdb,
+        legacy,
+      });
+
+    await expect(
+      select({ DUCKDB_ENABLED: "true" } as unknown as NodeJS.ProcessEnv),
+    ).resolves.toBe("duck");
+    await expect(
+      select({
+        DUCKDB_ENABLED: "true",
+        DUCKDB_AUTH_ENABLED: "false",
+      } as unknown as NodeJS.ProcessEnv),
+    ).resolves.toBe("bq");
+    await expect(
+      select({
+        DUCKDB_ENABLED: "false",
+        DUCKDB_AUTH_ENABLED: "true",
+      } as unknown as NodeJS.ProcessEnv),
+    ).resolves.toBe("bq");
+    expect(duckdb).toHaveBeenCalledOnce();
+    expect(legacy).toHaveBeenCalledTimes(2);
+  });
+
   it("lets the global cutback override an enabled capability", async () => {
     const duckdb = vi.fn().mockResolvedValue(["duck"]);
     const legacy = vi.fn().mockResolvedValue(["bq"]);
