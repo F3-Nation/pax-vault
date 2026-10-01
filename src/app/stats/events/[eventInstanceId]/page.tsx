@@ -23,6 +23,8 @@ import {
   EventDetailsHeader,
   EventDetailsBody,
 } from "@/components/EventDetailsContent";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
+import { DuckDbUnavailable } from "@/components/DuckDbUnavailable";
 
 interface PageProps {
   params: Promise<{ eventInstanceId: string }>;
@@ -39,10 +41,17 @@ export default async function EventDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [event, details] = await Promise.all([
-    getEventById(eventId, user.email),
-    getEventDetails(eventId, user.email),
-  ]);
+  let event;
+  let details;
+  try {
+    [event, details] = await Promise.all([
+      getEventById(eventId, user.email),
+      getEventDetails(eventId, user.email),
+    ]);
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError) return <DuckDbUnavailable />;
+    throw error;
+  }
 
   if (!event) {
     notFound();

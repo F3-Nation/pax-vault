@@ -2,6 +2,10 @@ import withPWA from "next-pwa";
 
 const nextConfig = {
   reactStrictMode: true,
+  // @duckdb/node-api loads a platform-native binding. Keep it server-side and
+  // let Node resolve the exact package at runtime; it must never enter a
+  // browser or Edge bundle.
+  serverExternalPackages: ["@duckdb/node-api", "@duckdb/node-bindings"],
   images: {
     remotePatterns: [
       {

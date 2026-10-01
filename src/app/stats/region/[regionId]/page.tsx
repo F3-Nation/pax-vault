@@ -18,6 +18,8 @@ import { parseFilterParams } from "@/lib/filters";
 import { EntityDataUnavailable } from "@/components/EntityDataUnavailable";
 import { PreferencesButton } from "@/components/region/PreferencesButton";
 import { reportError } from "@/lib/observability";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
+import { DuckDbUnavailable } from "@/components/DuckDbUnavailable";
 
 interface PageProps {
   params: Promise<{ regionId: string }>;
@@ -63,9 +65,15 @@ export default async function RegionDetailPage({
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
   const persist = searchParamsResolved?.persist;
-  const regionData = await loadRegionData(Number(regionId), user.email, {
-    ...filters,
-  });
+  let regionData;
+  try {
+    regionData = await loadRegionData(Number(regionId), user.email, {
+      ...filters,
+    });
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError) return <DuckDbUnavailable />;
+    throw error;
+  }
 
   // Region admins (role_id 3 on this region's org) get an entry point to the
   // preferences editor. The button is optional chrome, so a failed permission
@@ -83,10 +91,8 @@ export default async function RegionDetailPage({
     });
   }
 
-  const hasRegionData = !!regionData && Object.keys(regionData).length > 0;
-
   // Show empty state when region data is missing or empty
-  if (!hasRegionData) {
+  if (!regionData || Object.keys(regionData).length === 0) {
     return <EntityDataUnavailable entity="Region" />;
   }
 

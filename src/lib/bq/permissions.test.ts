@@ -1,5 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const { duckQuery } = vi.hoisted(() => ({ duckQuery: vi.fn() }));
+vi.mock("@/lib/duckdb/factory", () => ({ getDuckDbRuntime: () => ({}) }));
+vi.mock("@/lib/duckdb/query", () => ({
+  DuckDbQueryAdapter: class {
+    execute = duckQuery;
+  },
+  selectDuckDbOrLegacy: (selection: {
+    env?: NodeJS.ProcessEnv;
+    duckdb: () => Promise<unknown>;
+    legacy: () => Promise<unknown>;
+  }) =>
+    selection.env?.DUCKDB_ENABLED === "true" &&
+    selection.env?.DUCKDB_AUTH_ENABLED !== "false"
+      ? selection.duckdb()
+      : selection.legacy(),
+}));
+
 // Mock BigQuery helper
 vi.mock("@/lib/db", () => {
   return {
@@ -15,6 +32,8 @@ const mockQuery = queryBigQuery as unknown as ReturnType<typeof vi.fn>;
 describe("bq/permissions.ts getRegionPermission", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.DUCKDB_ENABLED;
+    delete process.env.DUCKDB_AUTH_ENABLED;
   });
 
   it("reads role grants from pv_pax only, with every value bound as a parameter", async () => {
@@ -78,6 +97,23 @@ describe("bq/permissions.ts getRegionPermission", () => {
       userId: null,
       isAdmin: false,
     });
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it("uses typed pv_pax roles in DuckDB with exact org and role bindings", async () => {
+    process.env.DUCKDB_ENABLED = "true";
+    process.env.DUCKDB_AUTH_ENABLED = "true";
+    duckQuery.mockResolvedValue([{ user_id: 18, is_admin: true }]);
+    await expect(
+      getRegionPermission(" DREDD@example.com ", 40364),
+    ).resolves.toEqual({
+      userId: 18,
+      isAdmin: true,
+    });
+    expect(duckQuery).toHaveBeenCalledWith(
+      expect.stringContaining("UNNEST(roles)"),
+      [40364, ADMIN_ROLE_ID, "dredd@example.com"],
+    );
     expect(mockQuery).not.toHaveBeenCalled();
   });
 });

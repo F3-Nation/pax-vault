@@ -19,9 +19,10 @@ import {
   RegionAchievementPax,
   RegionAOBreakdown,
 } from "@/lib/types";
+import { DuckDbDependencyError, DuckDbQueryError } from "@/lib/duckdb/errors";
 import { getPageData } from "@/lib/bq/regions";
 import { parseRegionPreferences } from "@/lib/preferences";
-import { cacheStatsData } from "@/lib/cache";
+import { cacheStatsData, getStatsReleaseIdentity } from "@/lib/cache";
 import { StatsFilters } from "@/lib/filters";
 import { normalizeDeep } from "@/lib/normalize";
 
@@ -36,6 +37,7 @@ export async function loadRegionData(
   filters?: StatsFilters,
 ): Promise<RegionData | null> {
   try {
+    const releaseIdentity = getStatsReleaseIdentity("stats_region");
     // Cache key is entity-scoped (region + filters), NOT user-scoped — the
     // normalization runs inside the cache so the cached value is plain JSON.
     return await cacheStatsData<RegionData>(
@@ -82,9 +84,15 @@ export async function loadRegionData(
       },
       ["region-page-data", String(regionId), JSON.stringify(filters ?? {})],
       [`region-${regionId}`],
+      releaseIdentity,
+      "stats_region",
     );
   } catch (err) {
+    if (err instanceof DuckDbDependencyError) throw err;
     console.error(`Error fetching Region data (region=${regionId}):`, err);
+    // A failed DuckDB query is not an empty region. Surface the error rather
+    // than rendering the unavailable state; streamed responses may already be 200.
+    if (err instanceof DuckDbQueryError) throw err;
     return null;
   }
 }

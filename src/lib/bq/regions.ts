@@ -1,4 +1,12 @@
+/* The DuckDB row adapter returns schema-dependent nested structs. */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { queryBigQuery } from "@/lib/db";
+import { getDuckDbRuntime } from "@/lib/duckdb/factory";
+import {
+  DuckDbQueryAdapter,
+  DuckDbParams,
+  selectDuckDbOrLegacy,
+} from "@/lib/duckdb/query";
 import {
   RegionInfo,
   EventData,
@@ -11,6 +19,111 @@ import {
   RegionAOBreakdown,
 } from "@/lib/types";
 import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
+
+type DuckDbExecutor = <T>(sql: string, params?: DuckDbParams) => Promise<T[]>;
+let injectedDuckDbQuery: DuckDbExecutor | undefined;
+export function setRegionDuckDbQueryForTests(query?: DuckDbExecutor): void {
+  injectedDuckDbQuery = query;
+}
+const executeDuckDb: DuckDbExecutor = async (sql, params) => {
+  const adapter = injectedDuckDbQuery
+    ? undefined
+    : new DuckDbQueryAdapter(getDuckDbRuntime());
+  return (injectedDuckDbQuery ?? adapter!.execute.bind(adapter))(sql, params);
+};
+
+function duckEventFilter(regionId: number | null, opts?: StatsFilters) {
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+  if (regionId !== null) {
+    clauses.push("region_org_id = ?");
+    params.push(regionId);
+  }
+  const range = buildRangeDates(opts?.range);
+  const start = opts?.startDate ?? range.startDate;
+  const end = opts?.endDate ?? range.endDate;
+  if (start) {
+    clauses.push("event_date >= CAST(? AS DATE)");
+    params.push(start);
+  }
+  if (end) {
+    clauses.push("event_date <= CAST(? AS DATE)");
+    params.push(end);
+  }
+  const aos = toFiniteNumbers(opts?.aoIds);
+  if (aos.length) {
+    const zero = aos.includes(0),
+      ids = aos.filter((id) => id !== 0),
+      marks = ids.map(() => "?").join(",");
+    if (zero && ids.length)
+      clauses.push(
+        opts?.aoMode === "exclude"
+          ? `(ao_org_id IS NOT NULL AND ao_org_id NOT IN (${marks}))`
+          : `(ao_org_id IS NULL OR ao_org_id IN (${marks}))`,
+      );
+    else if (zero)
+      clauses.push(
+        opts?.aoMode === "exclude"
+          ? "ao_org_id IS NOT NULL"
+          : "ao_org_id IS NULL",
+      );
+    else
+      clauses.push(
+        `${opts?.aoMode === "exclude" ? "ao_org_id NOT IN" : "ao_org_id IN"} (${marks})`,
+      );
+    params.push(...ids);
+  }
+  const addList = (
+    column: string,
+    values: number[] | undefined,
+    mode: string | undefined,
+  ) => {
+    const ids = toFiniteNumbers(values);
+    if (!ids.length) return;
+    const marks = ids.map(() => "?").join(",");
+    clauses.push(
+      `list_has(list_transform(${column}, x -> x.id), ${mode === "exclude" ? "" : ""}[${marks}])`,
+    );
+    // DuckDB's list_has accepts a scalar; use an EXISTS expression for lists.
+    clauses[clauses.length - 1] =
+      `${mode === "exclude" ? "NOT " : ""}EXISTS (SELECT 1 FROM UNNEST(${column}) u WHERE u.unnest.id IN (${marks}))`;
+    params.push(...ids);
+  };
+  addList("tags", opts?.tagIds, opts?.tagMode ?? "include");
+  addList("types", opts?.typeIds, opts?.typeMode ?? "include");
+  const cats = toFiniteNumbers(opts?.categoryIds).filter(
+    (x) => x === 1 || x === 2 || x === 3,
+  );
+  if (cats.length) {
+    const expressions = cats.map(
+      (x) => `${["", "first_f_ind", "second_f_ind", "third_f_ind"][x]} = 1`,
+    );
+    clauses.push(
+      (opts?.categoryMode === "exclude" ? "NOT " : "") +
+        `(${expressions.map((x) => `(${x})`).join(" OR ")})`,
+    );
+  }
+  return { where: clauses.join(" AND "), params };
+}
+
+async function getRegionEventsDuckDb(
+  regionId: number,
+  opts?: StatsFilters & { limit?: number },
+) {
+  const f = duckEventFilter(regionId, opts);
+  const limit =
+    Number.isFinite(opts?.limit) && Number(opts?.limit) > 0 ? " LIMIT ?" : "";
+  if (limit) f.params.push(Number(opts!.limit));
+  return executeDuckDb<EventData>(
+    `SELECT event_id AS event_instance_id, event_date, event_name,
+      pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name,
+      first_f_ind, second_f_ind, third_f_ind, types, tags,
+      list_filter(attendance, x -> x.fartsack IS NOT TRUE) AS attendance,
+      list_filter(attendance, x -> x.fartsack IS TRUE) AS fartsacks
+    FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC${limit}`,
+    f.params,
+  );
+}
 
 /**
  * Build a BigQuery WHERE clause for pv_events-based queries.
@@ -235,13 +348,20 @@ export async function getEvents(
     limit?: number;
   },
 ): Promise<EventData[] | null> {
-  // LIMIT is optional. Keep it numeric-only.
-  const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
-  const limitSql = limit ? `LIMIT ${limit}` : "";
+  return selectDuckDbOrLegacy({
+    capability: "events",
+    env: process.env,
+    duckdb: () => getRegionEventsDuckDb(regionId, opts),
+    legacy: async () => {
+      // LIMIT is optional. Keep it numeric-only.
+      const limit = Number.isFinite(opts?.limit)
+        ? Number(opts!.limit)
+        : undefined;
+      const limitSql = limit ? `LIMIT ${limit}` : "";
 
-  const whereSql = buildEventsWhereSql(regionId, opts);
+      const whereSql = buildEventsWhereSql(regionId, opts);
 
-  const query = `-- REGION EVENTS
+      const query = `-- REGION EVENTS
     SELECT
       event_id as event_instance_id,
       event_date,
@@ -265,12 +385,14 @@ export async function getEvents(
     ${limitSql};
   `;
 
-  const results = await queryBigQuery<EventData>(
-    query,
-    userIdentifier,
-    `fetch events for region ${regionId}`,
-  );
-  return results || null;
+      const results = await queryBigQuery<EventData>(
+        query,
+        userIdentifier,
+        `fetch events for region ${regionId}`,
+      );
+      return results || null;
+    },
+  });
 }
 
 /**
@@ -284,7 +406,19 @@ export async function getRegionInfo(
   regionId: number,
   userIdentifier?: string,
 ): Promise<RegionInfo | null> {
-  const query = `-- REGION INFO
+  return selectDuckDbOrLegacy({
+    capability: "stats_region",
+    env: process.env,
+    duckdb: async () => {
+      const rows = await executeDuckDb<RegionInfo>(
+        `SELECT region_id, region_name, area_id, area_name, logo_url, is_active, aos, types, tags
+       FROM pv_regions WHERE region_id = ? LIMIT 1`,
+        [regionId],
+      );
+      return rows[0] ?? null;
+    },
+    legacy: async () => {
+      const query = `-- REGION INFO
     SELECT
       region_id,
       region_name,
@@ -300,13 +434,15 @@ export async function getRegionInfo(
     LIMIT 1
   `;
 
-  const results = await queryBigQuery<RegionInfo>(
-    query,
-    userIdentifier,
-    `fetch region info for region ${regionId}`,
-    { regionId },
-  );
-  return results?.[0] ?? null;
+      const results = await queryBigQuery<RegionInfo>(
+        query,
+        userIdentifier,
+        `fetch region info for region ${regionId}`,
+        { regionId },
+      );
+      return results?.[0] ?? null;
+    },
+  });
 }
 
 /**
@@ -348,8 +484,19 @@ export async function searchRegionsByName(
   // Bound as a query parameter (@term) — no manual escaping needed.
   const likePattern = `%${term.toLowerCase()}%`;
 
-  // Simple contains search; ordering is alphabetical for predictability.
-  const query = `-- REGION SEARCH
+  return selectDuckDbOrLegacy({
+    capability: "search",
+    env: process.env,
+    duckdb: () =>
+      executeDuckDb<RegionInfo>(
+        `SELECT region_id, region_name, logo_url, is_active
+      FROM pv_regions WHERE region_name IS NOT NULL AND lower(region_name) LIKE ?
+      ${includeInactive ? "" : "AND is_active = TRUE"} ORDER BY region_name LIMIT 50`,
+        [likePattern],
+      ),
+    legacy: async () => {
+      // Simple contains search; ordering is alphabetical for predictability.
+      const query = `-- REGION SEARCH
     SELECT
       region_id,
       region_name,
@@ -363,13 +510,15 @@ export async function searchRegionsByName(
     LIMIT 50
   `;
 
-  const results = await queryBigQuery<RegionInfo>(
-    query,
-    userIdentifier,
-    `search regions by name: ${q}`,
-    { term: likePattern },
-  );
-  return results ?? [];
+      const results = await queryBigQuery<RegionInfo>(
+        query,
+        userIdentifier,
+        `search regions by name: ${q}`,
+        { term: likePattern },
+      );
+      return results ?? [];
+    },
+  });
 }
 
 export async function getPageData(
@@ -398,38 +547,45 @@ export async function getPageData(
   /** Raw `json_config` for this region; null when never saved. */
   preferencesJson: string | null;
 }> {
-  // Build WHERE clause from common filters (region-scoped).
-  const whereSql = buildEventsWhereSql(regionId, opts);
-  // Build non-region filters for re-use against aliased pv_events scans.
-  const eventsFilterAndSql = buildEventsAndSql(opts, "e");
+  return selectDuckDbOrLegacy({
+    capability: "stats_region",
+    env: process.env,
+    duckdb: () => getRegionPageDuckDbParity(regionId, userIdentifier, opts),
+    legacy: async () => {
+      // Build WHERE clause from common filters (region-scoped).
+      const whereSql = buildEventsWhereSql(regionId, opts);
+      // Build non-region filters for re-use against aliased pv_events scans.
+      const eventsFilterAndSql = buildEventsAndSql(opts, "e");
 
-  // Determine chart granularity based on date range.
-  const rangeDates = buildRangeDates(opts?.range);
-  const effectiveStart = opts?.startDate ?? rangeDates.startDate;
-  const effectiveEnd =
-    opts?.endDate ??
-    rangeDates.endDate ??
-    new Date().toISOString().split("T")[0];
-  const daysDiff = effectiveStart
-    ? (new Date(effectiveEnd).getTime() - new Date(effectiveStart).getTime()) /
-      86_400_000
-    : Infinity;
-  const chartGranularity =
-    daysDiff > 365 ? "monthly" : daysDiff > 180 ? "weekly" : "daily";
-  const truncUnit =
-    chartGranularity === "monthly"
-      ? "MONTH"
-      : chartGranularity === "weekly"
-        ? "WEEK(MONDAY)"
-        : "DAY";
-  const spineInterval =
-    chartGranularity === "monthly"
-      ? "INTERVAL 1 MONTH"
-      : chartGranularity === "weekly"
-        ? "INTERVAL 1 WEEK"
-        : "INTERVAL 1 DAY";
+      // Determine chart granularity based on date range.
+      const rangeDates = buildRangeDates(opts?.range);
+      const effectiveStart = opts?.startDate ?? rangeDates.startDate;
+      const effectiveEnd =
+        opts?.endDate ??
+        rangeDates.endDate ??
+        new Date().toISOString().split("T")[0];
+      const daysDiff = effectiveStart
+        ? (new Date(effectiveEnd).getTime() -
+            new Date(effectiveStart).getTime()) /
+          86_400_000
+        : Infinity;
+      const chartGranularity =
+        daysDiff > 365 ? "monthly" : daysDiff > 180 ? "weekly" : "daily";
+      const truncUnit =
+        chartGranularity === "monthly"
+          ? "MONTH"
+          : chartGranularity === "weekly"
+            ? "WEEK(MONDAY)"
+            : "DAY";
+      const spineInterval =
+        chartGranularity === "monthly"
+          ? "INTERVAL 1 MONTH"
+          : chartGranularity === "weekly"
+            ? "INTERVAL 1 WEEK"
+            : "INTERVAL 1 DAY";
 
-  const query = `-- REGION PAGE LOAD
+      const preferenceProjection = `(SELECT json_config FROM pv_regions_preferences WHERE region_id = ${regionId} LIMIT 1) AS preferencesJson`;
+      const query = `-- REGION PAGE LOAD
     WITH
       events AS (
         SELECT
@@ -636,12 +792,7 @@ export async function getPageData(
       -- loader). Folded into this query rather than fetched separately to hold
       -- the single-query-per-page rule. NULL when the region has never saved
       -- preferences, in which case the loader applies defaults.
-      (
-        SELECT json_config
-        FROM pv_regions_preferences
-        WHERE region_id = ${regionId}
-        LIMIT 1
-      ) AS preferencesJson,
+      ${preferenceProjection},
 
       -- Events list as an ARRAY (limit it)
       (
@@ -909,29 +1060,688 @@ export async function getPageData(
       ) AS charts;
     `;
 
-  const results = await queryBigQuery<{
-    regionInfo: RegionInfo;
-    events: EventData[];
-    summary: RegionSummary;
-    leaders: Leaders[];
-    upcoming: EventUpcoming[];
-    kotter: RegionKotterList[];
-    charts: ChartData[];
-    achievements: RegionAchievementPax[];
-    aoBreakdown: RegionAOBreakdown[];
-    preferencesJson: string | null;
-  }>(query, userIdentifier, `fetch region data for region ${regionId}`);
+      const results = await queryBigQuery<{
+        regionInfo: RegionInfo;
+        events: EventData[];
+        summary: RegionSummary;
+        leaders: Leaders[];
+        upcoming: EventUpcoming[];
+        kotter: RegionKotterList[];
+        charts: ChartData[];
+        achievements: RegionAchievementPax[];
+        aoBreakdown: RegionAOBreakdown[];
+        preferencesJson: string | null;
+      }>(query, userIdentifier, `fetch region data for region ${regionId}`);
 
+      const preferencesJson = results?.[0]?.preferencesJson ?? null;
+      return {
+        info: results?.[0]?.regionInfo || null,
+        events: results?.[0]?.events || null,
+        summary: results?.[0]?.summary || null,
+        leaders: results?.[0]?.leaders || null,
+        upcoming: results?.[0]?.upcoming || null,
+        kotter: results?.[0]?.kotter || null,
+        charts: results?.[0]?.charts || null,
+        achievements: results?.[0]?.achievements || null,
+        aoBreakdown: results?.[0]?.aoBreakdown || null,
+        preferencesJson,
+      };
+    },
+  });
+}
+
+/** Native DuckDB page read.  This is intentionally separate from the legacy
+ * BigQuery statement: DuckDB does not implement BigQuery STRUCT/UNNEST
+ * syntax, and keeping the two dialects mixed was the source of the old
+ * fallback bug. */
+type RegionPageData = Awaited<ReturnType<typeof getPageData>>;
+
+/** DuckDB implementation deliberately works from raw, unbounded events. */
+async function getRegionPageDuckDbParity(
+  regionId: number,
+  userIdentifier?: string,
+  opts?: StatsFilters,
+): Promise<RegionPageData> {
+  const f = duckEventFilter(regionId, opts);
+  const allFilter = duckEventFilter(null, opts);
+  const [info, raw, upcoming, kotter, pax] = await Promise.all([
+    executeDuckDb<RegionInfo>(
+      `SELECT region_id, region_name, area_id, area_name, logo_url, is_active, aos, types, tags FROM pv_regions WHERE region_id = ? LIMIT 1`,
+      [regionId],
+    ),
+    executeDuckDb<any>(
+      `SELECT event_id AS event_instance_id, event_date, event_name, pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name, first_f_ind, second_f_ind, third_f_ind, types, tags, attendance FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC`,
+      f.params,
+    ),
+    executeDuckDb<EventUpcoming>(
+      `SELECT start_date, start_time, ao_name, ao_org_id, location_name, event_name, event_type, event_category, q_list FROM pv_upcoming WHERE region_org_id = ? ORDER BY start_date, start_time, ao_name LIMIT 50`,
+      [regionId],
+    ),
+    executeDuckDb<RegionKotterList>(
+      `SELECT user_id, f3_name, avatar_url, kotter_status, total_events, first_event_date, days_since_last_event, last_event_date, last_event_name, last_event_ao_name, last_event_ao_org_id, bestie_list FROM pv_kotter WHERE home_region_id = ? ORDER BY days_since_last_event, last_event_date, f3_name`,
+      [regionId],
+    ),
+    executeDuckDb<any>(
+      `SELECT user_id, f3_name, avatar_url, start_date_override FROM pv_pax WHERE home_region_id = ?`,
+      [regionId],
+    ),
+  ]);
+  let career: any[] = [];
+  if (pax.some((p: any) => p.user_id != null)) {
+    const careerPosts = await executeDuckDb<any>(
+      `WITH scoped_pax AS (
+         SELECT DISTINCT user_id FROM pv_pax
+         WHERE home_region_id = ? AND user_id IS NOT NULL
+       ), event_users AS (
+         SELECT
+           UNNEST(list_distinct(list_transform(
+             list_filter(attendance, a -> a.user_id IS NOT NULL AND a.fartsack IS NOT TRUE),
+             a -> a.user_id
+           ))) AS user_id,
+           event_date,
+           region_org_id
+         FROM pv_events
+       )
+       SELECT event_users.user_id,
+         count(*) AS all_posts,
+         count(*) FILTER (WHERE region_org_id = ?) AS region_posts,
+         min(event_date) AS first_event_date,
+         max(event_date) FILTER (WHERE region_org_id = ?) AS last_region_event_date
+       FROM event_users
+       JOIN scoped_pax USING (user_id)
+       GROUP BY event_users.user_id`,
+      [regionId, regionId, regionId],
+    );
+    const careerQs = await executeDuckDb<any>(
+      `WITH scoped_pax AS (
+         SELECT DISTINCT user_id FROM pv_pax
+         WHERE home_region_id = ? AND user_id IS NOT NULL
+       ), event_qs AS (
+         SELECT
+           UNNEST(list_transform(list_filter(
+             attendance,
+             a -> a.user_id IS NOT NULL AND a.fartsack IS NOT TRUE AND COALESCE(a.q_ind, 0) <> 0
+           ), a -> a.user_id)) AS user_id,
+           region_org_id
+         FROM pv_events
+       )
+       SELECT event_qs.user_id,
+         count(*) AS all_qs,
+         count(*) FILTER (WHERE region_org_id = ?) AS region_qs
+       FROM event_qs
+       JOIN scoped_pax USING (user_id)
+       GROUP BY event_qs.user_id`,
+      [regionId, regionId],
+    );
+    const qByUser = new Map<number, any>(
+      careerQs.map((row) => [Number(row.user_id), row]),
+    );
+    career = careerPosts.map((row) => {
+      const q = qByUser.get(Number(row.user_id));
+      return {
+        ...row,
+        all_qs: Number(q?.all_qs ?? 0),
+        region_qs: Number(q?.region_qs ?? 0),
+      };
+    });
+  }
+  const display = raw.slice(0, 100).map((e: any) => ({
+    ...e,
+    attendance: (e.attendance ?? []).filter((a: any) => a.fartsack !== true),
+    fartsacks: (e.attendance ?? []).filter((a: any) => a.fartsack === true),
+  })) as EventData[];
+  const attended = (e: any) =>
+    (e.attendance ?? []).filter(
+      (a: any) => a.fartsack !== true && a.user_id != null,
+    );
+  const rows = raw.flatMap((e: any) => attended(e).map((a: any) => ({ e, a })));
+  const ids = (field: (a: any) => boolean) =>
+    new Set(
+      rows.filter((x: any) => field(x.a)).map((x: any) => Number(x.a.user_id)),
+    );
+  const countFlags = (flag: string) => {
+    const m = new Map<number, any>();
+    for (const e of raw)
+      for (const a of e.attendance ?? [])
+        if (a[flag] === true) {
+          const id = Number(a.user_id);
+          const x = m.get(id) ?? { user_id: id, f3_name: a.f3_name, count: 0 };
+          x.count++;
+          m.set(id, x);
+        }
+    const max = Math.max(0, ...[...m.values()].map((x) => x.count));
+    return [...m.values()]
+      .filter((x) => max > 0 && x.count === max)
+      .sort((a, b) => String(a.f3_name).localeCompare(String(b.f3_name)));
+  };
+  const breakdown = new Map<number, RegionAOBreakdown>();
+  for (const e of raw) {
+    const id = Number(e.ao_org_id ?? 0);
+    const x = breakdown.get(id) ?? {
+      ao_id: id,
+      ao_name: e.ao_name ?? "(No AO)",
+      beatdowns: 0,
+    };
+    x.beatdowns++;
+    breakdown.set(id, x);
+  }
+  const leaderMap = new Map<number, Leaders>();
+  for (const { e, a } of rows) {
+    const id = Number(a.user_id);
+    const x = leaderMap.get(id) ?? {
+      user_id: id,
+      f3_name: a.f3_name,
+      posts: 0,
+      qs: 0,
+      avatar_url: a.avatar_url ?? undefined,
+      all_posts: 0,
+      all_qs: 0,
+    };
+    x.posts++;
+    if (a.q_ind) x.qs++;
+    leaderMap.set(id, x);
+  }
+  const leaderList = [...leaderMap.values()]
+    .sort((a, b) => b.posts - a.posts || b.qs - a.qs)
+    .slice(0, 100);
+  if (leaderList.length) {
+    const targets = leaderList.map((leader) => leader.user_id);
+    const groupedLeaders = await executeDuckDb<any>(
+      `WITH filtered_events AS (
+         SELECT attendance FROM pv_events${allFilter.where ? ` WHERE ${allFilter.where}` : ""}
+       ), targets(user_id) AS (VALUES ${targets.map(() => "(CAST(? AS INTEGER))").join(",")})
+       , target_events AS (
+         SELECT
+           UNNEST(list_transform(list_filter(
+             attendance,
+             a -> a.user_id IS NOT NULL AND a.fartsack IS NOT TRUE
+           ), a -> struct_pack(
+             user_id := a.user_id,
+             is_q := COALESCE(a.q_ind, 0) <> 0
+           ))) AS attendee
+         FROM filtered_events
+       )
+       SELECT targets.user_id,
+         count(*) AS all_posts,
+         count(*) FILTER (WHERE target_events.attendee.is_q) AS all_qs
+       FROM target_events
+       JOIN targets ON targets.user_id = target_events.attendee.user_id
+       GROUP BY targets.user_id`,
+      [...allFilter.params, ...targets],
+    );
+    for (const row of groupedLeaders) {
+      const leader = leaderMap.get(Number(row.user_id));
+      if (leader) {
+        leader.all_posts = Number(row.all_posts ?? 0);
+        leader.all_qs = Number(row.all_qs ?? 0);
+      }
+    }
+  }
+  const now = Date.now(),
+    active = new Set<number>();
+  for (const { e, a } of rows)
+    if (new Date(String(e.event_date)).getTime() >= now - 30 * 86400000)
+      active.add(Number(a.user_id));
+  let paxCount = 0,
+    fngCount = 0;
+  for (const e of raw) {
+    paxCount += Number(e.pax_count ?? 0);
+    fngCount += Number(e.fng_count ?? 0);
+  }
+  const summary: RegionSummary = {
+    event_count: raw.length,
+    ao_count: new Set(
+      raw
+        .filter((e: any) => e.ao_org_id != null)
+        .map((e: any) => Number(e.ao_org_id)),
+    ).size,
+    active_pax: active.size,
+    unique_pax: ids(() => true).size,
+    unique_qs: ids((a) => !!a.q_ind).size,
+    fng_count: fngCount,
+    pax_count_average: raw.length ? paxCount / raw.length : 0,
+    fartsack_kings: countFlags("fartsack"),
+    ghost_kings: countFlags("ghost"),
+  };
+  const range = buildRangeDates(opts?.range),
+    start = opts?.startDate ?? range.startDate,
+    end =
+      opts?.endDate ?? range.endDate ?? new Date().toISOString().slice(0, 10);
+  const days = start
+      ? (Date.parse(end) - Date.parse(start)) / 86400000
+      : Infinity,
+    unit = days > 365 ? "month" : days > 180 ? "week" : "day";
+  const bucket = (s: string) => {
+    const d = new Date(`${s.slice(0, 10)}T00:00:00Z`);
+    if (unit === "month") return `${s.slice(0, 7)}-01`;
+    if (unit === "week") {
+      d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    }
+    return d.toISOString().slice(0, 10);
+  };
+  const charts = new Map<string, ChartData>();
+  const chartPax = new Map<string, Set<number>>(),
+    chartQs = new Map<string, Set<number>>();
+  for (const e of raw) {
+    const date = bucket(String(e.event_date));
+    const x = charts.get(date) ?? {
+      date,
+      pax_count: 0,
+      fng_count: 0,
+      q_count: 0,
+      unique_pax_count: 0,
+      unique_q_count: 0,
+    };
+    const as = attended(e);
+    x.pax_count += Number(e.pax_count ?? 0);
+    x.fng_count += Number(e.fng_count ?? 0);
+    x.q_count += as.filter((a: any) => !!a.q_ind).length;
+    x.unique_pax_count += new Set(as.map((a: any) => Number(a.user_id))).size;
+    x.unique_q_count += new Set(
+      as.filter((a: any) => !!a.q_ind).map((a: any) => Number(a.user_id)),
+    ).size;
+    charts.set(date, x);
+  }
+  for (const e of raw) {
+    const date = bucket(String(e.event_date));
+    const as = attended(e);
+    const p = chartPax.get(date) ?? new Set<number>(),
+      q = chartQs.get(date) ?? new Set<number>();
+    for (const a of as) {
+      p.add(Number(a.user_id));
+      if (a.q_ind) q.add(Number(a.user_id));
+    }
+    chartPax.set(date, p);
+    chartQs.set(date, q);
+  }
+  for (const [date, x] of charts) {
+    x.unique_pax_count = chartPax.get(date)?.size ?? 0;
+    x.unique_q_count = chartQs.get(date)?.size ?? 0;
+  }
+  const chartList = [...charts.values()].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
+  if (chartList.length > 1) {
+    const filled = new Map(charts),
+      cursor = new Date(`${chartList[0].date}T00:00:00Z`),
+      last = new Date(`${chartList.at(-1)!.date}T00:00:00Z`);
+    while (cursor <= last) {
+      const key = cursor.toISOString().slice(0, 10);
+      if (!filled.has(key))
+        filled.set(key, {
+          date: key,
+          pax_count: 0,
+          fng_count: 0,
+          q_count: 0,
+          unique_pax_count: 0,
+          unique_q_count: 0,
+        });
+      if (unit === "month") cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+      else cursor.setUTCDate(cursor.getUTCDate() + (unit === "week" ? 7 : 1));
+    }
+    charts.clear();
+    for (const [key, value] of filled) charts.set(key, value);
+  }
+  const prefs = await queryBigQuery<{ json_config: string | null }>(
+    "SELECT json_config FROM pv_regions_preferences WHERE region_id = @regionId LIMIT 1",
+    userIdentifier,
+    `fetch preferences for region ${regionId}`,
+    { regionId },
+  );
   return {
-    info: results?.[0]?.regionInfo || null,
-    events: results?.[0]?.events || null,
-    summary: results?.[0]?.summary || null,
-    leaders: results?.[0]?.leaders || null,
-    upcoming: results?.[0]?.upcoming || null,
-    kotter: results?.[0]?.kotter || null,
-    charts: results?.[0]?.charts || null,
-    achievements: results?.[0]?.achievements || null,
-    aoBreakdown: results?.[0]?.aoBreakdown || null,
-    preferencesJson: results?.[0]?.preferencesJson ?? null,
+    info: info[0] ?? null,
+    events: display,
+    summary,
+    leaders: leaderList,
+    upcoming,
+    kotter,
+    charts: [...charts.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    achievements: buildRegionAchievementsFromTotals(pax, career),
+    aoBreakdown: [...breakdown.values()].sort(
+      (a, b) => b.beatdowns - a.beatdowns || a.ao_name.localeCompare(b.ao_name),
+    ),
+    preferencesJson: prefs[0]?.json_config ?? null,
+  };
+}
+
+export function buildRegionAchievements(
+  pax: any[],
+  allEvents: any[],
+  regionId: number,
+): RegionAchievementPax[] {
+  const attended = (e: any) =>
+    (e.attendance ?? []).filter((a: any) => a.fartsack !== true);
+  const byUser = new Map<
+    number,
+    {
+      allPosts: number;
+      allQs: number;
+      regionPosts: number;
+      regionQs: number;
+      first: string | null;
+      last: string | null;
+    }
+  >();
+  for (const p of pax) {
+    if (p.user_id == null) continue;
+    const id = Number(p.user_id);
+    if (!Number.isNaN(id) && !byUser.has(id))
+      byUser.set(id, {
+        allPosts: 0,
+        allQs: 0,
+        regionPosts: 0,
+        regionQs: 0,
+        first: null,
+        last: null,
+      });
+  }
+  for (const e of allEvents) {
+    // Null-dated source rows still contribute attendance totals, but do not
+    // participate in earliest/last-date calculations (matching SQL MIN/MAX).
+    const eventDate =
+      e.event_date == null ? null : String(e.event_date).slice(0, 10);
+    const inRegion = Number(e.region_org_id) === regionId;
+    const qCounts = new Map<number, number>();
+    for (const a of attended(e)) {
+      if (a.user_id == null) continue;
+      const id = Number(a.user_id);
+      const stats = byUser.get(id);
+      if (!stats) continue;
+      // A post is one distinct event per user, regardless of duplicate
+      // attendance rows; Qs retain the legacy per-attendance-row counting.
+      if (!qCounts.has(id)) qCounts.set(id, 0);
+      if (a.q_ind) qCounts.set(id, qCounts.get(id)! + 1);
+    }
+    for (const [id, qCount] of qCounts) {
+      const stats = byUser.get(id)!;
+      stats.allPosts++;
+      stats.allQs += qCount;
+      if (
+        eventDate !== null &&
+        (stats.first === null || eventDate < stats.first)
+      )
+        stats.first = eventDate;
+      if (inRegion) {
+        stats.regionPosts++;
+        stats.regionQs += qCount;
+        if (
+          eventDate !== null &&
+          (stats.last === null || eventDate > stats.last)
+        )
+          stats.last = eventDate;
+      }
+    }
+  }
+  return buildRegionAchievementsFromTotals(pax, byUser);
+}
+
+function buildRegionAchievementsFromTotals(
+  pax: any[],
+  rows: any[] | Map<number, any>,
+): RegionAchievementPax[] {
+  const totals =
+    rows instanceof Map
+      ? rows
+      : new Map<number, any>(
+          rows.map((row) => [
+            Number(row.user_id),
+            {
+              allPosts: Number(row.all_posts ?? 0),
+              allQs: Number(row.all_qs ?? 0),
+              regionPosts: Number(row.region_posts ?? 0),
+              regionQs: Number(row.region_qs ?? 0),
+              first:
+                row.first_event_date == null
+                  ? null
+                  : String(row.first_event_date).slice(0, 10),
+              last:
+                row.last_region_event_date == null
+                  ? null
+                  : String(row.last_region_event_date).slice(0, 10),
+            },
+          ]),
+        );
+  const thresholds = [
+    25, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
+  ];
+  return pax
+    .map((p) => {
+      const stats = (p.user_id == null
+        ? undefined
+        : totals.get(Number(p.user_id))) ?? {
+        allPosts: 0,
+        allQs: 0,
+        regionPosts: 0,
+        regionQs: 0,
+        first: null,
+        last: null,
+      };
+      const rp = stats.regionPosts,
+        ap = stats.allPosts,
+        rq = stats.regionQs,
+        aq = stats.allQs;
+      const next = (n: number) => thresholds.find((t) => t > n) ?? null;
+      const first = p.start_date_override ?? stats.first;
+      const last = stats.last;
+      let anniversary: string | null = null;
+      if (first) {
+        const [, month, day] = first.slice(0, 10).split("-").map(Number),
+          today = new Date();
+        const isLeap = (year: number) =>
+          year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+        const safeDay =
+          month === 2 && day === 29 && !isLeap(today.getUTCFullYear())
+            ? 28
+            : day;
+        anniversary = `${today.getUTCFullYear()}-${String(month).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
+        if (anniversary < today.toISOString().slice(0, 10)) {
+          const nextYear = today.getUTCFullYear() + 1;
+          const nextDay =
+            month === 2 && day === 29 && !isLeap(nextYear) ? 28 : day;
+          anniversary = `${nextYear}-${String(month).padStart(2, "0")}-${String(nextDay).padStart(2, "0")}`;
+        }
+      }
+      const days = anniversary
+        ? Math.round(
+            (Date.parse(`${anniversary}T00:00:00Z`) - Date.now()) / 86400000,
+          )
+        : null;
+      const nextWithin = (n: number, limit: number) => {
+        const milestone = next(n);
+        return milestone !== null && milestone - n <= limit;
+      };
+      const lastTime = last ? Date.parse(`${last}T00:00:00Z`) : NaN;
+      const active90 =
+        Number.isFinite(lastTime) && lastTime >= Date.now() - 90 * 86400000;
+      const active30 =
+        Number.isFinite(lastTime) && lastTime >= Date.now() - 30 * 86400000;
+      const qualifies =
+        rp > 10 &&
+        ((active90 &&
+          (nextWithin(rp, 1) ||
+            nextWithin(ap, 1) ||
+            nextWithin(rq, 1) ||
+            nextWithin(aq, 1) ||
+            (active30 &&
+              (nextWithin(rp, 5) ||
+                nextWithin(ap, 5) ||
+                nextWithin(rq, 3) ||
+                nextWithin(aq, 3))))) ||
+          (days !== null && days >= 0 && days <= 14 && rp >= 25));
+      return {
+        user_id: p.user_id,
+        f3_name: p.f3_name,
+        avatar_url: p.avatar_url ?? undefined,
+        region_posts: rp,
+        region_qs: rq,
+        all_posts: ap,
+        all_qs: aq,
+        next_region_post_milestone: next(rp),
+        next_nation_post_milestone: next(ap),
+        next_region_q_milestone: next(rq),
+        next_nation_q_milestone: next(aq),
+        fng_date: first,
+        next_anniversary_date: anniversary,
+        days_until_anniversary: days,
+        last_region_event_date: last,
+        qualifies,
+      };
+    })
+    .filter((p) => p.qualifies)
+    .map(({ qualifies: _qualifies, ...p }) => p)
+    .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
+}
+
+async function getRegionPageDuckDb(
+  regionId: number,
+  userIdentifier?: string,
+  opts?: StatsFilters,
+): Promise<RegionPageData> {
+  const [infoRows, events, upcoming, kotter] = await Promise.all([
+    executeDuckDb<RegionInfo>(
+      `SELECT region_id, region_name, area_id, area_name, logo_url, is_active, aos, types, tags FROM pv_regions WHERE region_id = ? LIMIT 1`,
+      [regionId],
+    ),
+    getRegionEventsDuckDb(regionId, { ...opts, limit: 100 }),
+    executeDuckDb<EventUpcoming>(
+      `SELECT start_date, start_time, ao_name, ao_org_id, location_name, event_name, event_type, event_category, q_list FROM pv_upcoming WHERE region_org_id = ? ORDER BY start_date, start_time, ao_name LIMIT 50`,
+      [regionId],
+    ),
+    executeDuckDb<RegionKotterList>(
+      `SELECT user_id, f3_name, avatar_url, kotter_status, total_events, first_event_date, days_since_last_event, last_event_date, last_event_name, last_event_ao_name, last_event_ao_org_id, bestie_list FROM pv_kotter WHERE home_region_id = ? ORDER BY days_since_last_event, last_event_date, f3_name`,
+      [regionId],
+    ),
+  ]);
+  const active = new Set<number>(),
+    users = new Set<number>(),
+    qs = new Set<number>();
+  const farts = new Map<
+    number,
+    { user_id: number; f3_name: string; count: number }
+  >();
+  const ghosts = new Map<
+    number,
+    { user_id: number; f3_name: string; count: number }
+  >();
+  let fng = 0,
+    pax = 0;
+  const breakdown = new Map<
+    number,
+    { ao_id: number; ao_name: string; beatdowns: number }
+  >();
+  for (const event of events) {
+    fng += Number(event.fng_count ?? 0);
+    pax += Number(event.pax_count ?? 0);
+    const ao = Number(event.ao_org_id ?? 0);
+    const key = ao;
+    const b = breakdown.get(key) ?? {
+      ao_id: key,
+      ao_name: event.ao_name ?? "(No AO)",
+      beatdowns: 0,
+    };
+    b.beatdowns++;
+    breakdown.set(key, b);
+    for (const a of event.attendance ?? []) {
+      const id = Number(a.user_id);
+      if (!Number.isFinite(id)) continue;
+      users.add(id);
+      if (a.q_ind) qs.add(id);
+      if (
+        new Date(String(event.event_date)).getTime() >=
+        Date.now() - 30 * 86400000
+      )
+        active.add(id);
+      if (a.fartsack) {
+        const x = farts.get(id) ?? {
+          user_id: id,
+          f3_name: a.f3_name,
+          count: 0,
+        };
+        x.count++;
+        farts.set(id, x);
+      }
+      if (a.ghost) {
+        const x = ghosts.get(id) ?? {
+          user_id: id,
+          f3_name: a.f3_name,
+          count: 0,
+        };
+        x.count++;
+        ghosts.set(id, x);
+      }
+    }
+  }
+  const kings = (m: typeof farts) => {
+    const max = Math.max(0, ...[...m.values()].map((x) => x.count));
+    return [...m.values()]
+      .filter((x) => x.count === max && max > 0)
+      .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
+  };
+  const leaderMap = new Map<number, Leaders>();
+  for (const e of events)
+    for (const a of e.attendance ?? []) {
+      const id = Number(a.user_id);
+      const l = leaderMap.get(id) ?? {
+        user_id: id,
+        f3_name: a.f3_name,
+        posts: 0,
+        qs: 0,
+        avatar_url: a.avatar_url ?? undefined,
+      };
+      l.posts++;
+      if (a.q_ind) l.qs++;
+      leaderMap.set(id, l);
+    }
+  const summary: RegionSummary = {
+    event_count: events.length,
+    ao_count: breakdown.size,
+    active_pax: active.size,
+    unique_pax: users.size,
+    unique_qs: qs.size,
+    fng_count: fng,
+    pax_count_average: events.length ? pax / events.length : 0,
+    fartsack_kings: kings(farts),
+    ghost_kings: kings(ghosts),
+  };
+  const leaders = [...leaderMap.values()]
+    .sort((a, b) => b.posts - a.posts || b.qs - a.qs)
+    .slice(0, 100);
+  const chartMap = new Map<string, ChartData>();
+  for (const e of events) {
+    const date = String(e.event_date).slice(0, 10);
+    const c = chartMap.get(date) ?? {
+      date,
+      pax_count: 0,
+      fng_count: 0,
+      q_count: 0,
+      unique_pax_count: 0,
+      unique_q_count: 0,
+    };
+    c.pax_count += Number(e.pax_count ?? 0);
+    c.fng_count += Number(e.fng_count ?? 0);
+    const ids = new Set<number>(),
+      qids = new Set<number>();
+    for (const a of e.attendance ?? []) {
+      ids.add(Number(a.user_id));
+      if (a.q_ind) qids.add(Number(a.user_id));
+    }
+    c.q_count += qids.size;
+    c.unique_pax_count += ids.size;
+    c.unique_q_count += qids.size;
+    chartMap.set(date, c);
+  }
+  return {
+    info: infoRows[0] ?? null,
+    events,
+    summary,
+    leaders,
+    upcoming,
+    kotter,
+    charts: [...chartMap.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    achievements: [],
+    aoBreakdown: [...breakdown.values()].sort(
+      (a, b) => b.beatdowns - a.beatdowns || a.ao_name.localeCompare(b.ao_name),
+    ),
+    preferencesJson: null,
   };
 }

@@ -1,4 +1,6 @@
 import { queryBigQuery } from "@/lib/db";
+import { getDuckDbRuntime } from "@/lib/duckdb/factory";
+import { DuckDbQueryAdapter, selectDuckDbOrLegacy } from "@/lib/duckdb/query";
 import {
   ActivityWindow,
   EventData,
@@ -79,21 +81,14 @@ function buildEventsWhereSql(
 
   // AO filters.
   if (aoList.length > 0) {
-    const list = aoList.join(",");
-    if (aoList.includes(0)) {
-      aoList.splice(aoList.indexOf(0), 1); // Remove 0 for IN clause.
-      whereClauses.push(
-        aoMode === "exclude"
-          ? `(ao_org_id NOT IN (${list}) OR ao_org_id IS NOT NULL)`
-          : `(ao_org_id IN (${list}) OR ao_org_id IS NULL)`,
-      );
-    } else {
-      whereClauses.push(
-        aoMode === "exclude"
-          ? `ao_org_id NOT IN (${list})`
-          : `ao_org_id IN (${list})`,
-      );
-    }
+    const includesNull = aoList.includes(0);
+    const ids = aoList.filter((id) => id !== 0);
+    const nonNull = ids.length ? `ao_org_id IN (${ids.join(",")})` : "FALSE";
+    whereClauses.push(
+      aoMode === "exclude"
+        ? `(ao_org_id IS NOT NULL AND ${ids.length ? `ao_org_id NOT IN (${ids.join(",")})` : "TRUE"})`
+        : `(${includesNull ? "ao_org_id IS NULL" : "FALSE"}${ids.length ? ` OR ${nonNull}` : ""})`,
+    );
   }
 
   // Region filters.
@@ -253,6 +248,100 @@ export async function getEvents(
     limit?: number;
   },
 ): Promise<EventData[] | null> {
+  return selectDuckDbOrLegacy({
+    capability: "events",
+    env: process.env,
+    duckdb: async () => {
+      const limit = Number.isFinite(opts?.limit)
+        ? Number(opts!.limit)
+        : undefined;
+      const adapter = new DuckDbQueryAdapter(getDuckDbRuntime());
+      const clauses = [
+        `EXISTS (SELECT 1 FROM UNNEST(attendance) AS u(a)
+                 WHERE a.user_id = ? AND a.fartsack IS NOT TRUE)`,
+      ];
+      const params: unknown[] = [paxId];
+      const ranges = buildRangeDates(opts?.range);
+      const start = opts?.startDate ?? ranges.startDate;
+      const end = opts?.endDate ?? ranges.endDate;
+      if (start) {
+        clauses.push("event_date >= CAST(? AS DATE)");
+        params.push(start);
+      }
+      if (end) {
+        clauses.push("event_date <= CAST(? AS DATE)");
+        params.push(end);
+      }
+      const add = (
+        column: string,
+        values: number[] | undefined,
+        mode = "include",
+      ) => {
+        const ids = toFiniteNumbers(values);
+        if (!ids.length) return;
+        clauses.push(
+          `${column} ${mode === "exclude" ? "NOT IN" : "IN"} (${ids.map(() => "?").join(",")})`,
+        );
+        params.push(...ids);
+      };
+      const aoIds = toFiniteNumbers(opts?.aoIds);
+      if (aoIds.length) {
+        const includesNull = aoIds.includes(0);
+        const ids = aoIds.filter((id) => id !== 0);
+        clauses.push(
+          opts?.aoMode === "exclude"
+            ? `(ao_org_id IS NOT NULL AND ${ids.length ? `ao_org_id NOT IN (${ids.map(() => "?").join(",")})` : "TRUE"})`
+            : `(${includesNull ? "ao_org_id IS NULL" : "FALSE"}${ids.length ? ` OR ao_org_id IN (${ids.map(() => "?").join(",")})` : ""})`,
+        );
+        params.push(...ids);
+      }
+      // AO filters are handled above because 0 is the NULL-AO sentinel.
+      add("region_org_id", opts?.regionIds, opts?.regionMode);
+      const nested = (
+        column: string,
+        values: number[] | undefined,
+        mode = "include",
+      ) => {
+        const ids = toFiniteNumbers(values);
+        if (!ids.length) return;
+        const exists = `EXISTS (SELECT 1 FROM UNNEST(${column}) AS u(x) WHERE x.id IN (${ids.map(() => "?").join(",")}))`;
+        clauses.push(mode === "exclude" ? `NOT (${exists})` : exists);
+        params.push(...ids);
+      };
+      nested("tags", opts?.tagIds, opts?.tagMode);
+      nested("types", opts?.typeIds, opts?.typeMode);
+      const categories = toFiniteNumbers(opts?.categoryIds).filter((x) =>
+        [1, 2, 3].includes(x),
+      );
+      if (categories.length)
+        clauses.push(
+          `${opts?.categoryMode === "exclude" ? "NOT " : ""}(${categories.map((x) => `${["", "first_f_ind", "second_f_ind", "third_f_ind"][x]} = 1`).join(" OR ")})`,
+        );
+      const rows = await adapter.execute<EventData>(
+        `SELECT event_id AS event_instance_id, event_date, event_name, pax_count,
+          fng_count, ao_org_id, ao_name, region_org_id, region_name,
+          first_f_ind, second_f_ind, third_f_ind, types, tags,
+          list_filter(attendance, a -> a.fartsack IS NOT TRUE) AS attendance,
+          list_filter(attendance, a -> a.fartsack IS TRUE) AS fartsacks
+         FROM pv_events
+         WHERE ${clauses.join(" AND ")}
+         ORDER BY event_date DESC, event_id DESC${limit === undefined ? "" : " LIMIT ?"}`,
+        limit === undefined ? params : [...params, limit],
+      );
+      const attendedRows = rows.filter((event) =>
+        (event.attendance ?? []).some((a) => Number(a.user_id) === paxId),
+      );
+      return attendedRows.length ? attendedRows : null;
+    },
+    legacy: async () => getEventsLegacy(paxId, userIdentifier, opts),
+  });
+}
+
+async function getEventsLegacy(
+  paxId: number,
+  userIdentifier?: string,
+  opts?: StatsFilters & { limit?: number },
+): Promise<EventData[] | null> {
   // LIMIT is optional. Keep it numeric-only.
   const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
   const limitSql = limit ? `LIMIT ${limit}` : "";
@@ -313,6 +402,39 @@ export async function getPaxIdentityByEmail(
   userIdentifier?: string,
 ): Promise<PaxIdentity | null> {
   const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return null;
+  return selectDuckDbOrLegacy({
+    capability: "auth_identity",
+    env: process.env,
+    duckdb: async () => {
+      const adapter = new DuckDbQueryAdapter(getDuckDbRuntime());
+      const rows = await adapter.execute<{
+        pax_id: number;
+        home_region_id: number | null;
+      }>(
+        `SELECT user_id AS pax_id, home_region_id
+           FROM pv_pax
+          WHERE email IS NOT NULL AND LOWER(email) = ?
+          ORDER BY user_id LIMIT 1`,
+        [normalizedEmail],
+      );
+      const row = rows[0];
+      if (!row || row.pax_id == null) return null;
+      return {
+        paxId: Number(row.pax_id),
+        homeRegionId:
+          row.home_region_id == null ? null : Number(row.home_region_id),
+      };
+    },
+    legacy: () =>
+      getPaxIdentityByEmailBigQuery(normalizedEmail, userIdentifier),
+  });
+}
+
+async function getPaxIdentityByEmailBigQuery(
+  normalizedEmail: string,
+  userIdentifier?: string,
+): Promise<PaxIdentity | null> {
   const query = `-- PAX IDENTITY BY EMAIL
     SELECT
       user_id AS pax_id,
@@ -344,6 +466,34 @@ export async function getPaxIdentityByEmail(
 }
 
 export async function searchUsersByName(
+  q: string,
+  userIdentifier?: string,
+  regionId?: number,
+): Promise<PAXInfo[]> {
+  return selectDuckDbOrLegacy({
+    capability: "search",
+    env: process.env,
+    duckdb: async () => {
+      const term = (q || "").trim();
+      if (term.length < 2) return [];
+      const adapter = new DuckDbQueryAdapter(getDuckDbRuntime());
+      return adapter.execute<PAXInfo>(
+        `SELECT user_id, f3_name, home_region_id, home_region_name,
+                avatar_url, status
+           FROM pv_pax
+          WHERE f3_name IS NOT NULL AND lower(f3_name) LIKE ?
+            ${Number.isFinite(regionId) && regionId !== undefined ? "AND home_region_id = ?" : ""}
+          ORDER BY f3_name LIMIT 50`,
+        Number.isFinite(regionId) && regionId !== undefined
+          ? [`%${term.toLowerCase()}%`, Number(regionId)]
+          : [`%${term.toLowerCase()}%`],
+      );
+    },
+    legacy: async () => searchUsersByNameLegacy(q, userIdentifier, regionId),
+  });
+}
+
+async function searchUsersByNameLegacy(
   q: string,
   userIdentifier?: string,
   regionId?: number,
@@ -399,6 +549,19 @@ export async function getPageData(
   ao_weekly: PaxAOWeeklyActivity[] | null;
   activity_window: ActivityWindow;
 }> {
+  return selectDuckDbOrLegacy({
+    capability: "stats_pax",
+    env: process.env,
+    duckdb: () => getPaxPageDataDuckDb(paxId, opts),
+    legacy: () => getPaxPageDataLegacy(paxId, userIdentifier, opts),
+  });
+}
+
+async function getPaxPageDataLegacy(
+  paxId: number,
+  userIdentifier?: string,
+  opts?: StatsFilters,
+): Promise<Awaited<ReturnType<typeof getPageData>>> {
   // Build WHERE clause from common filters.
   const whereSql = buildEventsWhereSql(paxId, opts);
 
@@ -655,8 +818,8 @@ export async function getPageData(
       ao_events AS (
         SELECT
           event_id,
-          COALESCE(ao_org_id, 0) AS ao_org_id,
-          COALESCE(ANY_VALUE(ao_name), 'Unknown AO') AS ao_name,
+           COALESCE(ao_org_id, 0) AS ao_org_id,
+           COALESCE(ANY_VALUE(ao_name), 'Unknown AO') AS ao_name,
           ANY_VALUE(region_org_id) AS region_org_id,
           ANY_VALUE(region_name) AS region_name,
           IF(
@@ -831,5 +994,275 @@ export async function getPageData(
     ao_breakdown: results?.[0]?.ao_breakdown || null,
     ao_weekly: results?.[0]?.ao_weekly || null,
     activity_window: activityWindow,
+  };
+}
+
+/** DuckDB-owned PAX read path.  Keep the identity lookup above deliberately
+ * untouched: it is an authorization-adjacent BigQuery lookup. */
+async function getPaxPageDataDuckDb(
+  paxId: number,
+  opts?: StatsFilters,
+): Promise<Awaited<ReturnType<typeof getPageData>>> {
+  const adapter = new DuckDbQueryAdapter(getDuckDbRuntime());
+  const infoRows = await adapter.execute<
+    PAXInfo & { start_date_override?: string }
+  >(
+    `SELECT user_id, f3_name, home_region_id, home_region_name, avatar_url,
+            status, start_date_override, aos, regions, types, tags
+       FROM pv_pax WHERE user_id = ? LIMIT 1`,
+    [paxId],
+  );
+  const dates = buildRangeDates(opts?.range);
+  const start = opts?.startDate ?? dates.startDate;
+  const end = opts?.endDate ?? dates.endDate;
+  const clauses = [
+    "list_contains(list_transform(attendance, a -> a.user_id), ?)",
+  ];
+  const params: unknown[] = [paxId];
+  if (start) {
+    clauses.push("event_date >= CAST(? AS DATE)");
+    params.push(start);
+  }
+  if (end) {
+    clauses.push("event_date <= CAST(? AS DATE)");
+    params.push(end);
+  }
+  const addIds = (
+    column: string,
+    values: number[] | undefined,
+    mode = "include",
+  ) => {
+    const ids = toFiniteNumbers(values);
+    if (!ids.length) return;
+    const placeholders = ids.map(() => "?").join(",");
+    clauses.push(
+      `${column} ${mode === "exclude" ? "NOT IN" : "IN"} (${placeholders})`,
+    );
+    params.push(...ids);
+  };
+  const aoIds = toFiniteNumbers(opts?.aoIds);
+  if (aoIds.length) {
+    const includesNull = aoIds.includes(0);
+    const ids = aoIds.filter((id) => id !== 0);
+    clauses.push(
+      opts?.aoMode === "exclude"
+        ? `(ao_org_id IS NOT NULL AND ${ids.length ? `ao_org_id NOT IN (${ids.map(() => "?").join(",")})` : "TRUE"})`
+        : `(${includesNull ? "ao_org_id IS NULL" : "FALSE"}${ids.length ? ` OR ao_org_id IN (${ids.map(() => "?").join(",")})` : ""})`,
+    );
+    params.push(...ids);
+  }
+  addIds("region_org_id", opts?.regionIds, opts?.regionMode);
+  const addNested = (
+    column: string,
+    field: string,
+    values: number[] | undefined,
+    mode = "include",
+  ) => {
+    const ids = toFiniteNumbers(values);
+    if (!ids.length) return;
+    const placeholders = ids.map(() => "?").join(",");
+    const exists = `EXISTS (SELECT 1 FROM UNNEST(${column}) AS n(x) WHERE x.${field} IN (${placeholders}))`;
+    clauses.push(mode === "exclude" ? `NOT (${exists})` : exists);
+    params.push(...ids);
+  };
+  addNested("tags", "id", opts?.tagIds, opts?.tagMode);
+  addNested("types", "id", opts?.typeIds, opts?.typeMode);
+  const categories = toFiniteNumbers(opts?.categoryIds).filter((x) =>
+    [1, 2, 3].includes(x),
+  );
+  if (categories.length) {
+    const parts = categories.map(
+      (c) =>
+        `${c === 1 ? "first_f_ind" : c === 2 ? "second_f_ind" : "third_f_ind"} = 1`,
+    );
+    clauses.push(
+      opts?.categoryMode === "exclude"
+        ? `NOT (${parts.join(" OR ")})`
+        : `(${parts.join(" OR ")})`,
+    );
+  }
+  const queriedEvents = await adapter.execute<EventData>(
+    `SELECT event_id AS event_instance_id, event_date, event_name, pax_count,
+            fng_count, ao_org_id, ao_name, region_org_id, region_name,
+            first_f_ind, second_f_ind, third_f_ind, types, tags,
+            list_filter(attendance, a -> a.fartsack IS NOT TRUE) AS attendance,
+            list_filter(attendance, a -> a.fartsack IS TRUE) AS fartsacks
+       FROM pv_events WHERE ${clauses.join(" AND ")}
+       ORDER BY event_date DESC, event_id DESC`,
+    params,
+  );
+  // Fetch fartsack-only rows so their counts participate, but keep them out of
+  // the attended event stream and its Q/efficiency metrics.
+  const events = queriedEvents.filter((event) =>
+    (event.attendance ?? []).some((a) => Number(a.user_id) === paxId),
+  );
+  const attended = events.flatMap((event) => event.attendance ?? []);
+  const self = attended.filter((a) => Number(a.user_id) === paxId);
+  const isTrue = (value: unknown) =>
+    value === true || value === 1 || value === "1";
+  const qEvents = self.filter((a) => isTrue(a.q_ind));
+  const fartsacks = queriedEvents
+    .flatMap((event) => event.fartsacks ?? [])
+    .filter((a) => Number(a.user_id) === paxId).length;
+  const summary: PaxSummary | null = queriedEvents.length
+    ? {
+        event_count: events.length,
+        q_count: qEvents.length,
+        ghost_count: self.filter((a) => isTrue(a.ghost)).length,
+        fartsack_count: fartsacks,
+        fng_date:
+          infoRows[0]?.start_date_override ??
+          (String(events.at(-1)?.event_date ?? "").slice(0, 10) || null),
+        first_event_date:
+          String(events.at(-1)?.event_date ?? "").slice(0, 10) || null,
+        first_event_ao_id: events.at(-1)?.ao_org_id ?? null,
+        first_event_ao_name: events.at(-1)?.ao_name ?? null,
+        last_event_date:
+          String(events[0]?.event_date ?? "").slice(0, 10) || null,
+        last_event_ao_id: events[0]?.ao_org_id ?? null,
+        last_event_ao_name: events[0]?.ao_name ?? null,
+        bestie_user_id: null,
+        bestie_user_count: 0,
+        bestie_f3_name: null,
+        unique_users_met: new Set(
+          attended
+            .filter((a) => Number(a.user_id) !== paxId)
+            .map((a) => a.user_id),
+        ).size,
+        first_q_date: null,
+        first_q_ao_id: null,
+        first_q_ao_name: null,
+        last_q_date: null,
+        last_q_ao_id: null,
+        last_q_ao_name: null,
+        unique_pax_when_q: 0,
+        effective_percentage: null,
+      }
+    : null;
+  if (summary) {
+    const qRows = events.filter((event) =>
+      (event.attendance ?? []).some(
+        (a) => Number(a.user_id) === paxId && isTrue(a.q_ind),
+      ),
+    );
+    const qPeople = new Set<number>();
+    const coAttendance = new Map<
+      number,
+      { name: string | null; count: number }
+    >();
+    for (const event of events) {
+      const present = (event.attendance ?? []).filter(
+        (a) => Number(a.user_id) !== paxId,
+      );
+      const selfPresent = (event.attendance ?? []).some(
+        (a) => Number(a.user_id) === paxId,
+      );
+      if (selfPresent)
+        for (const person of present) {
+          const prior = coAttendance.get(Number(person.user_id)) ?? {
+            name: person.f3_name ?? null,
+            count: 0,
+          };
+          prior.count++;
+          coAttendance.set(Number(person.user_id), prior);
+        }
+    }
+    for (const event of qRows)
+      for (const person of event.attendance ?? [])
+        if (Number(person.user_id) !== paxId)
+          qPeople.add(Number(person.user_id));
+    const bestie = [...coAttendance.entries()].sort(
+      (a, b) =>
+        b[1].count - a[1].count ||
+        (a[1].name ?? "").localeCompare(b[1].name ?? ""),
+    )[0];
+    if (bestie) {
+      summary.bestie_user_id = bestie[0];
+      summary.bestie_user_count = bestie[1].count;
+      summary.bestie_f3_name = bestie[1].name;
+    }
+    const first = events.at(-1);
+    const firstQ = qRows.at(-1);
+    const lastQ = qRows[0];
+    summary.first_q_date = firstQ
+      ? String(firstQ.event_date).slice(0, 10)
+      : null;
+    summary.first_q_ao_id = firstQ?.ao_org_id ?? null;
+    summary.first_q_ao_name = firstQ?.ao_name ?? null;
+    summary.last_q_date = lastQ ? String(lastQ.event_date).slice(0, 10) : null;
+    summary.last_q_ao_id = lastQ?.ao_org_id ?? null;
+    summary.last_q_ao_name = lastQ?.ao_name ?? null;
+    summary.unique_pax_when_q = qPeople.size;
+    const firstDate = first
+      ? Date.parse(`${String(first.event_date).slice(0, 10)}T00:00:00Z`)
+      : NaN;
+    const today = Date.parse(
+      `${new Date().toISOString().slice(0, 10)}T00:00:00Z`,
+    );
+    const days = (today - firstDate) / 86400000;
+    summary.effective_percentage =
+      days > 0 ? (summary.event_count / days) * 100 : null;
+  }
+  const breakdownMap = new Map<number | null, PaxAOBreakdown>();
+  const weeklyMap = new Map<string, PaxAOWeeklyActivity>();
+  for (const event of events) {
+    const mine = (event.attendance ?? []).some(
+      (a) => Number(a.user_id) === paxId,
+    );
+    if (!mine) continue;
+    const ao = event.ao_org_id == null ? null : Number(event.ao_org_id);
+    const current = breakdownMap.get(ao) ?? {
+      ao_org_id: ao ?? 0,
+      ao_name: event.ao_name ?? "Unknown AO",
+      region_org_id: event.region_org_id,
+      region_name: event.region_name,
+      total_events: 0,
+      total_q_count: 0,
+    };
+    current.total_events++;
+    if (
+      (event.attendance ?? []).some(
+        (a) => Number(a.user_id) === paxId && isTrue(a.q_ind),
+      )
+    )
+      current.total_q_count++;
+    breakdownMap.set(ao, current);
+    if (event.ao_org_id != null) {
+      const date = new Date(
+        `${String(event.event_date).slice(0, 10)}T00:00:00Z`,
+      );
+      const monday = new Date(
+        date.getTime() - ((date.getUTCDay() + 6) % 7) * 86400000,
+      );
+      const week = monday.toISOString().slice(0, 10);
+      const activityWindow = buildActivityWindow(opts);
+      if (week < activityWindow.start || week > activityWindow.end) continue;
+      const key = `${ao}:${week}`;
+      const row = weeklyMap.get(key) ?? {
+        ao_org_id: ao as number,
+        ao_name: event.ao_name ?? "Unknown AO",
+        region_org_id: event.region_org_id,
+        region_name: event.region_name,
+        week,
+        posts: 0,
+      };
+      row.posts++;
+      weeklyMap.set(key, row);
+    }
+  }
+  return {
+    info: infoRows[0] ?? null,
+    events: events.length ? events : null,
+    summary,
+    ao_breakdown: [...breakdownMap.values()].sort(
+      (a, b) =>
+        b.total_events - a.total_events ||
+        (a.ao_name ?? "").localeCompare(b.ao_name ?? ""),
+    ),
+    ao_weekly: [...weeklyMap.values()].sort(
+      (a, b) =>
+        a.week.localeCompare(b.week) || a.ao_name.localeCompare(b.ao_name),
+    ),
+    activity_window: buildActivityWindow(opts),
   };
 }

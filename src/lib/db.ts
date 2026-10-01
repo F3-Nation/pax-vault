@@ -57,32 +57,57 @@ export async function queryBigQuery<T = BigQueryRow>(
 
   console.log(
     JSON.stringify({
-      env: env.toLowerCase(),
-      app: "pax-vault",
-      user: userLabel,
-      reason: reason || "unspecified",
-      message: "BigQuery fetch initiated",
-    }),
-  );
-
-  const [rawRows] = await bigquery.query({
-    query: sql,
-    defaultDataset: { datasetId, projectId },
-    location,
-    labels: {
       env: sanitize(env),
       app: "pax-vault",
       user: sanitize(userLabel),
       reason: sanitize(reason || "unspecified"),
-    },
-    // Named query parameters (@name) — the safe path for user-supplied values.
-    // Prefer this over string interpolation in all new/converted queries.
-    ...(params ? { params } : {}),
-  });
+      message: "BigQuery fetch initiated",
+    }),
+  );
 
-  const rows = (rawRows as BigQueryRow[]).map((row) =>
-    normalizeRow(row),
-  ) as T[];
+  const startedAt = Date.now();
+  try {
+    const [rawRows] = await bigquery.query({
+      query: sql,
+      defaultDataset: { datasetId, projectId },
+      location,
+      labels: {
+        env: sanitize(env),
+        app: "pax-vault",
+        user: sanitize(userLabel),
+        reason: sanitize(reason || "unspecified"),
+      },
+      // Named query parameters (@name) — the safe path for user-supplied values.
+      // Prefer this over string interpolation in all new/converted queries.
+      ...(params ? { params } : {}),
+    });
 
-  return rows;
+    const rows = (rawRows as BigQueryRow[]).map((row) =>
+      normalizeRow(row),
+    ) as T[];
+
+    console.log(
+      JSON.stringify({
+        env: sanitize(env),
+        app: "pax-vault",
+        user: sanitize(userLabel),
+        reason: sanitize(reason || "unspecified"),
+        durationMs: Date.now() - startedAt,
+        message: "BigQuery fetch completed",
+      }),
+    );
+    return rows;
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        env: sanitize(env),
+        app: "pax-vault",
+        user: sanitize(userLabel),
+        reason: sanitize(reason || "unspecified"),
+        durationMs: Date.now() - startedAt,
+        message: "BigQuery fetch failed",
+      }),
+    );
+    throw error;
+  }
 }

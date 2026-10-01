@@ -130,7 +130,7 @@ export function PAXPageWrapper({
       </div>
       {/* Summary + leaders */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 w-full max-w-6xl">
-        <SummaryCard summary={pax_summary!} filters={eventsFiltersQuery} />
+        <SummaryCard summary={pax_summary} filters={eventsFiltersQuery} />
         <AOBreakdownCard
           AOBreakdown={pax_ao_breakdown!}
           filters={eventsFiltersQuery}
