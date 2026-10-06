@@ -184,6 +184,68 @@ describe("DuckDB query adapter", () => {
     ]);
   });
 
+  it("logs staging-only bounded timings without query data on success and failure", async () => {
+    vi.stubEnv("ENVIRONMENT", "staging");
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const successful = new DuckDbQueryAdapter({
+      acquire: async () =>
+        lease(async (statement) =>
+          statement.startsWith("SET") ? [] : [{ ok: true }],
+        ),
+    });
+    await successful.execute("SELECT 'private sql'", {
+      email: "private@example.com",
+    });
+
+    const failed = new DuckDbQueryAdapter({
+      acquire: async () =>
+        lease(async (statement) => {
+          if (statement.startsWith("SET")) return [];
+          throw new Error("private exception");
+        }),
+    });
+    await expect(failed.execute("SELECT 'private sql'")).rejects.toBeInstanceOf(
+      DuckDbQueryError,
+    );
+
+    const logs = info.mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(logs).toHaveLength(2);
+    expect(logs[0]).toMatchObject({
+      app: "pax-vault",
+      level: "info",
+      metric: "duckdb_query_timing",
+      outcome: "success",
+    });
+    expect(logs[0].acquireWaitMs).toEqual(expect.any(Number));
+    expect(logs[0].timezoneMs).toEqual(expect.any(Number));
+    expect(logs[0].queryMs).toEqual(expect.any(Number));
+    expect(logs[0].normalizeMs).toEqual(expect.any(Number));
+    expect(logs[0].withConnectionMs).toEqual(expect.any(Number));
+    expect(logs[0].totalMs).toEqual(expect.any(Number));
+    expect(logs[1]).toMatchObject({
+      metric: "duckdb_query_timing",
+      outcome: "failure",
+    });
+    expect(info.mock.calls.join(" ")).not.toContain("private");
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it("does not log query timings outside staging", async () => {
+    vi.stubEnv("ENVIRONMENT", "production");
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const adapter = new DuckDbQueryAdapter({
+      acquire: async () =>
+        lease(async (statement) =>
+          statement.startsWith("SET") ? [] : [{ ok: true }],
+        ),
+    });
+    await adapter.execute("SELECT 1");
+    expect(info).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
   it("releases the acquired lease after successful and failed queries", async () => {
     const release = vi.fn();
     const successful = new DuckDbQueryAdapter({

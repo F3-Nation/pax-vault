@@ -39,6 +39,25 @@ interface PageProps {
   }>;
 }
 
+function logPermissionTiming(
+  regionId: number,
+  durationMs: number,
+  outcome: "success" | "failure",
+): void {
+  if (process.env.ENVIRONMENT !== "staging") return;
+  console.info(
+    JSON.stringify({
+      app: "pax-vault",
+      level: "info",
+      metric: "stats_region_timing",
+      operation: "getRegionPermissionForSession",
+      regionId,
+      durationMs,
+      outcome,
+    }),
+  );
+}
+
 export default async function RegionDetailPage({
   params,
   searchParams,
@@ -80,15 +99,24 @@ export default async function RegionDetailPage({
   // lookup hides it rather than taking the whole dashboard down — the
   // preferences page and its API re-check the role either way.
   let canEditPreferences = false;
+  const permissionStartedAt = Date.now();
+  let permissionOutcome: "success" | "failure" = "failure";
   try {
     const permission = await getRegionPermissionForSession(Number(regionId));
     canEditPreferences = permission.isAdmin;
+    permissionOutcome = "success";
   } catch (err) {
     reportError(err, {
       scope: "stats/region:permission",
       user: user.email,
       extra: { regionId },
     });
+  } finally {
+    logPermissionTiming(
+      Number(regionId),
+      Date.now() - permissionStartedAt,
+      permissionOutcome,
+    );
   }
 
   // Show empty state when region data is missing or empty

@@ -86,15 +86,50 @@ export class DuckDbQueryAdapter {
     sql: string,
     params?: DuckDbParams,
   ): Promise<T[]> {
+    const instrument = process.env.ENVIRONMENT === "staging";
+    const startedAt = instrument ? performance.now() : 0;
+    let acquireWaitMs: number | undefined;
+    let timezoneMs: number | undefined;
+    let queryMs: number | undefined;
+    let normalizeMs: number | undefined;
+    let withConnectionMs: number | undefined;
+    let connectionStartedAt = 0;
+    let outcome: "success" | "failure" = "failure";
     let lease: DuckDbLease | undefined;
     try {
-      lease = await this.provider.acquire();
-      return await lease.withConnection(
+      const acquireStartedAt = instrument ? performance.now() : 0;
+      try {
+        lease = await this.provider.acquire();
+      } finally {
+        if (instrument) acquireWaitMs = performance.now() - acquireStartedAt;
+      }
+      connectionStartedAt = instrument ? performance.now() : 0;
+      const result = await lease.withConnection(
         async (connection: DuckDbQueryConnection) => {
-          await connection.query("SET TimeZone = 'UTC'");
-          return normalizeDuckDbRows<T>(await connection.query(sql, params));
+          const timezoneStartedAt = instrument ? performance.now() : 0;
+          try {
+            await connection.query("SET TimeZone = 'UTC'");
+          } finally {
+            if (instrument) timezoneMs = performance.now() - timezoneStartedAt;
+          }
+          const queryStartedAt = instrument ? performance.now() : 0;
+          let rows: unknown[];
+          try {
+            rows = await connection.query(sql, params);
+          } finally {
+            if (instrument) queryMs = performance.now() - queryStartedAt;
+          }
+          const normalizeStartedAt = instrument ? performance.now() : 0;
+          try {
+            return normalizeDuckDbRows<T>(rows);
+          } finally {
+            if (instrument)
+              normalizeMs = performance.now() - normalizeStartedAt;
+          }
         },
       );
+      outcome = "success";
+      return result;
     } catch (cause) {
       if (
         cause instanceof DuckDbQueryError ||
@@ -108,7 +143,28 @@ export class DuckDbQueryAdapter {
         throw new DuckDbDependencyError(undefined, { cause });
       throw new DuckDbQueryError(undefined, { cause });
     } finally {
-      lease?.release();
+      if (instrument && lease)
+        withConnectionMs = performance.now() - connectionStartedAt;
+      try {
+        lease?.release();
+      } finally {
+        if (instrument) {
+          console.info(
+            JSON.stringify({
+              app: "pax-vault",
+              level: "info",
+              metric: "duckdb_query_timing",
+              acquireWaitMs,
+              timezoneMs,
+              queryMs,
+              normalizeMs,
+              withConnectionMs,
+              totalMs: performance.now() - startedAt,
+              outcome,
+            }),
+          );
+        }
+      }
     }
   }
 }
