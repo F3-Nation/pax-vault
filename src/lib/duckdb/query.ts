@@ -8,7 +8,19 @@ export interface DuckDbLeaseProvider {
 }
 export interface DuckDbQueryOptions {
   reason?: string;
+  operation?: DuckDbQueryOperation;
 }
+
+/** Fixed low-cardinality labels safe for staging telemetry. */
+export type DuckDbQueryOperation =
+  | "region_info"
+  | "region_events"
+  | "region_upcoming"
+  | "region_kotter"
+  | "region_pax"
+  | "region_career_posts"
+  | "region_career_qs"
+  | "region_leader_career";
 
 export type DuckDbCapability =
   | "search"
@@ -85,6 +97,7 @@ export class DuckDbQueryAdapter {
   async execute<T = Record<string, unknown>>(
     sql: string,
     params?: DuckDbParams,
+    options?: DuckDbQueryOptions,
   ): Promise<T[]> {
     const instrument = process.env.ENVIRONMENT === "staging";
     const startedAt = instrument ? performance.now() : 0;
@@ -95,6 +108,7 @@ export class DuckDbQueryAdapter {
     let withConnectionMs: number | undefined;
     let connectionStartedAt = 0;
     let outcome: "success" | "failure" = "failure";
+    let rowCount: number | undefined;
     let lease: DuckDbLease | undefined;
     try {
       const acquireStartedAt = instrument ? performance.now() : 0;
@@ -116,6 +130,7 @@ export class DuckDbQueryAdapter {
           let rows: unknown[];
           try {
             rows = await connection.query(sql, params);
+            if (instrument) rowCount = rows.length;
           } finally {
             if (instrument) queryMs = performance.now() - queryStartedAt;
           }
@@ -154,6 +169,8 @@ export class DuckDbQueryAdapter {
               app: "pax-vault",
               level: "info",
               metric: "duckdb_query_timing",
+              operation: options?.operation,
+              rowCount,
               acquireWaitMs,
               timezoneMs,
               queryMs,

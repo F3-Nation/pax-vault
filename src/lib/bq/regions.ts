@@ -5,6 +5,7 @@ import { getDuckDbRuntime } from "@/lib/duckdb/factory";
 import {
   DuckDbQueryAdapter,
   DuckDbParams,
+  DuckDbQueryOperation,
   selectDuckDbOrLegacy,
 } from "@/lib/duckdb/query";
 import {
@@ -20,16 +21,21 @@ import {
 } from "@/lib/types";
 import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
 
-type DuckDbExecutor = <T>(sql: string, params?: DuckDbParams) => Promise<T[]>;
+type DuckDbExecutor = <T>(
+  sql: string,
+  params?: DuckDbParams,
+  operation?: DuckDbQueryOperation,
+) => Promise<T[]>;
 let injectedDuckDbQuery: DuckDbExecutor | undefined;
 export function setRegionDuckDbQueryForTests(query?: DuckDbExecutor): void {
   injectedDuckDbQuery = query;
 }
-const executeDuckDb: DuckDbExecutor = async (sql, params) => {
+const executeDuckDb: DuckDbExecutor = async (sql, params, operation) => {
   const adapter = injectedDuckDbQuery
     ? undefined
     : new DuckDbQueryAdapter(getDuckDbRuntime());
-  return (injectedDuckDbQuery ?? adapter!.execute.bind(adapter))(sql, params);
+  if (injectedDuckDbQuery) return injectedDuckDbQuery(sql, params, operation);
+  return adapter!.execute(sql, params, { operation });
 };
 
 function duckEventFilter(regionId: number | null, opts?: StatsFilters) {
@@ -1096,38 +1102,113 @@ export async function getPageData(
  * fallback bug. */
 type RegionPageData = Awaited<ReturnType<typeof getPageData>>;
 
+type RegionPhase =
+  | "initial_five_reads"
+  | "career_pair"
+  | "javascript_transform_pre_leader"
+  | "leader_career"
+  | "javascript_transform_post_leader"
+  | "preferences_bigquery"
+  | "total";
+
+function logRegionPhase(
+  phase: RegionPhase,
+  startedAt: number,
+  outcome: "success" | "failure",
+): void {
+  if (process.env.ENVIRONMENT !== "staging") return;
+  console.info(
+    JSON.stringify({
+      app: "pax-vault",
+      level: "info",
+      metric: "stats_region_query_phase",
+      phase,
+      durationMs: performance.now() - startedAt,
+      outcome,
+    }),
+  );
+}
+
+async function timeRegionPhase<T>(
+  phase: RegionPhase,
+  work: () => Promise<T>,
+): Promise<T> {
+  const instrument = process.env.ENVIRONMENT === "staging";
+  const startedAt = instrument ? performance.now() : 0;
+  let outcome: "success" | "failure" = "failure";
+  try {
+    const result = await work();
+    outcome = "success";
+    return result;
+  } finally {
+    if (instrument) {
+      console.info(
+        JSON.stringify({
+          app: "pax-vault",
+          level: "info",
+          metric: "stats_region_query_phase",
+          phase,
+          durationMs: performance.now() - startedAt,
+          outcome,
+        }),
+      );
+    }
+  }
+}
+
 /** DuckDB implementation deliberately works from raw, unbounded events. */
 async function getRegionPageDuckDbParity(
   regionId: number,
   userIdentifier?: string,
   opts?: StatsFilters,
 ): Promise<RegionPageData> {
+  return timeRegionPhase("total", () =>
+    getRegionPageDuckDbParityImpl(regionId, userIdentifier, opts),
+  );
+}
+
+async function getRegionPageDuckDbParityImpl(
+  regionId: number,
+  userIdentifier?: string,
+  opts?: StatsFilters,
+): Promise<RegionPageData> {
   const f = duckEventFilter(regionId, opts);
   const allFilter = duckEventFilter(null, opts);
-  const [info, raw, upcoming, kotter, pax] = await Promise.all([
-    executeDuckDb<RegionInfo>(
-      `SELECT region_id, region_name, area_id, area_name, logo_url, is_active, aos, types, tags FROM pv_regions WHERE region_id = ? LIMIT 1`,
-      [regionId],
-    ),
-    executeDuckDb<any>(
-      `SELECT event_id AS event_instance_id, event_date, event_name, pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name, first_f_ind, second_f_ind, third_f_ind, types, tags, attendance FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC`,
-      f.params,
-    ),
-    executeDuckDb<EventUpcoming>(
-      `SELECT start_date, start_time, ao_name, ao_org_id, location_name, event_name, event_type, event_category, q_list FROM pv_upcoming WHERE region_org_id = ? ORDER BY start_date, start_time, ao_name LIMIT 50`,
-      [regionId],
-    ),
-    executeDuckDb<RegionKotterList>(
-      `SELECT user_id, f3_name, avatar_url, kotter_status, total_events, first_event_date, days_since_last_event, last_event_date, last_event_name, last_event_ao_name, last_event_ao_org_id, bestie_list FROM pv_kotter WHERE home_region_id = ? ORDER BY days_since_last_event, last_event_date, f3_name`,
-      [regionId],
-    ),
-    executeDuckDb<any>(
-      `SELECT user_id, f3_name, avatar_url, start_date_override FROM pv_pax WHERE home_region_id = ?`,
-      [regionId],
-    ),
-  ]);
+  const [info, raw, upcoming, kotter, pax] = await timeRegionPhase(
+    "initial_five_reads",
+    () =>
+      Promise.all([
+        executeDuckDb<RegionInfo>(
+          `SELECT region_id, region_name, area_id, area_name, logo_url, is_active, aos, types, tags FROM pv_regions WHERE region_id = ? LIMIT 1`,
+          [regionId],
+          "region_info",
+        ),
+        executeDuckDb<any>(
+          `SELECT event_id AS event_instance_id, event_date, event_name, pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name, first_f_ind, second_f_ind, third_f_ind, types, tags, attendance FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC`,
+          f.params,
+          "region_events",
+        ),
+        executeDuckDb<EventUpcoming>(
+          `SELECT start_date, start_time, ao_name, ao_org_id, location_name, event_name, event_type, event_category, q_list FROM pv_upcoming WHERE region_org_id = ? ORDER BY start_date, start_time, ao_name LIMIT 50`,
+          [regionId],
+          "region_upcoming",
+        ),
+        executeDuckDb<RegionKotterList>(
+          `SELECT user_id, f3_name, avatar_url, kotter_status, total_events, first_event_date, days_since_last_event, last_event_date, last_event_name, last_event_ao_name, last_event_ao_org_id, bestie_list FROM pv_kotter WHERE home_region_id = ? ORDER BY days_since_last_event, last_event_date, f3_name`,
+          [regionId],
+          "region_kotter",
+        ),
+        executeDuckDb<any>(
+          `SELECT user_id, f3_name, avatar_url, start_date_override FROM pv_pax WHERE home_region_id = ?`,
+          [regionId],
+          "region_pax",
+        ),
+      ]),
+  );
   let career: any[] = [];
   if (pax.some((p: any) => p.user_id != null)) {
+    const careerPairStarted =
+      process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
     const careerPosts = await executeDuckDb<any>(
       `WITH scoped_pax AS (
          SELECT DISTINCT user_id FROM pv_pax
@@ -1151,6 +1232,7 @@ async function getRegionPageDuckDbParity(
        JOIN scoped_pax USING (user_id)
        GROUP BY event_users.user_id`,
       [regionId, regionId, regionId],
+      "region_career_posts",
     );
     const careerQs = await executeDuckDb<any>(
       `WITH scoped_pax AS (
@@ -1172,7 +1254,10 @@ async function getRegionPageDuckDbParity(
        JOIN scoped_pax USING (user_id)
        GROUP BY event_qs.user_id`,
       [regionId, regionId],
+      "region_career_qs",
     );
+    if (process.env.ENVIRONMENT === "staging")
+      logRegionPhase("career_pair", careerPairStarted, "success");
     const qByUser = new Map<number, any>(
       careerQs.map((row) => [Number(row.user_id), row]),
     );
@@ -1185,6 +1270,8 @@ async function getRegionPageDuckDbParity(
       };
     });
   }
+  const transformPreLeaderStarted =
+    process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
   const display = raw.slice(0, 100).map((e: any) => ({
     ...e,
     attendance: (e.attendance ?? []).filter((a: any) => a.fartsack !== true),
@@ -1244,8 +1331,16 @@ async function getRegionPageDuckDbParity(
   const leaderList = [...leaderMap.values()]
     .sort((a, b) => b.posts - a.posts || b.qs - a.qs)
     .slice(0, 100);
+  if (process.env.ENVIRONMENT === "staging")
+    logRegionPhase(
+      "javascript_transform_pre_leader",
+      transformPreLeaderStarted,
+      "success",
+    );
   if (leaderList.length) {
     const targets = leaderList.map((leader) => leader.user_id);
+    const leaderStarted =
+      process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
     const groupedLeaders = await executeDuckDb<any>(
       `WITH filtered_events AS (
          SELECT attendance FROM pv_events${allFilter.where ? ` WHERE ${allFilter.where}` : ""}
@@ -1268,7 +1363,10 @@ async function getRegionPageDuckDbParity(
        JOIN targets ON targets.user_id = target_events.attendee.user_id
        GROUP BY targets.user_id`,
       [...allFilter.params, ...targets],
+      "region_leader_career",
     );
+    if (process.env.ENVIRONMENT === "staging")
+      logRegionPhase("leader_career", leaderStarted, "success");
     for (const row of groupedLeaders) {
       const leader = leaderMap.get(Number(row.user_id));
       if (leader) {
@@ -1277,6 +1375,8 @@ async function getRegionPageDuckDbParity(
       }
     }
   }
+  const transformPostLeaderStarted =
+    process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
   const now = Date.now(),
     active = new Set<number>();
   for (const { e, a } of rows)
@@ -1382,11 +1482,19 @@ async function getRegionPageDuckDbParity(
     charts.clear();
     for (const [key, value] of filled) charts.set(key, value);
   }
-  const prefs = await queryBigQuery<{ json_config: string | null }>(
-    "SELECT json_config FROM pv_regions_preferences WHERE region_id = @regionId LIMIT 1",
-    userIdentifier,
-    `fetch preferences for region ${regionId}`,
-    { regionId },
+  if (process.env.ENVIRONMENT === "staging")
+    logRegionPhase(
+      "javascript_transform_post_leader",
+      transformPostLeaderStarted,
+      "success",
+    );
+  const prefs = await timeRegionPhase("preferences_bigquery", () =>
+    queryBigQuery<{ json_config: string | null }>(
+      "SELECT json_config FROM pv_regions_preferences WHERE region_id = @regionId LIMIT 1",
+      userIdentifier,
+      `fetch preferences for region ${regionId}`,
+      { regionId },
+    ),
   );
   return {
     info: info[0] ?? null,

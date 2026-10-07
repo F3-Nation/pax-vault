@@ -193,9 +193,13 @@ describe("DuckDB query adapter", () => {
           statement.startsWith("SET") ? [] : [{ ok: true }],
         ),
     });
-    await successful.execute("SELECT 'private sql'", {
-      email: "private@example.com",
-    });
+    await successful.execute(
+      "SELECT 'private sql'",
+      {
+        email: "private@example.com",
+      },
+      { operation: "region_events" },
+    );
 
     const failed = new DuckDbQueryAdapter({
       acquire: async () =>
@@ -215,6 +219,8 @@ describe("DuckDB query adapter", () => {
       level: "info",
       metric: "duckdb_query_timing",
       outcome: "success",
+      operation: "region_events",
+      rowCount: 1,
     });
     expect(logs[0].acquireWaitMs).toEqual(expect.any(Number));
     expect(logs[0].timezoneMs).toEqual(expect.any(Number));
@@ -240,7 +246,9 @@ describe("DuckDB query adapter", () => {
           statement.startsWith("SET") ? [] : [{ ok: true }],
         ),
     });
-    await adapter.execute("SELECT 1");
+    await adapter.execute("SELECT 1", undefined, {
+      operation: "region_events",
+    });
     expect(info).not.toHaveBeenCalled();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();

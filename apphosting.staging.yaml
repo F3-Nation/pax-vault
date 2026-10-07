@@ -1,6 +1,6 @@
 # Overrides just for Staging
 runConfig:
-  minInstances: 0 # Let staging scale to zero to save money
+  minInstances: 1
   memoryMiB: 512
 
 env:
@@ -11,6 +11,30 @@ env:
     value: "https://staging.pax-vault.f3nation.com"
   - variable: "OAUTH_REDIRECT_URI"
     value: "https://staging.pax-vault.f3nation.com/api/auth/callback"
+  - variable: DUCKDB_ENABLED
+    value: "true"
+  - variable: DUCKDB_SHADOW_ENABLED
+    value: "false"
+  - variable: DUCKDB_SHADOW_TIMEOUT_MS
+    value: "500"
+  - variable: DUCKDB_GCS_BUCKET
+    value: "f3-analytics-nonprod"
+  - variable: DUCKDB_GCS_PREFIX
+    value: "pax-vault/releases"
+  - variable: DUCKDB_GCS_CONTROL_OBJECT
+    value: "pax-vault/current.json"
+  - variable: DUCKDB_CACHE_DIR
+    value: "/tmp/pax-vault-duckdb"
+  - variable: DUCKDB_REFRESH_TTL_MS
+    value: "300000"
+  - variable: DUCKDB_MAX_LKG_AGE_MS
+    value: "36000000000"
+  - variable: DUCKDB_MEMORY_LIMIT
+    value: "384MB"
+  - variable: DUCKDB_MAX_RELEASE_BYTES
+    value: "536870912"
+  - variable: DUCKDB_MAX_OBJECT_BYTES
+    value: "402653184"
 
   # Staging Secrets (Make sure these exist in Staging Secret Manager!)
   - variable: OAUTH_CLIENT_ID

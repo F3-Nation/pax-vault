@@ -6,6 +6,7 @@ vi.mock("@/lib/db", () => ({ queryBigQuery }));
 import {
   buildRegionAchievements,
   getRegionInfo,
+  getPageData,
   setRegionDuckDbQueryForTests,
 } from "./regions";
 
@@ -194,6 +195,49 @@ describe("region DuckDB migration", () => {
     );
     await expect(getRegionInfo(3)).rejects.toThrow("duckdb failed");
     expect(queryBigQuery).not.toHaveBeenCalled();
+  });
+
+  it("records staging region phases and fixed DuckDB operation labels", async () => {
+    vi.stubEnv("ENVIRONMENT", "staging");
+    process.env.DUCKDB_ENABLED = "true";
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const query = vi.fn(async (...[sql]: [string, unknown[]?, string?]) =>
+      sql.includes("FROM pv_pax")
+        ? [{ user_id: 7, f3_name: "Member", start_date_override: null }]
+        : [],
+    );
+    setRegionDuckDbQueryForTests(query as never);
+    queryBigQuery.mockResolvedValue([]);
+
+    await getPageData(3, "private@example.com");
+
+    const operations = query.mock.calls.map(([, , operation]) => operation);
+    expect(operations).toEqual([
+      "region_info",
+      "region_events",
+      "region_upcoming",
+      "region_kotter",
+      "region_pax",
+      "region_career_posts",
+      "region_career_qs",
+    ]);
+    const logs = info.mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(logs.map((log) => log.phase)).toEqual(
+      expect.arrayContaining([
+        "initial_five_reads",
+        "career_pair",
+        "javascript_transform_pre_leader",
+        "javascript_transform_post_leader",
+        "preferences_bigquery",
+        "total",
+      ]),
+    );
+    expect(logs.every((log) => log.metric === "stats_region_query_phase")).toBe(
+      true,
+    );
+    expect(info.mock.calls.join(" ")).not.toContain("private@example.com");
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("matches legacy achievement ordering and preserves leap-day rollover", () => {
