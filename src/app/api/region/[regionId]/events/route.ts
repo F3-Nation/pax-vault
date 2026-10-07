@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { getEvents } from "@/lib/bq/regions";
 import { getSessionUser } from "@/lib/auth/server";
 import { parseFilterSearchParams } from "@/lib/filters";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 
 export async function GET(
   request: Request,
@@ -40,7 +41,20 @@ export async function GET(
       : undefined,
   };
 
-  const events = await getEvents(regionId, user.email, opts);
+  let events;
+  try {
+    events = await getEvents(regionId, user.email, opts);
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError)
+      return NextResponse.json(
+        { error: "Region event data is temporarily unavailable." },
+        { status: 503 },
+      );
+    return NextResponse.json(
+      { error: "Region event lookup failed." },
+      { status: 500 },
+    );
+  }
 
   if (!events) {
     return NextResponse.json({ error: "Region not found" }, { status: 404 });

@@ -18,6 +18,8 @@ import { parseFilterParams } from "@/lib/filters";
 import { EntityDataUnavailable } from "@/components/EntityDataUnavailable";
 import { PreferencesButton } from "@/components/region/PreferencesButton";
 import { reportError } from "@/lib/observability";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
+import { DuckDbUnavailable } from "@/components/DuckDbUnavailable";
 
 interface PageProps {
   params: Promise<{ regionId: string }>;
@@ -35,6 +37,25 @@ interface PageProps {
     tagMode?: string;
     persist?: string;
   }>;
+}
+
+function logPermissionTiming(
+  regionId: number,
+  durationMs: number,
+  outcome: "success" | "failure",
+): void {
+  if (process.env.ENVIRONMENT !== "staging") return;
+  console.info(
+    JSON.stringify({
+      app: "pax-vault",
+      level: "info",
+      metric: "stats_region_timing",
+      operation: "getRegionPermissionForSession",
+      regionId,
+      durationMs,
+      outcome,
+    }),
+  );
 }
 
 export default async function RegionDetailPage({
@@ -63,30 +84,43 @@ export default async function RegionDetailPage({
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
   const persist = searchParamsResolved?.persist;
-  const regionData = await loadRegionData(Number(regionId), user.email, {
-    ...filters,
-  });
+  let regionData;
+  try {
+    regionData = await loadRegionData(Number(regionId), user.email, {
+      ...filters,
+    });
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError) return <DuckDbUnavailable />;
+    throw error;
+  }
 
   // Region admins (role_id 3 on this region's org) get an entry point to the
   // preferences editor. The button is optional chrome, so a failed permission
   // lookup hides it rather than taking the whole dashboard down — the
   // preferences page and its API re-check the role either way.
   let canEditPreferences = false;
+  const permissionStartedAt = Date.now();
+  let permissionOutcome: "success" | "failure" = "failure";
   try {
     const permission = await getRegionPermissionForSession(Number(regionId));
     canEditPreferences = permission.isAdmin;
+    permissionOutcome = "success";
   } catch (err) {
     reportError(err, {
       scope: "stats/region:permission",
       user: user.email,
       extra: { regionId },
     });
+  } finally {
+    logPermissionTiming(
+      Number(regionId),
+      Date.now() - permissionStartedAt,
+      permissionOutcome,
+    );
   }
 
-  const hasRegionData = !!regionData && Object.keys(regionData).length > 0;
-
   // Show empty state when region data is missing or empty
-  if (!hasRegionData) {
+  if (!regionData || Object.keys(regionData).length === 0) {
     return <EntityDataUnavailable entity="Region" />;
   }
 

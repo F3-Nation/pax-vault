@@ -15,8 +15,9 @@ import {
   PaxAOBreakdown,
   PaxAOWeeklyActivity,
 } from "@/lib/types";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 import { getPageData } from "@/lib/bq/pax";
-import { cacheStatsData } from "@/lib/cache";
+import { cacheStatsData, getStatsReleaseIdentity } from "@/lib/cache";
 import { StatsFilters } from "@/lib/filters";
 import { normalizeDeep } from "@/lib/normalize";
 
@@ -31,6 +32,7 @@ export async function loadPaxData(
   filters?: StatsFilters,
 ): Promise<PaxData | null> {
   try {
+    const releaseIdentity = getStatsReleaseIdentity("stats_pax");
     // Cache key is entity-scoped (PAX + filters), NOT user-scoped — the
     // normalization runs inside the cache so the cached value is plain JSON.
     return await cacheStatsData<PaxData>(
@@ -65,8 +67,11 @@ export async function loadPaxData(
       },
       ["pax-page-data", String(paxId), JSON.stringify(filters ?? {})],
       [`pax-${paxId}`],
+      releaseIdentity,
+      "stats_pax",
     );
   } catch (err) {
+    if (err instanceof DuckDbDependencyError) throw err;
     console.error("Error fetching PAX data:", err);
     return null;
   }
