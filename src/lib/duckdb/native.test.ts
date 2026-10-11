@@ -91,6 +91,9 @@ describe("native DuckDB candidate", () => {
           CAST(9223372036854775807 AS BIGINT) AS large_count
          FROM pv_pax`,
       );
+      const attendanceRows = await connection.query(
+        "SELECT id, event_instance_id, tags, types, categories FROM pv_attendance",
+      );
       connection.close();
       await handle.close();
       expect(rows).toEqual([
@@ -104,6 +107,14 @@ describe("native DuckDB candidate", () => {
           large_count: 9223372036854775807n,
         },
       ]);
+      expect(attendanceRows).toHaveLength(1);
+      expect(attendanceRows[0]).toMatchObject({
+        id: null,
+        event_instance_id: null,
+        tags: [],
+        types: [],
+        categories: [],
+      });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -8,12 +8,16 @@ export const DUCKDB_DATASETS = [
   "pv_upcoming",
   "pv_kotter",
   "pv_territories",
+  "pv_attendance",
 ] as const;
 
 /** @deprecated Use DUCKDB_DATASETS; retained as a source-compatible alias. */
 export const DUCKDB_V2_DATASETS = DUCKDB_DATASETS;
 export type DuckDbDataset = (typeof DUCKDB_DATASETS)[number];
-type DuckDbV1Dataset = Exclude<DuckDbDataset, "pv_territories">;
+type DuckDbV1Dataset = Exclude<
+  DuckDbDataset,
+  "pv_territories" | "pv_attendance"
+>;
 export type DuckDbContractVersion = "pv-release.v2";
 export const DUCKDB_CONTRACT_VERSION = "pv-release.v2";
 /** @deprecated Use DUCKDB_CONTRACT_VERSION. */
@@ -187,6 +191,25 @@ const paxV2Columns = [
     true,
   ],
 ] as const;
+const paxV3Columns = [
+  ...paxV2Columns,
+  ["lifetime_posts", "INTEGER", true],
+  ["lifetime_qs", "INTEGER", true],
+] as const;
+const attendanceV1Columns = [
+  ["refreshed_at", "TIMESTAMP WITH TIME ZONE", true],
+  ["id", "INTEGER", true],
+  ["user_id", "INTEGER", true],
+  ["event_instance_id", "INTEGER", true],
+  ["q_ind", "INTEGER", true],
+  ["coq_ind", "INTEGER", true],
+  ["start_date", "DATE", true],
+  ["ao_org_id", "INTEGER", true],
+  ["region_org_id", "INTEGER", true],
+  ["tags", "INTEGER[]", true],
+  ["types", "INTEGER[]", true],
+  ["categories", "VARCHAR[]", true],
+] as const;
 const eventsV2Columns = [
   ["refreshed_at", "TIMESTAMP WITH TIME ZONE", true],
   ["event_id", "INTEGER", true],
@@ -228,7 +251,7 @@ const eventsV2Columns = [
 
 function orderedSchema(
   dataset: DuckDbDataset,
-  version: "v1" | "v2",
+  version: "v1" | "v2" | "v3",
   columns: readonly (readonly [string, string, boolean])[],
 ): DuckDbSchemaSpec {
   return {
@@ -270,7 +293,7 @@ function orderedV1Schema(
 export const DUCKDB_V2_SCHEMA_REGISTRY: Readonly<
   Record<DuckDbDataset, DuckDbSchemaSpec>
 > = {
-  pv_pax: orderedSchema("pv_pax", "v2", paxV2Columns),
+  pv_pax: orderedSchema("pv_pax", "v3", paxV3Columns),
   pv_events: orderedSchema("pv_events", "v2", eventsV2Columns),
   pv_regions: orderedV1Schema("pv_regions"),
   pv_areas: orderedV1Schema("pv_areas", "v2"),
@@ -291,6 +314,7 @@ export const DUCKDB_V2_SCHEMA_REGISTRY: Readonly<
       true,
     ],
   ]),
+  pv_attendance: orderedSchema("pv_attendance", "v1", attendanceV1Columns),
 };
 
 /** Canonical schema registry for the sole supported release contract. */
@@ -312,7 +336,10 @@ export function schemaFor(
 }
 
 export interface DuckDbSchemaSpec {
-  schemaVersion: `${DuckDbDataset}.v1` | `${DuckDbDataset}.v2`;
+  schemaVersion:
+    | `${DuckDbDataset}.v1`
+    | `${DuckDbDataset}.v2`
+    | `${DuckDbDataset}.v3`;
   columns:
     | Readonly<Record<string, { logicalType: string; nullable: boolean }>>
     | readonly { name: string; logicalType: string; nullable: boolean }[];
@@ -330,7 +357,8 @@ function schema(
   columns: readonly (readonly [string, string, boolean])[],
   schemaVersion:
     | `${DuckDbDataset}.v1`
-    | `${DuckDbDataset}.v2` = `${dataset}.v1`,
+    | `${DuckDbDataset}.v2`
+    | `${DuckDbDataset}.v3` = `${dataset}.v1`,
 ): DuckDbSchemaSpec {
   return {
     schemaVersion,

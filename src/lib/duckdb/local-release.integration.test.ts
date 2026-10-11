@@ -39,7 +39,10 @@ import {
 
 const optedIn = process.env.DUCKDB_TEST_LOCAL_RELEASE === "true";
 const benchmarkOptedIn = optedIn && process.env.DUCKDB_BENCH_PAX === "true";
-const sourceRoot = resolve(process.cwd(), ".gcs/f3-analytics");
+const sourceRoot = resolve(
+  process.cwd(),
+  process.env.DUCKDB_TEST_RELEASE_ROOT ?? ".gcs/f3-analytics",
+);
 const controlUri = "gs://f3-analytics-nonprod/pax-vault/current.json";
 
 function expectOwnProperty(
@@ -275,13 +278,14 @@ describe("local producer release integration", () => {
         const lease = await runtime.acquire();
         try {
           expect(lease.releaseId).toBe(pointer.releaseId);
-          expect(manifests.size).toBe(9);
+          expect(manifests.size).toBe(10);
 
           await lease.withConnection(async (connection) => {
             for (const dataset of [
               "pv_pax",
               "pv_events",
               "pv_territories",
+              "pv_attendance",
             ] as const) {
               const rows = await connection.query<{
                 row_count: number | bigint;
@@ -323,9 +327,12 @@ describe("local producer release integration", () => {
               Record<string, unknown>
             >(
               `SELECT user_id, f3_name, home_region_id, home_region_name,
-                      avatar_url, status FROM pv_pax LIMIT 1`,
+                      avatar_url, status, lifetime_posts, lifetime_qs
+                 FROM pv_pax LIMIT 1`,
             );
             expect(analyticalPax.length === 1).toBe(true);
+            expectOwnProperty(analyticalPax[0], "lifetime_posts", true);
+            expectOwnProperty(analyticalPax[0], "lifetime_qs", true);
             expectOwnProperty(analyticalPax[0], "email", false);
             expectOwnProperty(analyticalPax[0], "roles", false);
           });

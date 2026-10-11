@@ -95,7 +95,7 @@ describe("DuckDB release validation", () => {
       ),
     ).toThrow();
   });
-  it("requires exactly the nine current datasets", () => {
+  it("requires exactly the ten strict consumer datasets", () => {
     const order = "20260101T000000.000000Z";
     const datasets = Object.fromEntries(
       DUCKDB_DATASETS.map((d) => [
@@ -120,14 +120,34 @@ describe("DuckDB release validation", () => {
       datasets,
     };
     expect(validateRelease(release).datasets.pv_pax.schemaVersion).toBe(
-      "pv_pax.v2",
+      "pv_pax.v3",
+    );
+    expect(validateRelease(release).datasets.pv_attendance.schemaVersion).toBe(
+      "pv_attendance.v1",
     );
     expect(() =>
       validateRelease({
         ...release,
-        datasets: { ...datasets, pv_territories: datasets.pv_pax },
+        datasets: { ...datasets, unexpected_dataset: datasets.pv_pax },
       }),
-    ).toThrow();
+    ).toThrow(/datasets/);
+    const oldNineDatasets = Object.fromEntries(
+      Object.entries(datasets).filter(
+        ([dataset]) => dataset !== "pv_attendance",
+      ),
+    );
+    expect(() =>
+      validateRelease({ ...release, datasets: oldNineDatasets }),
+    ).toThrow(/datasets/);
+    expect(() =>
+      validateRelease({
+        ...release,
+        datasets: {
+          ...datasets,
+          pv_pax: { ...datasets.pv_pax, schemaVersion: "pv_pax.v2" },
+        },
+      }),
+    ).toThrow(/schemaVersion/);
     expect(() =>
       validateRelease({ ...release, contractVersion: "pv-release.v1" }),
     ).toThrow(/unsupported release contractVersion/);
@@ -184,12 +204,49 @@ describe("DuckDB release validation", () => {
     );
   });
 
-  it("describes the sole supported nine-dataset v2 contract", () => {
-    expect(DUCKDB_DATASETS).toHaveLength(9);
-    expect(DUCKDB_V2_DATASETS).toHaveLength(9);
+  it("describes the sole supported strict ten-dataset v2 contract", () => {
+    expect(DUCKDB_DATASETS).toHaveLength(10);
+    expect(DUCKDB_V2_DATASETS).toHaveLength(10);
     expect(schemaFor("pv_pax", DUCKDB_V2_CONTRACT_VERSION).schemaVersion).toBe(
-      "pv_pax.v2",
+      "pv_pax.v3",
     );
+    const paxColumns = schemaFor("pv_pax", DUCKDB_V2_CONTRACT_VERSION)
+      .columns as readonly {
+      name: string;
+      logicalType: string;
+      nullable: boolean;
+    }[];
+    expect(paxColumns.slice(-2)).toEqual([
+      { name: "lifetime_posts", logicalType: "INTEGER", nullable: true },
+      { name: "lifetime_qs", logicalType: "INTEGER", nullable: true },
+    ]);
+    const attendance = schemaFor("pv_attendance", DUCKDB_V2_CONTRACT_VERSION);
+    expect(attendance.schemaVersion).toBe("pv_attendance.v1");
+    expect(attendance.goldenSpecifications).toEqual([
+      {
+        name: "candidate_transport_check",
+        query: "SELECT COUNT(*) AS row_count FROM pv_attendance",
+        canonicalization: "rows-json-v1",
+      },
+    ]);
+    expect(attendance.columns).toEqual([
+      {
+        name: "refreshed_at",
+        logicalType: "TIMESTAMP WITH TIME ZONE",
+        nullable: true,
+      },
+      { name: "id", logicalType: "INTEGER", nullable: true },
+      { name: "user_id", logicalType: "INTEGER", nullable: true },
+      { name: "event_instance_id", logicalType: "INTEGER", nullable: true },
+      { name: "q_ind", logicalType: "INTEGER", nullable: true },
+      { name: "coq_ind", logicalType: "INTEGER", nullable: true },
+      { name: "start_date", logicalType: "DATE", nullable: true },
+      { name: "ao_org_id", logicalType: "INTEGER", nullable: true },
+      { name: "region_org_id", logicalType: "INTEGER", nullable: true },
+      { name: "tags", logicalType: "INTEGER[]", nullable: true },
+      { name: "types", logicalType: "INTEGER[]", nullable: true },
+      { name: "categories", logicalType: "VARCHAR[]", nullable: true },
+    ]);
     expect(() => schemaFor("pv_pax", "pv-release.v1")).toThrow(/unsupported/);
     expect(
       Object.entries(
@@ -240,7 +297,7 @@ describe("DuckDB release validation", () => {
       datasets,
     };
     expect(validateRelease(release).datasets.pv_pax.schemaVersion).toBe(
-      "pv_pax.v2",
+      "pv_pax.v3",
     );
     expect(() =>
       validateRelease({

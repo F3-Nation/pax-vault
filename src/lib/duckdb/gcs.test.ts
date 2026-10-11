@@ -202,7 +202,7 @@ describe("GCS release repository", () => {
       client.read("gs://bucket/current.json", "8"),
     ).rejects.toBeInstanceOf(DuckDbReleaseError);
   });
-  it("accepts a complete synthetic nine-dataset release", async () => {
+  it("accepts a complete synthetic ten-dataset release", async () => {
     const fixtureData = fixture();
     const client: GcsClient = {
       read: async (uri, generation) => {

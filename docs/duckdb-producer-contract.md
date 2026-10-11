@@ -10,19 +10,33 @@ The normative migration requirements are in
 [`duckdb-migration-plan.md`](./duckdb-migration-plan.md). This document turns
 those requirements into an implementable producer interface.
 
-## 1. Current producer artifact and evidence boundary
+## 1. Current staging POC release and evidence boundary
 
-The checked-in local mirror `.gcs/f3-analytics/pax-vault/current.json` contains
-a `pv-release.v2` example in bucket `f3-analytics-nonprod`, under
-`pax-vault/releases`; the control object is `pax-vault/current.json`. This is a
-local artifact mirror, not evidence of a live GCS generation/CAS operation.
-There have been no DuckDB production releases. V2 is the sole supported runtime
-contract; v1 release contracts are unsupported and must be rejected.
+The live staging pointer `gs://f3-analytics-nonprod/pax-vault/current.json`
+currently names release `20261011T110818.964799Z-049e3ff018264f8eb14fd84cc84d1567`
+under `pax-vault/releases`, with contract `pv-release.v2` and ten datasets
+listed below. This is a breakable, staging-only, new-only POC; it is not a
+production release or production rollout. The checked-in local mirror
+`.gcs/f3-analytics/pax-vault/current.json` is a historical nine-dataset sample,
+not a valid current candidate and not evidence of live GCS generation/CAS.
+Production remains on BigQuery. The adopted POC consumer requires the current
+ten-dataset inventory and does not promise compatibility with older releases;
+the compatibility/overlap gates later in this document are production-rollout
+requirements, not staging POC gates.
 
-The v2 candidate includes exactly nine datasets:
+The current v2 POC candidate includes exactly ten datasets:
 `pv_pax`, `pv_events`, `pv_regions`, `pv_areas`, `pv_sectors`, `pv_aos`,
-`pv_upcoming`, `pv_kotter`, and `pv_territories`. Schema versions are v2 for
-`pv_pax`, `pv_events`, `pv_areas`, and `pv_sectors`, and v1 for the other five.
+`pv_upcoming`, `pv_kotter`, `pv_territories`, and `pv_attendance`. Schema
+versions are `pv_pax.v3`, `pv_events.v2`, `pv_areas.v2`, `pv_sectors.v2`,
+`pv_attendance.v1`, and v1 for `pv_regions`, `pv_aos`, `pv_upcoming`,
+`pv_kotter`, and `pv_territories`.
+`pv_attendance.v1` has ordered nullable columns: `refreshed_at TIMESTAMP WITH
+TIME ZONE`, `id INTEGER`, `user_id INTEGER`, `event_instance_id INTEGER`,
+`q_ind INTEGER`, `coq_ind INTEGER`, `start_date DATE`, `ao_org_id INTEGER`,
+`region_org_id INTEGER`, `tags INTEGER[]`, `types INTEGER[]`, and
+`categories VARCHAR[]`. `pv_pax.v3` appends nullable `lifetime_posts INTEGER`
+and `lifetime_qs INTEGER` after `roles`; all other `pv_pax` columns retain the
+v2 order. All listed columns are nullable.
 V2 columns are ordered arrays; their order is part of the canonical fingerprint.
 The release and entries record `sourceReadPolicy=ordered-sequential-per-dataset`
 and `sourceOrder`; each entry and manifest records its own UTC
@@ -58,11 +72,12 @@ prefix; reject `..`, alternate buckets, absolute/path-escaped names, unknown
 files, duplicate datasets, and duplicate object entries. `current.json` is the
 only mutable object.
 
-The v2 dataset allowlist is:
+The current ten-dataset v2 POC allowlist is:
 `pv_pax`, `pv_events`, `pv_regions`, `pv_areas`, `pv_sectors`, `pv_aos`,
-`pv_upcoming`, `pv_kotter`, and `pv_territories`. A v2 release must contain
-exactly these nine datasets, not merely a subset. Reject unsupported v1 release
-contracts. Do not expose v2 `pv_pax` email or roles through analytical
+`pv_upcoming`, `pv_kotter`, `pv_territories`, and `pv_attendance`. A current
+POC v2 release must contain exactly these ten datasets, not merely a subset.
+The historical nine-dataset mirror is not a current candidate. Reject
+unsupported release contracts. Do not expose `pv_pax` email or roles through analytical
 projections; use sensitive fields only through the explicitly defined auth and
 identity paths.
 
@@ -86,7 +101,7 @@ rejected.
     "pv_pax": {
       "manifestUri": "gs://BUCKET/pax-vault/releases/RELEASE/pv_pax/manifest.json",
       "manifestGeneration": "1789820643043457",
-      "schemaVersion": "pv_pax.v2",
+      "schemaVersion": "pv_pax.v3",
       "sourceReadPolicy": "ordered-sequential-per-dataset",
       "sourceReadTimestampUtc": "2026-09-19T12:23:48.191387Z",
       "sourceOrder": "20260919T122348.191387Z"
@@ -113,7 +128,7 @@ V2 release metadata has this version-specific shape (dataset map abbreviated):
     "pv_pax": {
       "manifestUri": "gs://BUCKET/pax-vault/releases/RELEASE/pv_pax/manifest.json",
       "manifestGeneration": "1790171725923504",
-      "schemaVersion": "pv_pax.v2",
+      "schemaVersion": "pv_pax.v3",
       "sourceReadPolicy": "ordered-sequential-per-dataset",
       "sourceReadTimestampUtc": "2026-09-23T13:55:10.721532+00:00",
       "sourceOrder": "20260923T135502.435915Z"
@@ -134,7 +149,7 @@ object-shaped v1 release manifests are unsupported and rejected:
 {
   "contractVersion": "pv-release.v2",
   "dataset": "pv_pax",
-  "schemaVersion": "pv_pax.v2",
+  "schemaVersion": "pv_pax.v3",
   "rowCount": 105026,
   "totalSizeBytes": 4397550,
   "schemaFingerprintSha256": "<sha256-of-canonical-schema-registry-columns>",
@@ -176,7 +191,7 @@ array must exactly match the consumer's executable v2 registry (column names,
 DuckDB logical types, and nullability); preserve array order when
 computing `schemaFingerprintSha256`. V2 manifests carry `sourceReadPolicy`,
 `sourceOrder`, and per-dataset `sourceReadTimestampUtc`, and omit
-`sourceSnapshot`. V2 `pv_pax` includes email/roles and `pv_events` includes six
+`sourceSnapshot`. `pv_pax.v3` includes email/roles and `pv_events` includes six
 event-content fields, three with JSON type; never expose these private fields
 through analytical projections. Each release dataset must have at least one
 golden. A golden is not a name/hash assertion only: its immutable `uri` and
@@ -202,9 +217,12 @@ Artifact classes are exact: the manifest is only
 only `<release>/<dataset>/goldens/<safe-name>.json`. No artifact may be reused
 across classes or datasets.
 
-The consumer registry is machine-readable and versioned. Each serving
-application revision is listed with its exact pointer schema, v2 release
-contract, and per-dataset schema versions. It also specifies columns,
+The consumer registry is machine-readable and versioned. The staging POC
+registry requires the exact ten-dataset inventory, v2 release contract, and
+per-dataset schema versions above; it intentionally does not accept older
+nine-dataset releases. Production rollout must list each serving application
+revision with its exact pointer schema, release contract, and per-dataset
+schema versions. The registry also specifies columns,
 types/nullability, non-negative row-count policy, and deterministic verification
 query specifications. Unsupported v1 release contracts, unknown schema
 versions, missing goldens, column/fingerprint mismatches, v2
@@ -284,11 +302,13 @@ Parquet buffers in memory.
 
 ## 6. Compatibility, source parity, and registry
 
-Maintain a machine-readable v2 schema registry containing pointer and manifest
-`contractVersion` plus every dataset `schemaVersion`. The runtime accepts v2
-only and rejects v1 release contracts. Publishing is blocked if a serving
-revision cannot read the candidate. Additive fields require consumer tolerance;
-renames/removals require a new contract version and coordinated rollout.
+The staging POC registry requires the exact current ten-dataset inventory and
+their pointer, manifest, and dataset schema versions; the consumer is new-only
+and rejects the historical nine-dataset sample. For production rollout,
+maintain a machine-readable registry for every serving revision and block
+publication if any revision cannot read the candidate. Additive-field tolerance
+and coordinated handling of breaking changes are production compatibility
+gates, not guarantees made by the staging POC.
 
 V2 releases must preserve the producer's ordered sequential read policy, shared
 `sourceOrder` token and each dataset's own UTC read timestamp, without inventing
@@ -322,7 +342,8 @@ or reordered; consumers always reconcile from `current.json`.
 ## 8. Producer implementation checklist
 
 - [ ] Use the configured bucket and exact immutable prefix layout.
-- [ ] Publish exactly the consumer allowlist; register any new dataset first.
+- [ ] Publish exactly the current ten-dataset POC allowlist; register any new
+      dataset first. Do not use the historical nine-dataset mirror as a candidate.
 - [ ] Generate complete per-dataset manifests and `release.json`.
 - [ ] Record object generations, CRC32C, byte sizes, row counts, schema
       fingerprints, contract-appropriate source metadata, and goldens. V2
@@ -349,9 +370,11 @@ test bucket (or an equivalent generation-faithful emulator):
 1. A complete release is reproducibly generated twice from a repeatable source
    input; canonical manifest bytes and SHA-256 are identical. For v2, preserve
    per-dataset read metadata and do not assert a shared source snapshot.
-2. The sample-shaped release is rejected when it lacks pointer metadata,
+2. The historical nine-dataset mirror is rejected as a current POC candidate;
+   a candidate is also rejected when it lacks pointer metadata,
    manifest SHA-256/schema fingerprints/goldens, has an extra dataset, or uses
-   an unsupported v1 release contract. V2 includes `pv_territories`.
+   an unsupported release contract. Current POC v2 includes `pv_attendance` and
+   `pv_territories`, with `pv_pax.v3` and `pv_attendance.v1` schemas.
 3. Missing dataset, extra file, duplicate dataset, path traversal, wrong
    bucket, unknown schema version, and malformed canonical JSON are rejected.
 4. Changing a Parquet byte, size, CRC32C, generation, row count, schema, or
@@ -364,8 +387,10 @@ test bucket (or an equivalent generation-faithful emulator):
    discard the candidate; all reads remain pinned to one release.
 8. A valid retained release can be rolled back by the same pointer CAS, while
    an incomplete or deleted release cannot be referenced.
-9. Registry tests reject unsupported v1 contracts and candidates unsupported
-   by a serving revision, and accept declared additive-compatible changes.
+9. Production-rollout registry tests reject unsupported contracts and
+   candidates unsupported by a serving revision, and accept only declared
+   additive-compatible changes. This overlap gate is not a staging POC
+   backward-compatibility promise.
 10. V2 policy/order and per-dataset entry/manifest timestamps are valid and
     consistent. Source parity/conflict checks, bounded cross-dataset drift, and
     freshness/lag targets are rollout follow-ups, not asserted by this test.

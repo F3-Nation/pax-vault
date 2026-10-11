@@ -32,7 +32,7 @@ const config = (dir: string): DuckDbConfig => ({
 });
 
 describe("complete generation-pinned DuckDB release", () => {
-  it("streams, validates, opens, and queries all nine real Parquet datasets", async () => {
+  it("streams, validates, opens, and queries all ten synthetic Parquet datasets", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pax-duckdb-e2e-"));
     try {
       const { DuckDBInstance } = await import("@duckdb/node-api");

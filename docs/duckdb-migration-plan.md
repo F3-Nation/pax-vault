@@ -20,20 +20,20 @@ universal error-status guarantee for every caller.
 The existing BigQuery adapter in `src/lib/db.ts` and all listed modules remain
 operational throughout rollout. The following matrix is normative:
 
-| Capability / source                                                                                                                          | Owner after migration | Treatment                                                                                                                                                                                               |
-| -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pv_pax`, `pv_events`, `pv_regions`, `pv_areas`, `pv_sectors`, `pv_aos`, `pv_upcoming`, `pv_kotter`, `pv_territories` analytical projections | DuckDB release        | V2 is the sole supported runtime release contract and contains nine datasets; reject v1 release contracts. Email/roles are private and never returned by analytical projections.                        |
-| Auth allowlist (`src/lib/auth/allowlist.ts`)                                                                                                 | DuckDB / BigQuery     | Use v2 DuckDB when `DUCKDB_ENABLED=true` and `DUCKDB_AUTH_ENABLED` is unset/true; otherwise use BigQuery. Custom `AUTH_EMAIL_TABLE` is incompatible with DuckDB auth. Errors do not silently fall back. |
-| Permissions (`src/lib/bq/permissions.ts`)                                                                                                    | DuckDB / BigQuery     | Region permission reads use v2 DuckDB under the same auth flags, otherwise BigQuery. Errors do not silently fall back.                                                                                  |
-| Identity (`getPaxIdentityByEmail` in `src/lib/bq/pax.ts`)                                                                                    | DuckDB / BigQuery     | PAX identity lookup uses v2 DuckDB under the same auth flags, otherwise BigQuery; errors do not silently fall back.                                                                                     |
-| Preferences (`src/lib/bq/preferences.ts`, `src/lib/preferences.ts`)                                                                          | BigQuery              | Reads and MERGE writes remain BigQuery and uncached for read-your-write behavior.                                                                                                                       |
-| 8-box (`getEightBoxPageData`, `getEightBoxVersionPageData`, and all writes in `src/lib/bq/eightBox.ts`)                                      | BigQuery              | Keep `pv_pax_eight_box` storage and writes in BigQuery; owner-display lookups also remain BigQuery.                                                                                                     |
-| Event detail content (`getEventDetails` in `src/lib/bq/events.ts`)                                                                           | DuckDB release        | Read detail content from the v2 DuckDB release when the events capability flag is enabled; use BigQuery when that flag is off.                                                                          |
-| `getEventById` (`src/lib/bq/events.ts`)                                                                                                      | Split                 | Fetch event/attendance from DuckDB; fetch `pv_regions_preferences.json_config` from BigQuery and join in the adapter.                                                                                   |
-| `getPageData` in `src/lib/bq/regions.ts` and `src/lib/bq/aos.ts`                                                                             | Split                 | Analytical page aggregates, events, leaders, upcoming, and kotter use DuckDB; `preferencesJson` remains a BigQuery point lookup.                                                                        |
-| `getPageData` in `src/lib/bq/pax.ts`, `areas.ts`, and `sectors.ts`; their `getEvents` and search functions; `src/lib/bq/search.ts`           | DuckDB release        | Migrate the `pv_*` reads, preserving current result shapes and filters.                                                                                                                                 |
-| `getRegionAOIds` (`src/lib/bq/regions.ts`)                                                                                                   | BigQuery              | This is a preference-cache invalidation lookup, not a region-permission read; keep it in BigQuery.                                                                                                      |
-| Scheduled ETL inputs                                                                                                                         | BigQuery              | Producer continues reading `public.*` source tables; publication does not replace producer source access.                                                                                               |
+| Capability / source                                                                                                                                           | Owner after migration | Treatment                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pv_pax`, `pv_events`, `pv_regions`, `pv_areas`, `pv_sectors`, `pv_aos`, `pv_upcoming`, `pv_kotter`, `pv_territories`, `pv_attendance` analytical projections | DuckDB release        | Staging POC requires exactly ten datasets under `pv-release.v2` (`pv_pax.v3`, `pv_attendance.v1`); it is new-only and breakable. Production remains BigQuery pending rollout gates. Email/roles are private and never returned by analytical projections. |
+| Auth allowlist (`src/lib/auth/allowlist.ts`)                                                                                                                  | DuckDB / BigQuery     | Use v2 DuckDB when `DUCKDB_ENABLED=true` and `DUCKDB_AUTH_ENABLED` is unset/true; otherwise use BigQuery. Custom `AUTH_EMAIL_TABLE` is incompatible with DuckDB auth. Errors do not silently fall back.                                                   |
+| Permissions (`src/lib/bq/permissions.ts`)                                                                                                                     | DuckDB / BigQuery     | Region permission reads use v2 DuckDB under the same auth flags, otherwise BigQuery. Errors do not silently fall back.                                                                                                                                    |
+| Identity (`getPaxIdentityByEmail` in `src/lib/bq/pax.ts`)                                                                                                     | DuckDB / BigQuery     | PAX identity lookup uses v2 DuckDB under the same auth flags, otherwise BigQuery; errors do not silently fall back.                                                                                                                                       |
+| Preferences (`src/lib/bq/preferences.ts`, `src/lib/preferences.ts`)                                                                                           | BigQuery              | Reads and MERGE writes remain BigQuery and uncached for read-your-write behavior.                                                                                                                                                                         |
+| 8-box (`getEightBoxPageData`, `getEightBoxVersionPageData`, and all writes in `src/lib/bq/eightBox.ts`)                                                       | BigQuery              | Keep `pv_pax_eight_box` storage and writes in BigQuery; owner-display lookups also remain BigQuery.                                                                                                                                                       |
+| Event detail content (`getEventDetails` in `src/lib/bq/events.ts`)                                                                                            | DuckDB release        | Read detail content from the v2 DuckDB release when the events capability flag is enabled; use BigQuery when that flag is off.                                                                                                                            |
+| `getEventById` (`src/lib/bq/events.ts`)                                                                                                                       | Split                 | Fetch event/attendance from DuckDB; fetch `pv_regions_preferences.json_config` from BigQuery and join in the adapter.                                                                                                                                     |
+| `getPageData` in `src/lib/bq/regions.ts` and `src/lib/bq/aos.ts`                                                                                              | Split                 | Analytical page aggregates, events, leaders, upcoming, and kotter use DuckDB; `preferencesJson` remains a BigQuery point lookup.                                                                                                                          |
+| `getPageData` in `src/lib/bq/pax.ts`, `areas.ts`, and `sectors.ts`; their `getEvents` and search functions; `src/lib/bq/search.ts`                            | DuckDB release        | Migrate the `pv_*` reads, preserving current result shapes and filters.                                                                                                                                                                                   |
+| `getRegionAOIds` (`src/lib/bq/regions.ts`)                                                                                                                    | BigQuery              | This is a preference-cache invalidation lookup, not a region-permission read; keep it in BigQuery.                                                                                                                                                        |
+| Scheduled ETL inputs                                                                                                                                          | BigQuery              | Producer continues reading `public.*` source tables; publication does not replace producer source access.                                                                                                                                                 |
 
 Mixed functions must not issue an accidental cross-engine SQL query. Their
 adapters explicitly name the source for each component and carry one
@@ -47,19 +47,28 @@ preference writes invalidate the affected region and inherited AO page keys.
 
 ## Current pointer and release protocol
 
-The checked-in local mirror contains a v2 pointer example for
-`gs://f3-analytics-nonprod/pax-vault/current.json` (mirror:
-`.gcs/f3-analytics/pax-vault/current.json`). The release prefix is
-`pax-vault/releases`; the control object is `pax-vault/current.json`. This is
-artifact evidence, not proof of a live GCS read/CAS or production deployment.
-V2 is the sole supported runtime contract. No DuckDB production releases have
-occurred; the local mirror is not evidence of a live release. Reject v1 release
-contracts rather than treating them as an application rollback option.
+The live staging pointer `gs://f3-analytics-nonprod/pax-vault/current.json`
+currently points to `20261011T110818.964799Z-049e3ff018264f8eb14fd84cc84d1567`,
+a `pv-release.v2` release with ten datasets. The checked-in local mirror
+`.gcs/f3-analytics/pax-vault/current.json` is a historical nine-dataset sample,
+not a valid current candidate and not evidence of a live GCS generation/CAS.
+This is a breakable staging POC using a new-only consumer; production remains
+BigQuery, and no DuckDB production release or cutover is claimed. Production
+rollout will require compatibility/overlap and rollback gates; those are not
+adopted as backward-compatibility promises for the staging POC.
 
-V2 contains exactly nine datasets: `pv_pax`, `pv_events`, `pv_regions`,
-`pv_areas`, `pv_sectors`, `pv_aos`, `pv_upcoming`, `pv_kotter`, and
-`pv_territories`. `pv_pax`, `pv_events`, `pv_areas`, and `pv_sectors` use v2
-schemas; the remaining datasets use v1 schemas. V2 manifests encode ordered
+The current staging POC v2 release contains exactly ten datasets: `pv_pax`,
+`pv_events`, `pv_regions`, `pv_areas`, `pv_sectors`, `pv_aos`, `pv_upcoming`,
+`pv_kotter`, `pv_territories`, and `pv_attendance`. Schema versions are
+`pv_pax.v3`, `pv_events.v2`, `pv_areas.v2`, `pv_sectors.v2`,
+`pv_attendance.v1`, and v1 for the other five datasets. `pv_attendance.v1`
+columns, in order, are nullable `refreshed_at TIMESTAMP WITH TIME ZONE`, `id
+INTEGER`, `user_id INTEGER`, `event_instance_id INTEGER`, `q_ind INTEGER`,
+`coq_ind INTEGER`, `start_date DATE`, `ao_org_id INTEGER`, `region_org_id
+INTEGER`, `tags INTEGER[]`, `types INTEGER[]`, and `categories VARCHAR[]`.
+`pv_pax.v3` appends nullable `lifetime_posts INTEGER` and `lifetime_qs INTEGER`
+after `roles`; all other PAX columns retain v2 order. All listed columns are
+nullable. V2 manifests encode ordered
 column arrays and fingerprint those exact arrays; column order is contract
 data. V2 describes ordered sequential per-dataset source reads, not a shared
 source snapshot. Each dataset records its own UTC read timestamp; `sourceOrder`
@@ -264,11 +273,13 @@ Emit structured metrics/logs for pointer reads/CAS failures, accepted release,
 releaseSequence, and pointer/object generations, release skew age, bootstrap/refresh duration, single-flight
 waiters, validation rejection reason, CRC/size mismatch, active/LKG state,
 503s, lease counts, cleanup failures, query latency/errors, and shadow parity
-diffs. Never log credentials or raw user identifiers. Define a machine-readable
-v2-only compatibility registry of supported pointer, manifest, and dataset
-`schemaVersion` values for every serving revision. Publishing is blocked unless
-the candidate schema is supported by every serving revision during overlap. If
-that cannot hold, coordinate a revision rollout first, or perform a validated
-v2 pointer recovery before rolling the application back. Additive fields require
-consumer tolerance; renames/removals require a new contract version and a
-coordinated rollout.
+diffs. Never log credentials or raw user identifiers. For production rollout,
+define a machine-readable compatibility registry of supported pointer,
+manifest, and dataset `schemaVersion` values for every serving revision.
+Publishing is blocked unless the candidate schema is supported by every serving
+revision during overlap. This is an aspirational production gate, not a
+compatibility guarantee of the breakable staging POC, whose consumer requires
+the exact current ten-dataset inventory. If the production gate cannot hold,
+coordinate a revision rollout first, or perform a validated release recovery
+before rolling the application back. Additive fields require consumer
+tolerance; renames/removals require a coordinated production rollout.

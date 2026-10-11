@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DuckDbConfig } from "./config";
 import { DuckDbUnavailableError, DuckDbReleaseError } from "./errors";
 import { categorizeDuckDbRejection, DuckDbRuntime } from "./runtime";
@@ -171,13 +171,20 @@ describe("DuckDB local lifecycle", () => {
       { ...config, maxLkgAgeMs: 1 },
       opener(),
     );
-    await runtime.acquire();
-    f.repo.downloadRelease = async () => {
-      throw new Error("refresh unavailable");
-    };
-    await new Promise((r) => setTimeout(r, 5));
-    await expect(runtime.acquire()).rejects.toBeInstanceOf(
-      DuckDbUnavailableError,
-    );
+    let now = Date.now();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      const lease = await runtime.acquire();
+      lease.release();
+      f.repo.downloadRelease = async () => {
+        throw new Error("refresh unavailable");
+      };
+      now += 5;
+      await expect(runtime.acquire()).rejects.toBeInstanceOf(
+        DuckDbUnavailableError,
+      );
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });

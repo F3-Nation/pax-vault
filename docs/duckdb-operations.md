@@ -1,7 +1,10 @@
 # DuckDB Phase 3 operations runbook
 
-This runbook is for the Phase-3 production cutover of the read-only `pv_*`
-DuckDB release consumer. It complements
+This runbook documents aspirational Phase-3 production cutover gates for the
+read-only `pv_*` DuckDB release consumer. The currently adopted effort is a
+breakable, staging-only, new-only POC; production remains BigQuery, and no
+production release or cutover is claimed. These production gates do not imply
+backward compatibility for the staging consumer. It complements
 [`duckdb-migration-plan.md`](./duckdb-migration-plan.md) and the producer
 contract in [`duckdb-producer-contract.md`](./duckdb-producer-contract.md).
 
@@ -16,10 +19,15 @@ ticket. Do not replace placeholders in this document with guessed values.
 Before scheduling a rollout, the release owner and platform/SRE must attach
 evidence that:
 
-- [ ] The candidate producer release uses the v2 contract and contains exactly
-      its nine datasets, including `pv_territories`, immutable generation-pinned
-      objects, complete manifests, ordered-column fingerprints, and v2 read
-      metadata. Reject v1 release contracts.
+- [ ] For the current staging POC, the candidate uses `pv-release.v2` and
+      contains exactly ten datasets: the historical nine plus `pv_attendance`;
+      schema versions include `pv_pax.v3` and `pv_attendance.v1`. The local
+      mirror's nine-dataset sample is historical and is not a valid candidate.
+      Preserve immutable generation-pinned objects, complete manifests,
+      ordered-column fingerprints, and v2 read metadata.
+- [ ] For future production rollout, complete the serving-revision compatibility
+      and overlap gates below; they are not a backward-compatibility promise or
+      a requirement to preserve older releases in the staging POC.
 - [ ] For v2, release and entries use
       `ordered-sequential-per-dataset` plus matching `sourceOrder`; every entry
       and manifest carries its dataset's UTC read timestamp. Do not require a
@@ -29,8 +37,8 @@ evidence that:
       transport/count check only, not query-parity evidence. Producer source
       parity/conflict checks and source freshness/lag targets are deferred to
       rollout, not prerequisites for this implementation.
-- [ ] The candidate is supported by the v2-only compatibility registry of the
-      new revision and every serving revision.
+- [ ] Future production candidate passes the compatibility registry for the
+      new and every serving revision; the staging POC remains strict new-only.
 - [ ] The consumer has passed corruption, generation-change, pointer-race,
       failed-ADC, no-LKG, refresh-concurrency, and old/new revision overlap
       tests.
@@ -56,11 +64,13 @@ validation owner has accepted the evidence.
 The serving runtime uses ADC and the GCS SDK. It does not use HMAC keys,
 DuckDB `httpfs`, embedded credentials, or request-time remote scans.
 
-For the checked-in f3-analytics deployment, configure bucket
-`f3-analytics-nonprod`, release prefix `pax-vault/releases`, and control object
-`pax-vault/current.json`. The checked-in pointer is local mirror evidence only;
-no DuckDB production release has occurred. Record live GCS reads/generations
-and CAS evidence separately. Auth allowlist, PAX identity, and region permission
+For the staging POC, configure bucket `f3-analytics-nonprod`, release prefix
+`pax-vault/releases`, and control object `pax-vault/current.json`. The live
+staging pointer currently names `20261011T110818.964799Z-049e3ff018264f8eb14fd84cc84d1567`,
+a ten-dataset `pv-release.v2` release. The checked-in local mirror is a
+historical nine-dataset sample, not a current candidate. Record live GCS
+reads/generations and CAS evidence separately; the staging pointer is not a
+production release. Auth allowlist, PAX identity, and region permission
 reads use the v2 DuckDB release when `DUCKDB_ENABLED=true` and
 `DUCKDB_AUTH_ENABLED` is unset or true; otherwise they use BigQuery. A custom
 `AUTH_EMAIL_TABLE` is incompatible with DuckDB auth. Errors on the enabled
@@ -180,8 +190,8 @@ the flag state and observed release tag at each step:
 3. **Observe:** watch readiness, refresh/activation errors, 503s, query
    latency/errors, release skew, LKG age, memory, ephemeral storage, and
    shadow parity for the agreed observation window `<OBSERVATION_WINDOW>`.
-4. **Expand:** enable the next capability only after the release owner and
-   SRE owner sign the previous capability's evidence.
+4. **Expand (future production rollout):** enable the next capability only
+   after the release owner and SRE owner sign the previous capability's evidence.
 
 **Cutback:** if correctness, readiness, skew, LKG, resource, or error gates
 fail, the data-access owner disables the affected flag and records the exact
@@ -309,6 +319,11 @@ timestamp. Use test identities and non-sensitive queries.
 
 ### Resource/query checks
 
+- [ ] The staging POC release contains exactly ten datasets, including
+      `pv_attendance.v1`; `pv_pax.v3` includes nullable `lifetime_posts` and
+      `lifetime_qs` after `roles`. Validate full attendance column
+      order/types/nullability from the producer contract. Do not use the
+      historical nine-dataset mirror as a current smoke-test candidate.
 - [ ] Authenticated PAX, region, area, sector, AO, event, and search paths
       return expected shape/order for the enabled capability.
 - [ ] Mixed paths obtain auth allowlist, PAX identity, and region permissions
@@ -341,8 +356,8 @@ timestamp, owner, and environment is incomplete.
       validation owners.
 - [ ] Candidate release ID/sequence, pointer generation before/after, manifest
       SHA-256, contract/schema registry version, and retention decision.
-- [ ] V2 producer metadata (read order/policy and every dataset timestamp),
-      complete dataset inventory, object generations/CRC32C, and transport
+- [ ] Staging POC producer metadata (read order/policy and every dataset
+      timestamp), exact ten-dataset inventory, object generations/CRC32C, and transport
       golden list/digests. Source parity/conflict checks, bounded drift checks,
       and freshness/lag targets are rollout follow-ups, not claimed evidence.
 - [ ] Staging native boot, ADC read/deny, refresh/LKG, resource peak, query,
