@@ -244,28 +244,36 @@ describe("migrated service functions on the pinned native release fixture", () =
     native = await db.connect();
     await native.run(`
       SET TimeZone='UTC';
-      CREATE TABLE pv_events(
+       CREATE TABLE pv_events(
         event_id INTEGER, event_date DATE, event_name VARCHAR, pax_count INTEGER,
         fng_count INTEGER, ao_org_id INTEGER, ao_name VARCHAR, region_org_id INTEGER,
         region_name VARCHAR, area_org_id INTEGER, area_name VARCHAR, sector_org_id INTEGER,
         sector_name VARCHAR,
         first_f_ind INTEGER, second_f_ind INTEGER, third_f_ind INTEGER,
         types STRUCT(id INTEGER)[], tags STRUCT(id INTEGER)[],
-        attendance STRUCT(user_id INTEGER, f3_name VARCHAR, q_ind INTEGER, fartsack BOOLEAN, ghost BOOLEAN, avatar_url VARCHAR)[]);
+         attendance STRUCT(user_id INTEGER, f3_name VARCHAR, q_ind INTEGER, fartsack BOOLEAN, ghost BOOLEAN, avatar_url VARCHAR)[]);
+       CREATE TABLE pv_attendance(
+         refreshed_at TIMESTAMP, id INTEGER, user_id INTEGER, event_instance_id INTEGER,
+         q_ind INTEGER, coq_ind INTEGER, start_date DATE, ao_org_id INTEGER,
+         region_org_id INTEGER, tags INTEGER[], types INTEGER[], categories VARCHAR[]
+       );
       CREATE TABLE pv_regions(region_id INTEGER, region_name VARCHAR, area_id INTEGER, area_name VARCHAR, logo_url VARCHAR, is_active BOOLEAN, aos STRUCT(ao_org_id INTEGER)[], types STRUCT(id INTEGER)[], tags STRUCT(id INTEGER)[]);
       CREATE TABLE pv_aos(ao_id INTEGER, ao_name VARCHAR, region_id INTEGER, region_name VARCHAR, logo_url VARCHAR, is_active BOOLEAN, types STRUCT(id INTEGER)[], tags STRUCT(id INTEGER)[]);
-      CREATE TABLE pv_pax(user_id INTEGER, f3_name VARCHAR, home_region_id INTEGER, home_region_name VARCHAR, avatar_url VARCHAR, status VARCHAR, start_date_override DATE, aos STRUCT(id INTEGER)[], regions STRUCT(id INTEGER)[], types STRUCT(id INTEGER)[], tags STRUCT(id INTEGER)[]);
+       CREATE TABLE pv_pax(user_id INTEGER, f3_name VARCHAR, home_region_id INTEGER, home_region_name VARCHAR, avatar_url VARCHAR, status VARCHAR, start_date_override DATE, aos STRUCT(id INTEGER)[], regions STRUCT(id INTEGER)[], types STRUCT(id INTEGER)[], tags STRUCT(id INTEGER)[], lifetime_posts BIGINT, lifetime_qs BIGINT);
       CREATE TABLE pv_areas(area_id INTEGER, area_name VARCHAR, sector_id INTEGER, sector_name VARCHAR, logo_url VARCHAR, is_active BOOLEAN, regions STRUCT(region_id INTEGER)[]);
       CREATE TABLE pv_sectors(sector_id INTEGER, sector_name VARCHAR, logo_url VARCHAR, is_active BOOLEAN, areas STRUCT(area_id INTEGER)[]);
       CREATE TABLE pv_upcoming(start_date DATE, start_time VARCHAR, ao_name VARCHAR, ao_org_id INTEGER, region_org_id INTEGER, location_name VARCHAR, event_name VARCHAR, event_type VARCHAR, event_category VARCHAR, q_list STRUCT(user_id INTEGER)[]);
       CREATE TABLE pv_kotter(user_id INTEGER, f3_name VARCHAR, avatar_url VARCHAR, kotter_status VARCHAR, total_events INTEGER, first_event_date DATE, days_since_last_event INTEGER, last_event_date DATE, last_event_name VARCHAR, last_event_ao_name VARCHAR, last_event_ao_org_id INTEGER, bestie_list STRUCT(user_id INTEGER)[], home_region_id INTEGER);
-      INSERT INTO pv_events VALUES
+       INSERT INTO pv_events VALUES
         (1, DATE '2024-01-01', 'Alpha', 1, 0, NULL, NULL, 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 1, 0, 0, [{id:10}], [], [{user_id:10,f3_name:'Ace',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL}]),
         (2, DATE '2024-01-03', 'Bravo', 2, 1, 7, 'Bravo AO', 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 0, 1, 0, [{id:11}], [{id:21}], [{user_id:10,f3_name:'Ace',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL},{user_id:11,f3_name:'Boo',q_ind:0,fartsack:true,ghost:false,avatar_url:NULL}]),
-        (3, DATE '2024-01-05', 'Charlie', 3, 0, 7, 'Bravo AO', 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 0, 0, 1, [], [], []);
+         (3, DATE '2024-01-05', 'Charlie', 3, 0, 7, 'Bravo AO', 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 0, 0, 1, [], [], []);
+       INSERT INTO pv_attendance VALUES
+         (CURRENT_TIMESTAMP,1,10,1,1,0,DATE '2024-01-01',NULL,1,[],[],[]),
+         (CURRENT_TIMESTAMP,2,10,2,1,0,DATE '2024-01-03',7,1,[],[],[]);
       INSERT INTO pv_regions VALUES (1,'Alpha Region',3,'Area One',NULL,true,[{ao_org_id:7}],[],[]);
       INSERT INTO pv_aos VALUES (7,'Bravo AO',1,'Alpha Region',NULL,true,[],[]);
-      INSERT INTO pv_pax VALUES (10,'Ace',1,'Alpha Region',NULL,'active',NULL,[],[],[],[]),(11,'Boo',1,'Alpha Region',NULL,'active',NULL,[],[],[],[]);
+       INSERT INTO pv_pax VALUES (10,'Ace',1,'Alpha Region',NULL,'active',NULL,[],[],[],[],2,2),(11,'Boo',1,'Alpha Region',NULL,'active',NULL,[],[],[],[],0,0);
       INSERT INTO pv_areas VALUES (3,'Area One',5,'Sector Five',NULL,true,[{region_id:1}]);
       INSERT INTO pv_sectors VALUES (5,'Sector Five',NULL,true,[{area_id:3}]);
     `);
@@ -449,10 +457,66 @@ describe("migrated service functions on the pinned native release fixture", () =
     expect(queryBigQuery).toHaveBeenCalled();
   });
 
+  it("counts duplicate attendance once per event for region posts and Qs under filters", async () => {
+    // The nested event mirror and published attendance table both carry the
+    // duplicate, but event-based metrics count it once.
+    await native.run(`
+      UPDATE pv_events SET attendance = list_append(attendance,
+        {user_id:10,f3_name:'Ace',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL})
+        WHERE event_id = 2;
+      INSERT INTO pv_attendance VALUES
+        (CURRENT_TIMESTAMP,3,10,2,1,0,DATE '2024-01-03',7,1,[],[],[]),
+        (CURRENT_TIMESTAMP,4,10,4,1,0,DATE '2024-01-04',7,2,[],[],[]);
+      INSERT INTO pv_events VALUES
+        (4, DATE '2024-01-04', 'Delta', 1, 0, 7, 'Bravo AO', 2, 'Other Region', 3, 'Area One', 5, 'Sector Five', 0, 0, 1, [], [],
+          [{user_id:10,f3_name:'Ace',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL}]);
+    `);
+
+    const page = await getRegionPage(1, "fixture@example.com", {
+      startDate: "2024-01-01",
+      endDate: "2024-01-03",
+      aoIds: [0, 7],
+    });
+    expect(page.leaders).toEqual([
+      expect.objectContaining({
+        user_id: 10,
+        posts: 2,
+        qs: 2,
+        all_posts: 2,
+        all_qs: 2,
+      }),
+    ]);
+    expect(page.charts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ date: "2024-01-01", q_count: 1 }),
+        expect.objectContaining({ date: "2024-01-03", q_count: 1 }),
+      ]),
+    );
+    const careerSql = executedSql.find((sql) => sql.includes("scoped_pax"));
+    const leaderSql = executedSql.find(
+      (sql) =>
+        sql.includes("FROM pv_attendance a") && sql.includes("filtered_events"),
+    );
+    expect(careerSql).toContain("count(DISTINCT a.event_instance_id)");
+    expect(careerSql).toContain(
+      "JOIN pv_events e ON e.event_id = a.event_instance_id",
+    );
+    expect(careerSql).toContain("home_region_id = ?");
+    expect(careerSql).toContain("lifetime_posts");
+    expect(careerSql).toContain("lifetime_qs");
+    expect(leaderSql).toContain(
+      "JOIN filtered_events ON filtered_events.event_id = a.event_instance_id",
+    );
+    expect(leaderSql).toContain("event_date >= CAST(? AS DATE)");
+    expect(leaderSql).toContain("ao_org_id IS NULL OR ao_org_id IN (?)");
+    expect(leaderSql).toContain("count(DISTINCT a.event_instance_id)");
+    expect(leaderSql).toContain("a.q_ind = 1");
+  });
+
   it("preserves PAX page membership for true, false, and NULL fartsack flags", async () => {
     await native.run(`
       INSERT INTO pv_pax VALUES
-        (42,'Membership Fixture',1,'Alpha Region',NULL,'active',NULL,[],[],[],[]);
+        (42,'Membership Fixture',1,'Alpha Region',NULL,'active',NULL,[],[],[],[],NULL,NULL);
       INSERT INTO pv_events VALUES
         (4201, DATE '2024-02-01', 'False flag', 1, 0, 7, 'Bravo AO', 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 1, 0, 0, [], [],
           [{user_id:42,f3_name:'Membership Fixture',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL}]),
@@ -535,9 +599,125 @@ describe("migrated service functions on the pinned native release fixture", () =
         all_qs: 2,
       }),
     ]);
+    expect(
+      executedSql.some((sql) => sql.includes("p.lifetime_posts AS all_posts")),
+    ).toBe(true);
+    expect(
+      executedSql.some((sql) => sql.includes("JOIN filtered_events")),
+    ).toBe(false);
+    expect(
+      executedSql.some((sql) =>
+        sql.includes("FROM pv_attendance a JOIN targets USING (user_id)"),
+      ),
+    ).toBe(false);
     // The only BigQuery request in this native path is the intentional
     // preference lookup; native query failures do not retry the legacy path.
     expect(queryBigQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to distinct attendance totals for null lifetime fields and missing profiles", async () => {
+    await native.run(`
+      INSERT INTO pv_pax VALUES
+        (97,'Cross Region Leader',2,'Other Region',NULL,'active',NULL,[],[],[],[],15,3),
+        (99,'Cross Region Visitor',2,'Other Region',NULL,'active',NULL,[],[],[],[],NULL,NULL);
+      INSERT INTO pv_events VALUES
+        (50, DATE '2024-01-06', 'Visitor Event', 2, 0, 7, 'Bravo AO', 1, 'Alpha Region',
+         3, 'Area One', 5, 'Sector Five', 0, 0, 1, [], [],
+         [{user_id:97,f3_name:'Cross Region Leader',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL},
+          {user_id:99,f3_name:'Cross Region Visitor',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL},
+          {user_id:98,f3_name:'Unprofiled Visitor',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL}]);
+      INSERT INTO pv_attendance VALUES
+        (CURRENT_TIMESTAMP,99,97,50,1,0,DATE '2024-01-06',7,1,[],[],[]),
+        (CURRENT_TIMESTAMP,100,99,50,1,0,DATE '2024-01-06',7,1,[],[],[]),
+        (CURRENT_TIMESTAMP,101,98,50,1,0,DATE '2024-01-06',7,1,[],[],[]);
+    `);
+
+    const page = await getRegionPage(1, "fixture@example.com");
+    expect(page.leaders).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          user_id: 97,
+          posts: 1,
+          qs: 1,
+          all_posts: 15,
+          all_qs: 3,
+        }),
+        expect.objectContaining({
+          user_id: 99,
+          posts: 1,
+          qs: 1,
+          all_posts: 1,
+          all_qs: 1,
+        }),
+        expect.objectContaining({
+          user_id: 98,
+          posts: 1,
+          qs: 1,
+          all_posts: 1,
+          all_qs: 1,
+        }),
+      ]),
+    );
+    expect(
+      executedSql.some((sql) => sql.includes("p.lifetime_posts AS all_posts")),
+    ).toBe(true);
+    expect(
+      executedSql.some((sql) =>
+        sql.includes("FROM pv_attendance a JOIN targets USING (user_id)"),
+      ),
+    ).toBe(true);
+  });
+
+  it("falls back to distinct event totals for null career lifetime counters", async () => {
+    const recentDate = new Date(Date.now() - 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    await native.run(`
+      INSERT INTO pv_pax VALUES
+        (90,'Null Lifetime',1,'Alpha Region',NULL,'active',NULL,[],[],[],[],NULL,NULL)
+    `);
+    for (let index = 0; index < 24; index++) {
+      const eventId = 9000 + index;
+      const q = index === 0 ? 1 : 0;
+      const duplicateQ =
+        index === 0
+          ? ",{user_id:90,f3_name:'Null Lifetime',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL}"
+          : "";
+      await native.run(`
+        INSERT INTO pv_events VALUES
+          (${eventId}, DATE '${recentDate}', 'Fallback ${index}', 1, 0, 7, 'Bravo AO',
+           1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 0, 0, 0, [], [],
+           [{user_id:90,f3_name:'Null Lifetime',q_ind:${q},fartsack:false,ghost:false,avatar_url:NULL}${duplicateQ}]);
+        INSERT INTO pv_attendance VALUES
+          (CURRENT_TIMESTAMP,${200 + index},90,${eventId},${q},0,DATE '${recentDate}',7,1,[],[],[])
+          ${index === 0 ? `,(CURRENT_TIMESTAMP,300,90,${eventId},1,0,DATE '${recentDate}',7,1,[],[],[])` : ""}
+      `);
+    }
+
+    const page = await getRegionPage(1, "fixture@example.com");
+    expect(page.leaders).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          user_id: 90,
+          posts: 24,
+          qs: 1,
+          all_posts: 24,
+          all_qs: 1,
+        }),
+      ]),
+    );
+    expect(page.achievements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          user_id: 90,
+          region_posts: 24,
+          region_qs: 1,
+          all_posts: 24,
+          all_qs: 1,
+          last_region_event_date: recentDate,
+        }),
+      ]),
+    );
   });
 
   it("bounds leader totals by page filters while computing career totals in DuckDB", async () => {
@@ -562,8 +742,8 @@ describe("migrated service functions on the pinned native release fixture", () =
     }
     await native.run(`
       INSERT INTO pv_pax VALUES
-        (0,'Zero',1,'Alpha Region',NULL,'active',NULL,[],[],[],[]),
-        (NULL,'Null ID',1,'Alpha Region',NULL,'active',NULL,[],[],[],[])
+        (0,'Zero',1,'Alpha Region',NULL,'active',NULL,[],[],[],[],NULL,NULL),
+        (NULL,'Null ID',1,'Alpha Region',NULL,'active',NULL,[],[],[],[],NULL,NULL)
     `);
     await native.run(`
       INSERT INTO pv_events VALUES (
@@ -577,9 +757,6 @@ describe("migrated service functions on the pinned native release fixture", () =
     `);
     await native.run(`
       INSERT INTO pv_events VALUES
-        (200, DATE '2022-01-01', 'Duplicate event id', 1, 0, NULL, NULL, 9, 'Other Region',
-         NULL, NULL, NULL, NULL, 0, 0, 0, [], [],
-         [{user_id:10,f3_name:'Ace',q_ind:0,fartsack:false,ghost:false,avatar_url:NULL}]),
         (201, DATE '2024-01-04', 'Filtered foreign region', 1, 0, NULL, NULL, 9, 'Other Region',
          NULL, NULL, NULL, NULL, 0, 0, 0, [], [],
          [{user_id:10,f3_name:'Ace',q_ind:2,fartsack:false,ghost:false,avatar_url:NULL},
@@ -592,26 +769,76 @@ describe("migrated service functions on the pinned native release fixture", () =
          [{user_id:10,f3_name:'Ace',q_ind:-1,fartsack:NULL,ghost:false,avatar_url:NULL}])
     `);
 
+    await native.run(`
+      DELETE FROM pv_attendance;
+      INSERT INTO pv_attendance
+      SELECT CURRENT_TIMESTAMP, row_number() OVER ()::INTEGER, a.attendee.user_id,
+        e.event_id, a.attendee.q_ind, 0, e.event_date, e.ao_org_id, e.region_org_id,
+        [], [], []
+      FROM pv_events e CROSS JOIN UNNEST(e.attendance) AS a(attendee)
+      WHERE a.attendee.user_id IS NOT NULL AND a.attendee.fartsack IS NOT TRUE
+    `);
+
+    const careerBaselineResult = await native.runAndReadAll(`
+      SELECT a.attendee.user_id AS user_id,
+        count(DISTINCT (e.event_id, a.attendee.user_id)) AS all_posts,
+        count(DISTINCT (e.event_id, a.attendee.user_id)) FILTER (WHERE e.region_org_id = 1) AS region_posts,
+        count(DISTINCT e.event_id) FILTER (WHERE a.attendee.q_ind = 1) AS all_qs,
+        count(DISTINCT e.event_id) FILTER (WHERE e.region_org_id = 1 AND a.attendee.q_ind = 1) AS region_qs
+      FROM pv_events e CROSS JOIN UNNEST(e.attendance) AS a(attendee)
+      JOIN pv_pax p ON p.user_id = a.attendee.user_id
+      WHERE p.home_region_id = 1 AND a.attendee.user_id IS NOT NULL
+        AND a.attendee.fartsack IS NOT TRUE
+      GROUP BY a.attendee.user_id
+    `);
+    await careerBaselineResult.readAll();
+    const careerBaseline = careerBaselineResult.getRowObjectsJS()[0] as {
+      all_posts: bigint;
+      all_qs: bigint;
+    };
+    expect(Number(careerBaseline.all_posts)).toBe(27);
+    expect(Number(careerBaseline.all_qs)).toBe(4);
+    expect(Number(careerBaselineResult.getRowObjectsJS()[0].region_qs)).toBe(3);
+    await native.run(
+      `UPDATE pv_pax SET lifetime_posts = ?, lifetime_qs = ? WHERE user_id = 10`,
+      [careerBaseline.all_posts, careerBaseline.all_qs] as never,
+    );
+
     const region = await getRegionPage(1, "fixture@example.com", {
       startDate: "2024-01-01",
       endDate: "2024-01-05",
     });
 
+    const leaderBaselineResult = await native.runAndReadAll(`
+      SELECT count(DISTINCT e.event_id) AS all_posts,
+        count(DISTINCT e.event_id) FILTER (WHERE a.attendee.q_ind = 1) AS all_qs
+      FROM pv_events e CROSS JOIN UNNEST(e.attendance) AS a(attendee)
+      WHERE e.event_date BETWEEN DATE '2024-01-01' AND DATE '2024-01-05'
+        AND a.attendee.user_id = 10 AND a.attendee.fartsack IS NOT TRUE
+    `);
+    await leaderBaselineResult.readAll();
+    const leaderBaseline = leaderBaselineResult.getRowObjectsJS()[0] as {
+      all_posts: bigint;
+      all_qs: bigint;
+    };
+    expect(Number(leaderBaseline.all_posts)).toBe(3);
+    expect(Number(leaderBaseline.all_qs)).toBe(2);
+
     expect(region.leaders).toEqual([
       expect.objectContaining({
         user_id: 10,
         posts: 2,
-        all_posts: 6,
-        all_qs: 4,
+        all_posts: 3,
+        all_qs: 2,
       }),
     ]);
     expect(region.achievements).toEqual([
       expect.objectContaining({
         user_id: 10,
         region_posts: 24,
-        region_qs: 13,
-        all_posts: 28,
-        all_qs: 18,
+        region_qs: Number(careerBaselineResult.getRowObjectsJS()[0].region_qs),
+        all_posts: 27,
+        all_qs: Number(careerBaseline.all_qs),
         fng_date: "2022-01-01",
         last_region_event_date: recentDate,
       }),
@@ -623,39 +850,30 @@ describe("migrated service functions on the pinned native release fixture", () =
       executedSql.some((sql) => /targets\(user_id\).*VALUES/is.test(sql)),
     ).toBe(true);
     const groupedLeadersSql = executedSql.find((sql) =>
-      /target_events AS/i.test(sql),
+      /JOIN filtered_events ON filtered_events\.event_id = a\.event_instance_id/i.test(
+        sql,
+      ),
     );
-    expect(groupedLeadersSql).toMatch(/UNNEST\(list_transform\(list_filter\(/i);
-    expect(groupedLeadersSql).toMatch(/struct_pack\(/i);
+    expect(groupedLeadersSql).toMatch(
+      /JOIN targets ON targets\.user_id = a\.user_id/i,
+    );
     expect(groupedLeadersSql).toMatch(/a\.user_id IS NOT NULL/i);
-    expect(groupedLeadersSql).toMatch(/a\.fartsack IS NOT TRUE/i);
-    expect(groupedLeadersSql).toMatch(/COALESCE\(a\.q_ind, 0\) <> 0/i);
-    expect(groupedLeadersSql).not.toMatch(/CROSS JOIN UNNEST/i);
-    const postsSql = executedSql.find((sql) =>
-      /UNNEST\(list_distinct\(list_transform/is.test(sql),
+    expect(groupedLeadersSql).not.toMatch(/a\.fartsack/i);
+    expect(groupedLeadersSql).toMatch(/a\.q_ind = 1/i);
+    const postsSql = executedSql.find((sql) => sql.includes("scoped_pax"));
+    expect(postsSql).toMatch(
+      /JOIN pv_events e ON e\.event_id = a\.event_instance_id/i,
     );
-    const qsSql = executedSql.find((sql) =>
-      /COALESCE\(a\.q_ind, 0\) <> 0/is.test(sql),
-    );
-    expect(postsSql).toBeDefined();
-    expect(qsSql).toBeDefined();
-    expect(executedSql.indexOf(postsSql!)).toBeLessThan(
-      executedSql.indexOf(qsSql!),
-    );
-    expect(postsSql).toMatch(/GROUP BY event_users\.user_id/i);
-    expect(postsSql).not.toMatch(/row_number|event_row_id/i);
+    expect(postsSql).toMatch(/count\(DISTINCT a\.event_instance_id\)/i);
+    expect(postsSql).not.toMatch(/a\.fartsack/i);
     expect(
       executedSql.some((sql) =>
         /scoped_pax AS \([\s\S]*user_id IS NOT NULL/i.test(sql),
       ),
     ).toBe(true);
     expect(
-      executedSql.some((sql) =>
-        /SELECT event_id AS event_instance_id, event_date, region_org_id, attendance FROM pv_events$/is.test(
-          sql,
-        ),
-      ),
-    ).toBe(false);
+      executedSql.some((sql) => sql.includes("FROM pv_attendance a")),
+    ).toBe(true);
     expect(queryBigQuery).toHaveBeenCalledTimes(1);
   });
 });

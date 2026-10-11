@@ -39,6 +39,8 @@ import {
 
 const optedIn = process.env.DUCKDB_TEST_LOCAL_RELEASE === "true";
 const benchmarkOptedIn = optedIn && process.env.DUCKDB_BENCH_PAX === "true";
+const regionBenchmarkOptedIn =
+  optedIn && process.env.DUCKDB_BENCH_REGION === "true";
 const sourceRoot = resolve(
   process.cwd(),
   process.env.DUCKDB_TEST_RELEASE_ROOT ?? ".gcs/f3-analytics",
@@ -199,7 +201,7 @@ describe("local producer release integration", () => {
   });
 
   it.skipIf(!optedIn)(
-    "activates and queries the unchanged local pv-release.v2 artifact",
+    "activates and queries a pinned local pv-release.v2 artifact",
     async () => {
       const pointerPath = join(sourceRoot, "pax-vault/current.json");
       await access(pointerPath).catch((cause) => {
@@ -294,6 +296,35 @@ describe("local producer release integration", () => {
                 manifests.get(dataset)?.rowCount,
               );
             }
+
+            const eventIdCounts = await connection.query<{
+              row_count: number | bigint;
+              non_null_event_id_count: number | bigint;
+              distinct_event_id_count: number | bigint;
+            }>(`
+              SELECT COUNT(*) AS row_count,
+                     COUNT(event_id) AS non_null_event_id_count,
+                     COUNT(DISTINCT event_id) AS distinct_event_id_count
+              FROM pv_events
+            `);
+            const eventIdInvariant = {
+              rowCount: Number(eventIdCounts[0]?.row_count),
+              nonNullEventIdCount: Number(
+                eventIdCounts[0]?.non_null_event_id_count,
+              ),
+              distinctEventIdCount: Number(
+                eventIdCounts[0]?.distinct_event_id_count,
+              ),
+            };
+            console.info(
+              `[duckdb-event-id-invariant] ${JSON.stringify(eventIdInvariant)}`,
+            );
+            expect(eventIdInvariant.nonNullEventIdCount).toBe(
+              eventIdInvariant.rowCount,
+            );
+            expect(eventIdInvariant.distinctEventIdCount).toBe(
+              eventIdInvariant.rowCount,
+            );
 
             const pax = await connection.query<Record<string, unknown>>(
               "SELECT user_id, f3_name, regions, aos FROM pv_pax WHERE len(regions) > 0 LIMIT 1",
@@ -444,6 +475,22 @@ describe("local producer release integration", () => {
           expectOwnProperty(page, "summary", true);
           expect(Boolean(page.summary)).toBe(true);
           expect(queryBigQuery.mock.calls.length).toBe(2);
+
+          if (regionBenchmarkOptedIn) {
+            const startedAt = performance.now();
+            const regionPage = await getRegionPageData(25265);
+            const totalMs = Number((performance.now() - startedAt).toFixed(2));
+            expect(regionPage.info !== null).toBe(true);
+            expect(regionPage.summary !== null).toBe(true);
+            console.info(
+              `[duckdb-region-benchmark] ${JSON.stringify({
+                totalMs,
+                eventCount: regionPage.summary?.event_count ?? 0,
+                leaderCount: regionPage.leaders?.length ?? 0,
+                achievementCount: regionPage.achievements?.length ?? 0,
+              })}`,
+            );
+          }
 
           if (benchmarkOptedIn) {
             const repetitions = 5;

@@ -51,12 +51,13 @@ function referenceAchievements(
         es.reduce(
           (n, e) =>
             n +
-            attended(e).filter(
-              (a) =>
-                p.user_id != null &&
-                Number(a.user_id) === Number(p.user_id) &&
-                a.q_ind,
-            ).length,
+            Number(
+              p.user_id != null &&
+                attended(e).some(
+                  (a) =>
+                    Number(a.user_id) === Number(p.user_id) && a.q_ind === 1,
+                ),
+            ),
           0,
         );
       const rp = region.length,
@@ -201,11 +202,34 @@ describe("region DuckDB migration", () => {
     vi.stubEnv("ENVIRONMENT", "staging");
     process.env.DUCKDB_ENABLED = "true";
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
-    const query = vi.fn(async (...[sql]: [string, unknown[]?, string?]) =>
-      sql.includes("FROM pv_pax")
-        ? [{ user_id: 7, f3_name: "Member", start_date_override: null }]
-        : [],
-    );
+    const query = vi.fn(async (...[sql]: [string, unknown[]?, string?]) => {
+      if (sql.includes("p.lifetime_posts AS all_posts"))
+        return [{ user_id: 7, all_posts: 0, all_qs: 0 }];
+      if (
+        sql.includes("SELECT user_id, f3_name, avatar_url, start_date_override")
+      )
+        return [
+          {
+            user_id: 7,
+            f3_name: "Member",
+            start_date_override: null,
+            lifetime_posts: 0,
+            lifetime_qs: 0,
+          },
+        ];
+      if (sql.includes("FROM pv_events"))
+        return [
+          {
+            event_instance_id: 10,
+            event_date: "2024-01-01",
+            region_org_id: 3,
+            attendance: [
+              { user_id: 7, f3_name: "Member", q_ind: 1, fartsack: false },
+            ],
+          },
+        ];
+      return [];
+    });
     setRegionDuckDbQueryForTests(query as never);
     queryBigQuery.mockResolvedValue([]);
 
@@ -218,14 +242,14 @@ describe("region DuckDB migration", () => {
       "region_upcoming",
       "region_kotter",
       "region_pax",
-      "region_career_posts",
-      "region_career_qs",
+      "region_career_attendance",
+      "region_leader_lifetime",
     ]);
     const logs = info.mock.calls.map(([line]) => JSON.parse(String(line)));
     expect(logs.map((log) => log.phase)).toEqual(
       expect.arrayContaining([
         "initial_five_reads",
-        "career_pair",
+        "career_aggregate",
         "javascript_transform_pre_leader",
         "javascript_transform_post_leader",
         "preferences_bigquery",
@@ -278,27 +302,27 @@ describe("region DuckDB migration", () => {
     vi.useRealTimers();
   });
 
-  it("matches the pre-optimization achievement algorithm for shared and duplicate attendance", () => {
+  it("counts duplicate attendance as one post and one Q per user/event", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-21T12:00:00Z"));
     const events: ReferenceEvent[] = Array.from({ length: 24 }, (_, index) => ({
       event_date: index === 23 ? "2026-09-20" : "2026-09-10",
       region_org_id: 7,
       attendance: [
-        { user_id: 1, q_ind: true, fartsack: false },
-        { user_id: 1, q_ind: index === 0, fartsack: false },
-        { user_id: 2, q_ind: false, fartsack: false },
-        { user_id: 2, q_ind: true, fartsack: true },
+        { user_id: 1, q_ind: 1, fartsack: false },
+        { user_id: 1, q_ind: index === 0 ? 1 : 0, fartsack: false },
+        { user_id: 2, q_ind: 0, fartsack: false },
+        { user_id: 2, q_ind: 1, fartsack: true },
       ],
     }));
     events.push({
       event_date: "2025-02-03",
       region_org_id: 99,
       attendance: [
-        { user_id: 1, q_ind: true, fartsack: false },
-        { user_id: 1, q_ind: true, fartsack: false },
-        { user_id: 2, q_ind: false, fartsack: false },
-        { user_id: 2, q_ind: true, fartsack: true },
+        { user_id: 1, q_ind: 1, fartsack: false },
+        { user_id: 1, q_ind: 1, fartsack: false },
+        { user_id: 2, q_ind: 0, fartsack: false },
+        { user_id: 2, q_ind: 1, fartsack: true },
       ],
     });
     const pax = [
@@ -323,9 +347,9 @@ describe("region DuckDB migration", () => {
       {
         user_id: 1,
         region_posts: 24,
-        region_qs: 25,
+        region_qs: 24,
         all_posts: 25,
-        all_qs: 27,
+        all_qs: 25,
         fng_date: "2020-02-29",
       },
       { user_id: 2, region_posts: 24, region_qs: 0, all_posts: 25, all_qs: 0 },
@@ -375,9 +399,9 @@ describe("region DuckDB migration", () => {
       {
         user_id: 0,
         region_posts: 24,
-        region_qs: 13,
+        region_qs: 0,
         all_posts: 25,
-        all_qs: 14,
+        all_qs: 0,
         fng_date: "2020-02-29",
         last_region_event_date: "2026-09-20",
       },

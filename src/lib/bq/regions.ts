@@ -1104,7 +1104,7 @@ type RegionPageData = Awaited<ReturnType<typeof getPageData>>;
 
 type RegionPhase =
   | "initial_five_reads"
-  | "career_pair"
+  | "career_aggregate"
   | "javascript_transform_pre_leader"
   | "leader_career"
   | "javascript_transform_post_leader"
@@ -1199,7 +1199,7 @@ async function getRegionPageDuckDbParityImpl(
           "region_kotter",
         ),
         executeDuckDb<any>(
-          `SELECT user_id, f3_name, avatar_url, start_date_override FROM pv_pax WHERE home_region_id = ?`,
+          `SELECT user_id, f3_name, avatar_url, start_date_override, lifetime_posts, lifetime_qs FROM pv_pax WHERE home_region_id = ?`,
           [regionId],
           "region_pax",
         ),
@@ -1207,68 +1207,34 @@ async function getRegionPageDuckDbParityImpl(
   );
   let career: any[] = [];
   if (pax.some((p: any) => p.user_id != null)) {
-    const careerPairStarted =
+    // Nationwide totals are authoritative in the PAX snapshot; attendance is
+    // retained here for region-scoped counts and event dates.
+    const careerAggregateStarted =
       process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
-    const careerPosts = await executeDuckDb<any>(
+    career = await executeDuckDb<any>(
       `WITH scoped_pax AS (
-         SELECT DISTINCT user_id FROM pv_pax
+         SELECT user_id, MAX(lifetime_posts) AS lifetime_posts,
+           MAX(lifetime_qs) AS lifetime_qs
+         FROM pv_pax
          WHERE home_region_id = ? AND user_id IS NOT NULL
-       ), event_users AS (
-         SELECT
-           UNNEST(list_distinct(list_transform(
-             list_filter(attendance, a -> a.user_id IS NOT NULL AND a.fartsack IS NOT TRUE),
-             a -> a.user_id
-           ))) AS user_id,
-           event_date,
-           region_org_id
-         FROM pv_events
+         GROUP BY user_id
        )
-       SELECT event_users.user_id,
-         count(*) AS all_posts,
-         count(*) FILTER (WHERE region_org_id = ?) AS region_posts,
-         min(event_date) AS first_event_date,
-         max(event_date) FILTER (WHERE region_org_id = ?) AS last_region_event_date
-       FROM event_users
-       JOIN scoped_pax USING (user_id)
-       GROUP BY event_users.user_id`,
-      [regionId, regionId, regionId],
-      "region_career_posts",
-    );
-    const careerQs = await executeDuckDb<any>(
-      `WITH scoped_pax AS (
-         SELECT DISTINCT user_id FROM pv_pax
-         WHERE home_region_id = ? AND user_id IS NOT NULL
-       ), event_qs AS (
-         SELECT
-           UNNEST(list_transform(list_filter(
-             attendance,
-             a -> a.user_id IS NOT NULL AND a.fartsack IS NOT TRUE AND COALESCE(a.q_ind, 0) <> 0
-           ), a -> a.user_id)) AS user_id,
-           region_org_id
-         FROM pv_events
-       )
-       SELECT event_qs.user_id,
-         count(*) AS all_qs,
-         count(*) FILTER (WHERE region_org_id = ?) AS region_qs
-       FROM event_qs
-       JOIN scoped_pax USING (user_id)
-       GROUP BY event_qs.user_id`,
-      [regionId, regionId],
-      "region_career_qs",
+       SELECT p.user_id,
+         COALESCE(MAX(p.lifetime_posts), COUNT(DISTINCT a.event_instance_id)) AS all_posts,
+         count(DISTINCT a.event_instance_id) FILTER (WHERE e.region_org_id = ?) AS region_posts,
+         min(e.event_date) AS first_event_date,
+         max(e.event_date) FILTER (WHERE e.region_org_id = ?) AS last_region_event_date,
+         COALESCE(MAX(p.lifetime_qs), COUNT(DISTINCT a.event_instance_id) FILTER (WHERE a.q_ind = 1)) AS all_qs,
+         count(DISTINCT a.event_instance_id) FILTER (WHERE e.region_org_id = ? AND a.q_ind = 1) AS region_qs
+       FROM scoped_pax p
+       LEFT JOIN pv_attendance a ON a.user_id = p.user_id
+       LEFT JOIN pv_events e ON e.event_id = a.event_instance_id
+       GROUP BY p.user_id`,
+      [regionId, regionId, regionId, regionId],
+      "region_career_attendance",
     );
     if (process.env.ENVIRONMENT === "staging")
-      logRegionPhase("career_pair", careerPairStarted, "success");
-    const qByUser = new Map<number, any>(
-      careerQs.map((row) => [Number(row.user_id), row]),
-    );
-    career = careerPosts.map((row) => {
-      const q = qByUser.get(Number(row.user_id));
-      return {
-        ...row,
-        all_qs: Number(q?.all_qs ?? 0),
-        region_qs: Number(q?.region_qs ?? 0),
-      };
-    });
+      logRegionPhase("career_aggregate", careerAggregateStarted, "success");
   }
   const transformPreLeaderStarted =
     process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
@@ -1281,7 +1247,16 @@ async function getRegionPageDuckDbParityImpl(
     (e.attendance ?? []).filter(
       (a: any) => a.fartsack !== true && a.user_id != null,
     );
-  const rows = raw.flatMap((e: any) => attended(e).map((a: any) => ({ e, a })));
+  const rows = raw.flatMap((e: any) => {
+    const byUser = new Map<number, any>();
+    for (const a of attended(e)) {
+      const userId = Number(a.user_id);
+      const existing = byUser.get(userId);
+      if (!existing || (a.q_ind === 1 && existing.q_ind !== 1))
+        byUser.set(userId, existing ? { ...existing, q_ind: 1 } : a);
+    }
+    return [...byUser.values()].map((a: any) => ({ e, a }));
+  });
   const ids = (field: (a: any) => boolean) =>
     new Set(
       rows.filter((x: any) => field(x.a)).map((x: any) => Number(x.a.user_id)),
@@ -1325,7 +1300,7 @@ async function getRegionPageDuckDbParityImpl(
       all_qs: 0,
     };
     x.posts++;
-    if (a.q_ind) x.qs++;
+    if (a.q_ind === 1) x.qs++;
     leaderMap.set(id, x);
   }
   const leaderList = [...leaderMap.values()]
@@ -1341,39 +1316,83 @@ async function getRegionPageDuckDbParityImpl(
     const targets = leaderList.map((leader) => leader.user_id);
     const leaderStarted =
       process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
-    const groupedLeaders = await executeDuckDb<any>(
-      `WITH filtered_events AS (
-         SELECT attendance FROM pv_events${allFilter.where ? ` WHERE ${allFilter.where}` : ""}
-       ), targets(user_id) AS (VALUES ${targets.map(() => "(CAST(? AS INTEGER))").join(",")})
-       , target_events AS (
-         SELECT
-           UNNEST(list_transform(list_filter(
-             attendance,
-             a -> a.user_id IS NOT NULL AND a.fartsack IS NOT TRUE
-           ), a -> struct_pack(
-             user_id := a.user_id,
-             is_q := COALESCE(a.q_ind, 0) <> 0
-           ))) AS attendee
-         FROM filtered_events
-       )
-       SELECT targets.user_id,
-         count(*) AS all_posts,
-         count(*) FILTER (WHERE target_events.attendee.is_q) AS all_qs
-       FROM target_events
-       JOIN targets ON targets.user_id = target_events.attendee.user_id
-       GROUP BY targets.user_id`,
-      [...allFilter.params, ...targets],
-      "region_leader_career",
-    );
-    if (process.env.ENVIRONMENT === "staging")
-      logRegionPhase("leader_career", leaderStarted, "success");
-    for (const row of groupedLeaders) {
-      const leader = leaderMap.get(Number(row.user_id));
-      if (leader) {
-        leader.all_posts = Number(row.all_posts ?? 0);
-        leader.all_qs = Number(row.all_qs ?? 0);
+    if (!allFilter.where) {
+      const lifetimeRows = await executeDuckDb<any>(
+        `WITH targets(user_id) AS (VALUES ${targets.map(() => "(CAST(? AS INTEGER))").join(",")})
+         SELECT p.user_id, p.lifetime_posts AS all_posts, p.lifetime_qs AS all_qs
+         FROM pv_pax p JOIN targets USING (user_id)`,
+        targets,
+        "region_leader_lifetime",
+      );
+      const lifetimeByUser = new Map<number, any>(
+        lifetimeRows.map((row) => [Number(row.user_id), row]),
+      );
+      const missingTargets = targets.filter((userId) => {
+        const row = lifetimeByUser.get(userId);
+        if (
+          row?.all_posts != null &&
+          row?.all_qs != null &&
+          Number.isFinite(Number(row.all_posts)) &&
+          Number.isFinite(Number(row.all_qs))
+        ) {
+          const leader = leaderMap.get(userId);
+          if (leader) {
+            leader.all_posts = Number(row.all_posts);
+            leader.all_qs = Number(row.all_qs);
+          }
+          return false;
+        }
+        return true;
+      });
+      if (missingTargets.length) {
+        const fallbackRows = await executeDuckDb<any>(
+          `WITH targets(user_id) AS (VALUES ${missingTargets.map(() => "(CAST(? AS INTEGER))").join(",")})
+           SELECT a.user_id,
+             count(DISTINCT a.event_instance_id) AS all_posts,
+             count(DISTINCT a.event_instance_id) FILTER (WHERE a.q_ind = 1) AS all_qs
+           FROM pv_attendance a JOIN targets USING (user_id)
+           GROUP BY a.user_id`,
+          missingTargets,
+          "region_leader_career",
+        );
+        const fallbackByUser = new Map<number, any>(
+          fallbackRows.map((row) => [Number(row.user_id), row]),
+        );
+        for (const userId of missingTargets) {
+          const leader = leaderMap.get(userId);
+          const row = fallbackByUser.get(userId);
+          if (leader) {
+            leader.all_posts = Number(row?.all_posts ?? 0);
+            leader.all_qs = Number(row?.all_qs ?? 0);
+          }
+        }
+      }
+    } else {
+      const groupedLeaders = await executeDuckDb<any>(
+        `WITH filtered_events AS (
+           SELECT e.event_id FROM pv_events e${allFilter.where ? ` WHERE ${allFilter.where}` : ""}
+         ), targets(user_id) AS (VALUES ${targets.map(() => "(CAST(? AS INTEGER))").join(",")})
+         SELECT targets.user_id,
+           count(DISTINCT a.event_instance_id) AS all_posts,
+           count(DISTINCT a.event_instance_id) FILTER (WHERE a.q_ind = 1) AS all_qs
+         FROM pv_attendance a
+         JOIN filtered_events ON filtered_events.event_id = a.event_instance_id
+         JOIN targets ON targets.user_id = a.user_id
+         WHERE a.user_id IS NOT NULL
+         GROUP BY targets.user_id`,
+        [...allFilter.params, ...targets],
+        "region_leader_career",
+      );
+      for (const row of groupedLeaders) {
+        const leader = leaderMap.get(Number(row.user_id));
+        if (leader) {
+          leader.all_posts = Number(row.all_posts ?? 0);
+          leader.all_qs = Number(row.all_qs ?? 0);
+        }
       }
     }
+    if (process.env.ENVIRONMENT === "staging")
+      logRegionPhase("leader_career", leaderStarted, "success");
   }
   const transformPostLeaderStarted =
     process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
@@ -1397,7 +1416,7 @@ async function getRegionPageDuckDbParityImpl(
     ).size,
     active_pax: active.size,
     unique_pax: ids(() => true).size,
-    unique_qs: ids((a) => !!a.q_ind).size,
+    unique_qs: ids((a) => a.q_ind === 1).size,
     fng_count: fngCount,
     pax_count_average: raw.length ? paxCount / raw.length : 0,
     fartsack_kings: countFlags("fartsack"),
@@ -1435,10 +1454,12 @@ async function getRegionPageDuckDbParityImpl(
     const as = attended(e);
     x.pax_count += Number(e.pax_count ?? 0);
     x.fng_count += Number(e.fng_count ?? 0);
-    x.q_count += as.filter((a: any) => !!a.q_ind).length;
+    x.q_count += new Set(
+      as.filter((a: any) => a.q_ind === 1).map((a: any) => Number(a.user_id)),
+    ).size;
     x.unique_pax_count += new Set(as.map((a: any) => Number(a.user_id))).size;
     x.unique_q_count += new Set(
-      as.filter((a: any) => !!a.q_ind).map((a: any) => Number(a.user_id)),
+      as.filter((a: any) => a.q_ind === 1).map((a: any) => Number(a.user_id)),
     ).size;
     charts.set(date, x);
   }
@@ -1449,7 +1470,7 @@ async function getRegionPageDuckDbParityImpl(
       q = chartQs.get(date) ?? new Set<number>();
     for (const a of as) {
       p.add(Number(a.user_id));
-      if (a.q_ind) q.add(Number(a.user_id));
+      if (a.q_ind === 1) q.add(Number(a.user_id));
     }
     chartPax.set(date, p);
     chartQs.set(date, q);
@@ -1555,10 +1576,10 @@ export function buildRegionAchievements(
       const id = Number(a.user_id);
       const stats = byUser.get(id);
       if (!stats) continue;
-      // A post is one distinct event per user, regardless of duplicate
-      // attendance rows; Qs retain the legacy per-attendance-row counting.
+      // Posts and Qs each count at most once per user/event, regardless of
+      // duplicate attendance rows.
       if (!qCounts.has(id)) qCounts.set(id, 0);
-      if (a.q_ind) qCounts.set(id, qCounts.get(id)! + 1);
+      if (a.q_ind === 1) qCounts.set(id, 1);
     }
     for (const [id, qCount] of qCounts) {
       const stats = byUser.get(id)!;

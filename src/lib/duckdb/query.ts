@@ -18,8 +18,8 @@ export type DuckDbQueryOperation =
   | "region_upcoming"
   | "region_kotter"
   | "region_pax"
-  | "region_career_posts"
-  | "region_career_qs"
+  | "region_career_attendance"
+  | "region_leader_lifetime"
   | "region_leader_career";
 
 export type DuckDbCapability =
