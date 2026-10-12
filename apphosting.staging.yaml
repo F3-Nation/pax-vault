@@ -13,6 +13,8 @@ env:
     value: "https://staging.pax-vault.f3nation.com/api/auth/callback"
   - variable: DUCKDB_ENABLED
     value: "true"
+    availability:
+      - RUNTIME
   - variable: DUCKDB_SHADOW_ENABLED
     value: "false"
   - variable: DUCKDB_SHADOW_TIMEOUT_MS
