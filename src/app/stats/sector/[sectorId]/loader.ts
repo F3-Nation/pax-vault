@@ -13,8 +13,9 @@ import {
   SectorAreaBreakdown,
   ChartData,
 } from "@/lib/types";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 import { getPageData } from "@/lib/bq/sectors";
-import { cacheStatsData } from "@/lib/cache";
+import { cacheStatsData, getStatsReleaseIdentity } from "@/lib/cache";
 import { DateRangeFilters } from "@/lib/filters";
 import { normalizeDeep } from "@/lib/normalize";
 
@@ -24,6 +25,7 @@ export async function loadSectorData(
   filters?: DateRangeFilters,
 ): Promise<SectorData | null> {
   try {
+    const releaseIdentity = getStatsReleaseIdentity("stats_sector");
     // Cache key is entity-scoped (sector + filters), NOT user-scoped — the
     // normalization runs inside the cache so the cached value is plain JSON.
     return await cacheStatsData<SectorData>(
@@ -44,8 +46,11 @@ export async function loadSectorData(
       },
       ["sector-page-data", String(sectorId), JSON.stringify(filters ?? {})],
       [`sector-${sectorId}`],
+      releaseIdentity,
+      "stats_sector",
     );
   } catch (err) {
+    if (err instanceof DuckDbDependencyError) throw err;
     console.error(`Error fetching Sector data (sector=${sectorId}):`, err);
     return null;
   }

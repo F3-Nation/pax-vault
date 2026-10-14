@@ -16,6 +16,8 @@ import { Card, CardHeader, CardBody } from "@heroui/card";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { buildBreadcrumb } from "@/lib/breadcrumb";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
+import { DuckDbUnavailable } from "@/components/DuckDbUnavailable";
 
 interface PageProps {
   params: Promise<{ areaId: string }>;
@@ -27,7 +29,13 @@ export default async function AreaDetailPage({ params }: PageProps) {
   if (!user) throw new Error("User should never be null after requireAuth");
 
   const { areaId } = await params;
-  const areaData = await loadAreaData(Number(areaId), user.email);
+  let areaData;
+  try {
+    areaData = await loadAreaData(Number(areaId), user.email);
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError) return <DuckDbUnavailable />;
+    throw error;
+  }
 
   if (!areaData?.info) {
     return (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { searchAll } from "@/lib/bq/search";
 import { getSessionUser } from "@/lib/auth/server";
 import { reportError } from "@/lib/observability";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -25,6 +26,12 @@ export async function GET(request: Request) {
     const results = await searchAll(q, user.email, includeInactive);
     return NextResponse.json(results, { status: 200 });
   } catch (err) {
+    if (err instanceof DuckDbDependencyError) {
+      return NextResponse.json(
+        { error: "Search data is temporarily unavailable." },
+        { status: 503 },
+      );
+    }
     const errorId = reportError(err, {
       scope: "api/search",
       user: user.email,

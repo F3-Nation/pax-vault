@@ -15,6 +15,8 @@
  * (= `f3data.public.users.id`).
  */
 import { queryBigQuery } from "@/lib/db";
+import { getDuckDbRuntime } from "@/lib/duckdb/factory";
+import { DuckDbQueryAdapter, selectDuckDbOrLegacy } from "@/lib/duckdb/query";
 
 /** `f3data.public.roles.id` for the "admin" role. */
 export const ADMIN_ROLE_ID = 3;
@@ -50,6 +52,43 @@ export async function getRegionPermission(
     return { userId: null, isAdmin: false };
   }
 
+  return selectDuckDbOrLegacy({
+    capability: "auth_region_permission",
+    env: process.env,
+    duckdb: async () => {
+      const adapter = new DuckDbQueryAdapter(getDuckDbRuntime());
+      const rows = await adapter.execute<{
+        user_id: number | null;
+        is_admin: boolean | null;
+      }>(
+        `WITH matched_users AS (
+           SELECT user_id AS id,
+             EXISTS (
+               SELECT 1 FROM UNNEST(roles) AS grants(role)
+                WHERE role.org_id = ? AND role.role_id = ?
+             ) AS is_admin
+           FROM pv_pax
+           WHERE email IS NOT NULL AND LOWER(email) = ?
+         )
+         SELECT COALESCE(MIN(CASE WHEN is_admin THEN id END), MIN(id)) AS user_id,
+                COALESCE(BOOL_OR(is_admin), FALSE) AS is_admin
+           FROM matched_users`,
+        [regionId, ADMIN_ROLE_ID, normalizedEmail],
+      );
+      const row = rows[0];
+      return {
+        userId: row?.user_id ?? null,
+        isAdmin: row?.is_admin === true,
+      };
+    },
+    legacy: () => getRegionPermissionBigQuery(normalizedEmail, regionId),
+  });
+}
+
+async function getRegionPermissionBigQuery(
+  normalizedEmail: string,
+  regionId: number,
+): Promise<RegionPermission> {
   const query = `-- REGION ADMIN CHECK
     WITH
       matched_users AS (

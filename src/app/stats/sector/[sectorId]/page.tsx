@@ -16,6 +16,8 @@ import { Card, CardHeader, CardBody } from "@heroui/card";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import { Breadcrumb } from "@/components/breadcrumb";
 import { buildBreadcrumb } from "@/lib/breadcrumb";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
+import { DuckDbUnavailable } from "@/components/DuckDbUnavailable";
 
 interface PageProps {
   params: Promise<{ sectorId: string }>;
@@ -27,7 +29,13 @@ export default async function SectorDetailPage({ params }: PageProps) {
   if (!user) throw new Error("User should never be null after requireAuth");
 
   const { sectorId } = await params;
-  const sectorData = await loadSectorData(Number(sectorId), user.email);
+  let sectorData;
+  try {
+    sectorData = await loadSectorData(Number(sectorId), user.email);
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError) return <DuckDbUnavailable />;
+    throw error;
+  }
 
   if (!sectorData?.info) {
     return (

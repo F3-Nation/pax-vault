@@ -11,9 +11,14 @@
 import { NextResponse } from "next/server";
 import { getEventDetails } from "@/lib/bq/events";
 import { getSessionUser } from "@/lib/auth/server";
+import {
+  DuckDbDependencyError,
+  DuckDbReleaseConflictError,
+} from "@/lib/duckdb/errors";
+import { isDuckDbEnabled } from "@/lib/duckdb/query";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ eventInstanceId?: string }> },
 ): Promise<NextResponse> {
   const user = await getSessionUser();
@@ -28,17 +33,72 @@ export async function GET(
 
   // Reject missing, non-numeric, or non-positive ids early to avoid
   // unnecessary BigQuery calls and ambiguous downstream errors.
-  if (!rawEventId || !Number.isFinite(eventId) || eventId <= 0) {
-    return NextResponse.json({ error: "Invalid event id" }, { status: 400 });
+  if (!rawEventId || !Number.isSafeInteger(eventId) || eventId <= 0) {
+    return NextResponse.json(
+      { error: "Invalid event id" },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  const search = new URL(req.url).searchParams;
+  const releaseValues = search.getAll("releaseId");
+  const releaseId = releaseValues.length ? releaseValues[0] : null;
+  const missingReleaseId = releaseId === null || releaseId === "";
+  const validReleaseId =
+    releaseValues.length <= 1 &&
+    !missingReleaseId &&
+    releaseId.length <= 128 &&
+    /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(releaseId);
+  if (!missingReleaseId && !validReleaseId) {
+    return NextResponse.json(
+      { error: "Invalid release id" },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+  if (missingReleaseId && isDuckDbEnabled(process.env, "events")) {
+    return NextResponse.json(
+      { error: "Event release is required." },
+      { status: 409, headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   // Fetch event details from the BigQuery data layer.
-  const event = await getEventDetails(eventId, user.email);
+  let event;
+  try {
+    event = await getEventDetails(
+      eventId,
+      user.email,
+      missingReleaseId ? undefined : releaseId,
+    );
+  } catch (error) {
+    if (error instanceof DuckDbReleaseConflictError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 409, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    if (error instanceof DuckDbDependencyError) {
+      return NextResponse.json(
+        { error: "Event data is temporarily unavailable." },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    return NextResponse.json(
+      { error: "Event lookup failed." },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   // Valid id, but no matching event exists.
   if (!event) {
-    return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Event not found" },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
+    );
   }
 
-  return NextResponse.json(event, { status: 200 });
+  return NextResponse.json(event, {
+    status: 200,
+    headers: { "Cache-Control": "no-store" },
+  });
 }

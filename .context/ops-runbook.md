@@ -59,3 +59,12 @@ The provider-agnostic seam is already wired (`src/lib/observability.ts`,
 `reportError`). When you adopt a provider (e.g. Sentry), forward from the single
 `TODO(P0-3)` hook there and set its DSN as a Secret Manager secret — no call
 sites change.
+
+## 5. DuckDB Phase-3 operations
+
+The deployment, ADC least-privilege checks, release/golden evidence, feature
+flag cutback, App Hosting all-traffic rollback, pointer-CAS data rollback,
+readiness/skew/LKG alerts, retention, and staging/production smoke checklist
+are maintained in [`docs/duckdb-operations.md`](../docs/duckdb-operations.md).
+The validation owner for that runbook is the parent orchestrator; do not infer
+bucket or service-account values that are not recorded in the change ticket.

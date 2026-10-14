@@ -11,9 +11,11 @@ export function SummaryCard({
   summary,
   filters,
 }: {
-  summary: PaxSummary;
+  summary: PaxSummary | null;
   filters?: string;
 }) {
+  const hasNoEventData = !summary || summary.event_count === 0;
+
   return (
     <Card className="bg-background/60 dark:bg-default-100/50" shadow="md">
       <CardHeader className="flex justify-between items-center px-6 lg:min-h-16">
@@ -25,7 +27,7 @@ export function SummaryCard({
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">Total Events:</span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>{formatNumber(summary.event_count)} Events</>
@@ -35,7 +37,7 @@ export function SummaryCard({
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">Total Qs:</span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>{formatNumber(summary.q_count)} Qs</>
@@ -50,7 +52,7 @@ export function SummaryCard({
               <HelpHint content="Workouts this PAX showed up to unannounced — posted without being on the planned roster beforehand." />
             </span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>{formatNumber(summary.ghost_count)}</>
@@ -63,7 +65,7 @@ export function SummaryCard({
               <HelpHint content="Workouts this PAX signed up for but didn't attend — a no-show." />
             </span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>{formatNumber(summary.fartsack_count)}</>
@@ -74,7 +76,7 @@ export function SummaryCard({
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">FNG Date:</span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>{summary.fng_date || summary?.first_event_date}</>
@@ -84,7 +86,7 @@ export function SummaryCard({
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">First Event:</span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>
@@ -106,7 +108,7 @@ export function SummaryCard({
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">Last Seen:</span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>
@@ -128,7 +130,7 @@ export function SummaryCard({
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">Bestie:</span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>
@@ -148,7 +150,7 @@ export function SummaryCard({
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">Unique PAX Met:</span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>{formatNumber(summary.unique_users_met)} PAX</>
@@ -158,7 +160,7 @@ export function SummaryCard({
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">First Q:</span>
             <span>
-              {summary?.q_count === 0 ? (
+              {hasNoEventData || summary.q_count === 0 ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>
@@ -180,7 +182,7 @@ export function SummaryCard({
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">Most Recent Q:</span>
             <span>
-              {summary?.q_count === 0 ? (
+              {hasNoEventData || summary.q_count === 0 ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>
@@ -202,7 +204,7 @@ export function SummaryCard({
           <div className="flex justify-between py-1 pb-2 border-b light:border-black/10 dark:border-white/10">
             <span className="text-primary">Unique PAX Led:</span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>{formatNumber(summary.unique_pax_when_q)} PAX</>
@@ -215,7 +217,7 @@ export function SummaryCard({
               <HelpHint content="Posting consistency: posts divided by the number of days since the first post, shown as a percentage. Higher means this PAX posts more often relative to how long they've been around." />
             </span>
             <span>
-              {summary?.event_count === 0 ? (
+              {hasNoEventData ? (
                 <span className="text-default-500 italic">No Event Data</span>
               ) : (
                 <>{formatNumber(summary.effective_percentage, 2)}%</>

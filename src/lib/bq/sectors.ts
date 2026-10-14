@@ -1,4 +1,6 @@
 import { queryBigQuery } from "@/lib/db";
+import { getDuckDbRuntime } from "@/lib/duckdb/factory";
+import { DuckDbQueryAdapter, selectDuckDbOrLegacy } from "@/lib/duckdb/query";
 import {
   SectorInfo,
   SectorSummary,
@@ -96,6 +98,30 @@ export async function searchSectorsByName(
   userIdentifier?: string,
   includeInactive = false,
 ): Promise<SectorInfo[]> {
+  return selectDuckDbOrLegacy({
+    capability: "search",
+    env: process.env,
+    duckdb: async () => {
+      const term = (q || "").trim();
+      if (term.length < 2) return [];
+      return new DuckDbQueryAdapter(getDuckDbRuntime()).execute<SectorInfo>(
+        `SELECT sector_id, sector_name, logo_url, is_active FROM pv_sectors
+         WHERE sector_name IS NOT NULL AND lower(sector_name) LIKE ?
+         ${includeInactive ? "" : "AND is_active = TRUE"}
+         ORDER BY sector_name LIMIT 50`,
+        [`%${term.toLowerCase()}%`],
+      );
+    },
+    legacy: async () =>
+      searchSectorsByNameLegacy(q, userIdentifier, includeInactive),
+  });
+}
+
+async function searchSectorsByNameLegacy(
+  q: string,
+  userIdentifier?: string,
+  includeInactive = false,
+): Promise<SectorInfo[]> {
   const term = (q || "").trim();
   if (term.length < 2) return [];
 
@@ -134,6 +160,19 @@ export async function getPageData(
   areaBreakdown: SectorAreaBreakdown[] | null;
   charts: ChartData[] | null;
 }> {
+  return selectDuckDbOrLegacy({
+    capability: "stats_sector",
+    env: process.env,
+    duckdb: () => getSectorPageDataDuckDb(sectorId, opts),
+    legacy: () => getSectorPageDataLegacy(sectorId, userIdentifier, opts),
+  });
+}
+
+async function getSectorPageDataLegacy(
+  sectorId: number,
+  userIdentifier?: string,
+  opts?: DateRangeFilters,
+): Promise<Awaited<ReturnType<typeof getPageData>>> {
   const dateFilterClauses = buildDateFilterClauses(opts);
   const dateFilterSql = dateFilterClauses.length
     ? `AND ${dateFilterClauses.join("\n      AND ")}`
@@ -402,5 +441,223 @@ export async function getPageData(
     summary: results?.[0]?.summary || null,
     areaBreakdown: results?.[0]?.areaBreakdown || null,
     charts: results?.[0]?.charts || null,
+  };
+}
+
+async function getSectorPageDataDuckDb(
+  sectorId: number,
+  opts?: DateRangeFilters,
+): Promise<Awaited<ReturnType<typeof getPageData>>> {
+  const db = new DuckDbQueryAdapter(getDuckDbRuntime());
+  const info = await db.execute<SectorInfo>(
+    `SELECT sector_id, sector_name, logo_url, is_active, areas
+       FROM pv_sectors WHERE sector_id = ? LIMIT 1`,
+    [sectorId],
+  );
+  const range = buildRangeDates(opts?.range);
+  const filters = ["sector_org_id = ?"];
+  const params: unknown[] = [sectorId];
+  const start = opts?.startDate ?? range.startDate;
+  const end = opts?.endDate ?? range.endDate;
+  if (start) {
+    filters.push("event_date >= CAST(? AS DATE)");
+    params.push(start);
+  }
+  if (end) {
+    filters.push("event_date <= CAST(? AS DATE)");
+    params.push(end);
+  }
+  const events = await db.execute<Record<string, unknown>>(
+    `SELECT event_id, event_date, pax_count, fng_count, ao_org_id, area_org_id,
+            area_name, attendance FROM pv_events WHERE ${filters.join(" AND ")}`,
+    params,
+  );
+  const active = new Set<number>();
+  const users = new Set<number>();
+  const qs = new Set<number>();
+  const truthy = (v: unknown) => v === true || v === 1 || v === "1";
+  const areaMap = new Map<number | null, SectorAreaBreakdown>();
+  const flagMap = new Map<
+    number,
+    { name: string | null; fartsack: number; ghost: number }
+  >();
+  let fng = 0;
+  let paxTotal = 0;
+  for (const e of events) {
+    fng += Number(e.fng_count ?? 0);
+    paxTotal += Number(e.pax_count ?? 0);
+    for (const a of (e.attendance as Array<Record<string, unknown>> | null) ??
+      []) {
+      if (a.user_id == null) continue;
+      const id = Number(a.user_id);
+      const flag = flagMap.get(id) ?? {
+        name: (a.f3_name as string | null) ?? null,
+        fartsack: 0,
+        ghost: 0,
+      };
+      if (truthy(a.fartsack)) flag.fartsack++;
+      if (truthy(a.ghost)) flag.ghost++;
+      flagMap.set(id, flag);
+      if (truthy(a.fartsack)) continue;
+      users.add(id);
+      if (truthy(a.q_ind)) qs.add(id);
+      if (
+        new Date(String(e.event_date)).getTime() >=
+        Date.now() - 30 * 86400000
+      )
+        active.add(id);
+    }
+    const areaId = e.area_org_id == null ? null : Number(e.area_org_id);
+    const row = areaMap.get(areaId) ?? {
+      area_id: areaId as number,
+      area_name: String(e.area_name ?? ""),
+      event_count: 0,
+      ao_count: 0,
+      active_pax: 0,
+      unique_pax: 0,
+      unique_qs: 0,
+      fng_count: 0,
+      pax_count_average: 0,
+    };
+    row.event_count++;
+    row.fng_count += Number(e.fng_count ?? 0);
+    row.pax_count_average += Number(e.pax_count ?? 0);
+    areaMap.set(areaId, row);
+  }
+  for (const row of areaMap.values()) {
+    const rows = events.filter(
+      (e) =>
+        (e.area_org_id == null ? null : Number(e.area_org_id)) === row.area_id,
+    );
+    const ids = new Set<number>();
+    const qids = new Set<number>();
+    const aos = new Set<number>();
+    const activeIds = new Set<number>();
+    for (const e of rows)
+      for (const a of (e.attendance as Array<Record<string, unknown>> | null) ??
+        [])
+        if (!truthy(a.fartsack)) {
+          if (a.user_id == null) continue;
+          const id = Number(a.user_id);
+          ids.add(id);
+          if (truthy(a.q_ind)) qids.add(id);
+          if (e.ao_org_id != null) aos.add(Number(e.ao_org_id));
+          if (
+            new Date(String(e.event_date)).getTime() >=
+            Date.now() - 30 * 86400000
+          )
+            activeIds.add(id);
+        }
+    for (const e of rows) if (e.ao_org_id != null) aos.add(Number(e.ao_org_id));
+    row.ao_count = aos.size;
+    row.unique_pax = ids.size;
+    row.unique_qs = qids.size;
+    row.active_pax = activeIds.size;
+    row.pax_count_average /= row.event_count;
+  }
+  const top = (key: "fartsack" | "ghost") => {
+    const max = Math.max(0, ...[...flagMap.values()].map((x) => x[key]));
+    return max
+      ? [...flagMap.entries()]
+          .filter(([, x]) => x[key] === max)
+          .map(([user_id, x]) => ({ user_id, f3_name: x.name, count: max }))
+          .sort((a, b) => (a.f3_name ?? "").localeCompare(b.f3_name ?? ""))
+      : [];
+  };
+  const summary: SectorSummary = {
+    event_count: events.length,
+    area_count: new Set(
+      events.filter((e) => e.area_org_id != null).map((e) => e.area_org_id),
+    ).size,
+    ao_count: new Set(
+      events.filter((e) => e.ao_org_id != null).map((e) => e.ao_org_id),
+    ).size,
+    active_pax: active.size,
+    unique_pax: users.size,
+    unique_qs: qs.size,
+    fng_count: fng,
+    pax_count_average: events.length ? paxTotal / events.length : 0,
+    fartsack_kings: top("fartsack"),
+    ghost_kings: top("ghost"),
+  };
+  const rangeStart = opts?.startDate ?? range.startDate;
+  const rangeEnd =
+    opts?.endDate ?? range.endDate ?? new Date().toISOString().slice(0, 10);
+  const days = rangeStart
+    ? (Date.parse(rangeEnd) - Date.parse(rangeStart)) / 86400000
+    : Infinity;
+  const granularity = days > 365 ? "month" : days > 180 ? "week" : "day";
+  const bucket = (value: unknown) => {
+    const d = new Date(`${String(value).slice(0, 10)}T00:00:00Z`);
+    if (granularity === "month")
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+    if (granularity === "week")
+      d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    return d.toISOString().slice(0, 10);
+  };
+  const chartMap = new Map<string, ChartData>();
+  const chartUsers = new Map<string, Set<number>>();
+  const chartQs = new Map<string, Set<number>>();
+  for (const e of events) {
+    const date = bucket(e.event_date);
+    const c = chartMap.get(date) ?? {
+      date,
+      pax_count: 0,
+      fng_count: 0,
+      q_count: 0,
+      unique_pax_count: 0,
+      unique_q_count: 0,
+    };
+    c.pax_count += Number(e.pax_count ?? 0);
+    c.fng_count += Number(e.fng_count ?? 0);
+    const ids = new Set<number>();
+    const qids = new Set<number>();
+    for (const a of (e.attendance as Array<Record<string, unknown>> | null) ??
+      [])
+      if (!truthy(a.fartsack) && a.user_id != null) {
+        ids.add(Number(a.user_id));
+        if (truthy(a.q_ind)) qids.add(Number(a.user_id));
+      }
+    c.q_count += qids.size;
+    const allUsers = chartUsers.get(date) ?? new Set<number>();
+    const allQs = chartQs.get(date) ?? new Set<number>();
+    ids.forEach((id) => allUsers.add(id));
+    qids.forEach((id) => allQs.add(id));
+    chartUsers.set(date, allUsers);
+    chartQs.set(date, allQs);
+    c.unique_pax_count = allUsers.size;
+    c.unique_q_count = allQs.size;
+    chartMap.set(date, c);
+  }
+  const chartRows = [...chartMap.values()];
+  if (chartRows.length) {
+    const dates = chartRows.map((row) => row.date).sort();
+    const first = new Date(`${dates[0]}T00:00:00Z`);
+    const last = new Date(`${dates.at(-1)}T00:00:00Z`);
+    for (const cursor = new Date(first); cursor <= last; ) {
+      const key = cursor.toISOString().slice(0, 10);
+      if (!chartMap.has(key))
+        chartMap.set(key, {
+          date: key,
+          pax_count: 0,
+          fng_count: 0,
+          q_count: 0,
+          unique_pax_count: 0,
+          unique_q_count: 0,
+        });
+      if (granularity === "month") cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+      else
+        cursor.setUTCDate(
+          cursor.getUTCDate() + (granularity === "week" ? 7 : 1),
+        );
+    }
+  }
+  return {
+    info: info[0] ?? null,
+    summary,
+    areaBreakdown: [...areaMap.values()].sort(
+      (a, b) => b.event_count - a.event_count,
+    ),
+    charts: [...chartMap.values()].sort((a, b) => a.date.localeCompare(b.date)),
   };
 }
