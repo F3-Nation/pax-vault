@@ -1,4 +1,9 @@
-import { DuckDbDependencyError, DuckDbQueryError } from "./errors";
+import {
+  DuckDbDependencyError,
+  DuckDbQueryError,
+  DuckDbReleaseConflictError,
+  DuckDbReleaseError,
+} from "./errors";
 import { DuckDbLease, DuckDbQueryConnection } from "./runtime";
 import { assertDuckDbServerRuntime } from "./server";
 
@@ -99,6 +104,14 @@ export class DuckDbQueryAdapter {
     params?: DuckDbParams,
     options?: DuckDbQueryOptions,
   ): Promise<T[]> {
+    return (await this.executeWithRelease<T>(sql, params, options)).rows;
+  }
+
+  async executeWithRelease<T = Record<string, unknown>>(
+    sql: string,
+    params?: DuckDbParams,
+    options?: DuckDbQueryOptions,
+  ): Promise<{ rows: T[]; releaseId: string }> {
     const instrument = process.env.ENVIRONMENT === "staging";
     const startedAt = instrument ? performance.now() : 0;
     let acquireWaitMs: number | undefined;
@@ -144,7 +157,7 @@ export class DuckDbQueryAdapter {
         },
       );
       outcome = "success";
-      return result;
+      return { rows: result, releaseId: lease.releaseId };
     } catch (cause) {
       if (
         cause instanceof DuckDbQueryError ||
@@ -182,6 +195,42 @@ export class DuckDbQueryAdapter {
           );
         }
       }
+    }
+  }
+
+  async executeDetailsForRelease<T = Record<string, unknown>>(
+    sqlForDataset: (dataset: DuckDbLease["detailsDataset"]) => string,
+    params: DuckDbParams,
+    expectedReleaseId: string,
+  ): Promise<T[]> {
+    let lease: DuckDbLease | undefined;
+    try {
+      lease = await this.provider.acquire();
+      if (lease.releaseId !== expectedReleaseId)
+        throw new DuckDbReleaseConflictError();
+      const sql = sqlForDataset(lease.detailsDataset);
+      return await lease.withDetailsConnection(async (connection) => {
+        await connection.query("SET TimeZone = 'UTC'");
+        const rows = await connection.query(sql, params);
+        return normalizeDuckDbRows<T>(rows);
+      });
+    } catch (cause) {
+      if (
+        cause instanceof DuckDbQueryError ||
+        cause instanceof DuckDbDependencyError ||
+        cause instanceof DuckDbReleaseConflictError
+      )
+        throw cause;
+      if (cause instanceof DuckDbReleaseError)
+        throw new DuckDbDependencyError(undefined, { cause });
+      if (
+        cause instanceof Error &&
+        (cause as Error & { code?: string }).code === "DUCKDB_UNAVAILABLE"
+      )
+        throw new DuckDbDependencyError(undefined, { cause });
+      throw new DuckDbQueryError(undefined, { cause });
+    } finally {
+      lease?.release();
     }
   }
 }

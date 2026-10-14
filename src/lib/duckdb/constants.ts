@@ -10,12 +10,19 @@ export const DUCKDB_DATASETS = [
   "pv_territories",
   "pv_attendance",
 ] as const;
+export const DUCKDB_DETAILS_DATASET = "pv_event_details" as const;
+export const DUCKDB_DETAILS_PROFILE_DATASETS = [
+  ...DUCKDB_DATASETS,
+  DUCKDB_DETAILS_DATASET,
+] as const;
 
 /** @deprecated Use DUCKDB_DATASETS; retained as a source-compatible alias. */
 export const DUCKDB_V2_DATASETS = DUCKDB_DATASETS;
-export type DuckDbDataset = (typeof DUCKDB_DATASETS)[number];
+export type DuckDbDataset =
+  | (typeof DUCKDB_DATASETS)[number]
+  | typeof DUCKDB_DETAILS_DATASET;
 type DuckDbV1Dataset = Exclude<
-  DuckDbDataset,
+  (typeof DUCKDB_DATASETS)[number],
   "pv_territories" | "pv_attendance"
 >;
 export type DuckDbContractVersion = "pv-release.v2";
@@ -248,6 +255,27 @@ const eventsV2Columns = [
     true,
   ],
 ] as const;
+const eventsV3Columns = eventsV2Columns.filter(
+  ([name]) =>
+    ![
+      "description",
+      "preblast",
+      "preblast_rich",
+      "backblast",
+      "backblast_rich",
+      "meta",
+    ].includes(name),
+);
+const eventDetailsV1Columns = [
+  ["event_id", "INTEGER", true],
+  ["description", "VARCHAR", true],
+  ["preblast", "VARCHAR", true],
+  ["preblast_rich", "JSON", true],
+  ["backblast", "VARCHAR", true],
+  ["backblast_rich", "JSON", true],
+  ["meta", "JSON", true],
+  ["refreshed_at", "TIMESTAMP WITH TIME ZONE", true],
+] as const;
 
 function orderedSchema(
   dataset: DuckDbDataset,
@@ -295,6 +323,11 @@ export const DUCKDB_V2_SCHEMA_REGISTRY: Readonly<
 > = {
   pv_pax: orderedSchema("pv_pax", "v3", paxV3Columns),
   pv_events: orderedSchema("pv_events", "v2", eventsV2Columns),
+  pv_event_details: orderedSchema(
+    "pv_event_details",
+    "v1",
+    eventDetailsV1Columns,
+  ),
   pv_regions: orderedV1Schema("pv_regions"),
   pv_areas: orderedV1Schema("pv_areas", "v2"),
   pv_sectors: orderedV1Schema("pv_sectors", "v2"),
@@ -317,6 +350,13 @@ export const DUCKDB_V2_SCHEMA_REGISTRY: Readonly<
   pv_attendance: orderedSchema("pv_attendance", "v1", attendanceV1Columns),
 };
 
+export const DUCKDB_DETAILS_SCHEMA_REGISTRY: Readonly<
+  Record<DuckDbDataset, DuckDbSchemaSpec>
+> = {
+  ...DUCKDB_V2_SCHEMA_REGISTRY,
+  pv_events: orderedSchema("pv_events", "v3", eventsV3Columns),
+};
+
 /** Canonical schema registry for the sole supported release contract. */
 export const DUCKDB_SCHEMA_REGISTRY = DUCKDB_V2_SCHEMA_REGISTRY;
 
@@ -325,14 +365,35 @@ export function datasetsFor(contractVersion: string): readonly DuckDbDataset[] {
   throw new Error(`unsupported DuckDB contract version: ${contractVersion}`);
 }
 
+export function datasetsForProfile(
+  contractVersion: string,
+  datasetNames: readonly string[],
+): readonly DuckDbDataset[] {
+  if (contractVersion !== DUCKDB_CONTRACT_VERSION)
+    throw new Error(`unsupported DuckDB contract version: ${contractVersion}`);
+  const sorted = [...datasetNames].sort().join(",");
+  if (sorted === [...DUCKDB_DATASETS].sort().join(",")) return DUCKDB_DATASETS;
+  if (sorted === [...DUCKDB_DETAILS_PROFILE_DATASETS].sort().join(","))
+    return DUCKDB_DETAILS_PROFILE_DATASETS;
+  throw new Error("release must match a supported dataset profile");
+}
+
 export function schemaFor(
   dataset: DuckDbDataset,
   contractVersion: string,
+  profile: "legacy" | "details" = "legacy",
 ): DuckDbSchemaSpec {
-  const datasets = datasetsFor(contractVersion);
+  const datasets =
+    profile === "details"
+      ? datasetsForProfile(contractVersion, DUCKDB_DETAILS_PROFILE_DATASETS)
+      : datasetsFor(contractVersion);
   if (!(datasets as readonly string[]).includes(dataset))
     throw new Error(`${dataset} is not supported by ${contractVersion}`);
-  return DUCKDB_SCHEMA_REGISTRY[dataset];
+  return (
+    profile === "details"
+      ? DUCKDB_DETAILS_SCHEMA_REGISTRY
+      : DUCKDB_SCHEMA_REGISTRY
+  )[dataset];
 }
 
 export interface DuckDbSchemaSpec {

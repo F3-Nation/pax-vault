@@ -12,19 +12,19 @@ those requirements into an implementable producer interface.
 
 ## 1. Current staging POC release and evidence boundary
 
-The live staging pointer `gs://f3-analytics-nonprod/pax-vault/current.json`
-currently names release `20261011T110818.964799Z-049e3ff018264f8eb14fd84cc84d1567`
-under `pax-vault/releases`, with contract `pv-release.v2` and ten datasets
-listed below. This is a breakable, staging-only, new-only POC; it is not a
-production release or production rollout. The checked-in local mirror
+The staging pointer has previously named release
+`20261011T110818.964799Z-049e3ff018264f8eb14fd84cc84d1567` under
+`pax-vault/releases`, with the legacy ten-dataset profile described below. The
+consumer also accepts a split eleven-dataset profile; both retain contract
+`pv-release.v2`. This remains a staging-only POC, not a production release or
+production rollout. The checked-in local mirror
 `.gcs/f3-analytics/pax-vault/current.json` is a historical nine-dataset sample,
 not a valid current candidate and not evidence of live GCS generation/CAS.
-Production remains on BigQuery. The adopted POC consumer requires the current
-ten-dataset inventory and does not promise compatibility with older releases;
-the compatibility/overlap gates later in this document are production-rollout
-requirements, not staging POC gates.
+Production remains on BigQuery. Compatibility is limited to the two exact
+profiles below; neither permits an incomplete or mixed inventory. Production
+compatibility/overlap gates later in this document remain rollout requirements.
 
-The current v2 POC candidate includes exactly ten datasets:
+The legacy ten-dataset profile includes exactly these datasets:
 `pv_pax`, `pv_events`, `pv_regions`, `pv_areas`, `pv_sectors`, `pv_aos`,
 `pv_upcoming`, `pv_kotter`, `pv_territories`, and `pv_attendance`. Schema
 versions are `pv_pax.v3`, `pv_events.v2`, `pv_areas.v2`, `pv_sectors.v2`,
@@ -51,6 +51,19 @@ DuckDB replicate upstream Postgres. Producer source parity/conflict checks and
 freshness/lag targets are deferred to rollout, with no guarantee asserted here.
 Live GCS CAS/readback and Cloud Run capacity remain operational validation items.
 
+The split profile contains the same ten core datasets, but uses `pv_events.v3`
+and adds mandatory `pv_event_details.v1`. `pv_events.v3` is the ordered
+`pv_events.v2` schema with the following six nullable columns removed; all
+remaining columns retain their original order: `description VARCHAR`,
+`preblast VARCHAR`, `preblast_rich JSON`, `backblast VARCHAR`,
+`backblast_rich JSON`, and `meta JSON`. The detail schema contains those fields plus `event_id INTEGER`
+and `refreshed_at TIMESTAMP WITH TIME ZONE`, in this exact nullable column
+order: `event_id`, `description`, `preblast`, `preblast_rich`, `backblast`,
+`backblast_rich`, `meta`, `refreshed_at`. The split profile's detail dataset,
+manifest, object declarations, and golden declaration are mandatory even
+though the consumer defers downloading detail payloads until an authenticated
+detail request.
+
 ## 2. Immutable layout and object set
 
 Use one configured bucket and this layout:
@@ -72,12 +85,14 @@ prefix; reject `..`, alternate buckets, absolute/path-escaped names, unknown
 files, duplicate datasets, and duplicate object entries. `current.json` is the
 only mutable object.
 
-The current ten-dataset v2 POC allowlist is:
+The legacy ten-dataset profile is:
 `pv_pax`, `pv_events`, `pv_regions`, `pv_areas`, `pv_sectors`, `pv_aos`,
-`pv_upcoming`, `pv_kotter`, `pv_territories`, and `pv_attendance`. A current
-POC v2 release must contain exactly these ten datasets, not merely a subset.
-The historical nine-dataset mirror is not a current candidate. Reject
-unsupported release contracts. Do not expose `pv_pax` email or roles through analytical
+`pv_upcoming`, `pv_kotter`, `pv_territories`, and `pv_attendance`. It must
+contain exactly these ten datasets with `pv_events.v2`. The split profile must
+contain exactly these ten core datasets plus `pv_event_details` (11 total),
+with `pv_events.v3` and `pv_event_details.v1`; do not mix profile schemas or
+omit the detail dataset. The historical nine-dataset mirror is not a candidate.
+Reject unsupported release contracts. Do not expose `pv_pax` email or roles through analytical
 projections; use sensitive fields only through the explicitly defined auth and
 identity paths.
 
@@ -191,8 +206,9 @@ array must exactly match the consumer's executable v2 registry (column names,
 DuckDB logical types, and nullability); preserve array order when
 computing `schemaFingerprintSha256`. V2 manifests carry `sourceReadPolicy`,
 `sourceOrder`, and per-dataset `sourceReadTimestampUtc`, and omit
-`sourceSnapshot`. `pv_pax.v3` includes email/roles and `pv_events` includes six
-event-content fields, three with JSON type; never expose these private fields
+`sourceSnapshot`. `pv_pax.v3` includes email/roles. Legacy `pv_events.v2`
+contains the six event-content fields; the split `pv_events.v3` moves them to
+the required `pv_event_details.v1` sidecar. Never expose private PAX fields
 through analytical projections. Each release dataset must have at least one
 golden. A golden is not a name/hash assertion only: its immutable `uri` and
 generation are downloaded generation-pinned by the consumer and it must carry
@@ -217,10 +233,10 @@ Artifact classes are exact: the manifest is only
 only `<release>/<dataset>/goldens/<safe-name>.json`. No artifact may be reused
 across classes or datasets.
 
-The consumer registry is machine-readable and versioned. The staging POC
-registry requires the exact ten-dataset inventory, v2 release contract, and
-per-dataset schema versions above; it intentionally does not accept older
-nine-dataset releases. Production rollout must list each serving application
+The consumer registry is machine-readable and versioned. The staging consumer
+accepts exactly the legacy ten-dataset profile or the split eleven-dataset
+profile, under the v2 release contract and per-dataset schema versions above;
+it rejects the historical nine-dataset profile. Production rollout must list each serving application
 revision with its exact pointer schema, release contract, and per-dataset
 schema versions. The registry also specifies columns,
 types/nullability, non-negative row-count policy, and deterministic verification
@@ -302,9 +318,13 @@ Parquet buffers in memory.
 
 ## 6. Compatibility, source parity, and registry
 
-The staging POC registry requires the exact current ten-dataset inventory and
-their pointer, manifest, and dataset schema versions; the consumer is new-only
-and rejects the historical nine-dataset sample. For production rollout,
+The staging registry requires an exact supported profile and its pointer,
+manifest, and dataset schema versions; it rejects the historical nine-dataset
+sample and all mixed/partial profiles. In the split profile, startup validates
+all detail declarations but does not fetch detail Parquet or golden payloads.
+The first authenticated detail request downloads those payloads generation-
+pinned from the same immutable release, then validates the sidecar separately;
+sidecar failure leaves the validated core available. For production rollout,
 maintain a machine-readable registry for every serving revision and block
 publication if any revision cannot read the candidate. Additive-field tolerance
 and coordinated handling of breaking changes are production compatibility
@@ -342,8 +362,11 @@ or reordered; consumers always reconcile from `current.json`.
 ## 8. Producer implementation checklist
 
 - [ ] Use the configured bucket and exact immutable prefix layout.
-- [ ] Publish exactly the current ten-dataset POC allowlist; register any new
-      dataset first. Do not use the historical nine-dataset mirror as a candidate.
+- [ ] Publish exactly one supported profile: legacy ten datasets with
+      `pv_events.v2`, or the same ten core datasets plus required
+      `pv_event_details.v1` with `pv_events.v3`. Never omit details from a split
+      release or mix profile schemas. Do not use the historical nine-dataset
+      mirror as a candidate.
 - [ ] Generate complete per-dataset manifests and `release.json`.
 - [ ] Record object generations, CRC32C, byte sizes, row counts, schema
       fingerprints, contract-appropriate source metadata, and goldens. V2
@@ -353,8 +376,8 @@ or reordered; consumers always reconcile from `current.json`.
       active-plus-staging database memory/storage separately.
 - [ ] Canonicalize JSON and compute SHA-256 over the exact uploaded bytes.
 - [ ] Validate all objects and manifests by generation-pinned read before CAS.
-- [ ] Accept only the v2 pointer/manifest contract and supported dataset schema
-      versions; reject v1 release contracts.
+- [ ] Accept only the v2 pointer/manifest contract and one exact supported
+      dataset profile; reject v1 release contracts and mixed/partial profiles.
 - [ ] Use create-only `ifGenerationMatch=0` for first `current.json` creation.
 - [ ] Use observed-generation `ifGenerationMatch` for every pointer update.
 - [ ] Read back and validate the pointer after a successful CAS.
@@ -370,11 +393,12 @@ test bucket (or an equivalent generation-faithful emulator):
 1. A complete release is reproducibly generated twice from a repeatable source
    input; canonical manifest bytes and SHA-256 are identical. For v2, preserve
    per-dataset read metadata and do not assert a shared source snapshot.
-2. The historical nine-dataset mirror is rejected as a current POC candidate;
+2. The historical nine-dataset mirror and mixed/partial profiles are rejected;
    a candidate is also rejected when it lacks pointer metadata,
    manifest SHA-256/schema fingerprints/goldens, has an extra dataset, or uses
-   an unsupported release contract. Current POC v2 includes `pv_attendance` and
-   `pv_territories`, with `pv_pax.v3` and `pv_attendance.v1` schemas.
+   an unsupported release contract. Both profiles include `pv_attendance` and
+   `pv_territories`; the split profile also requires `pv_event_details.v1` and
+   `pv_events.v3` with their validated declarations.
 3. Missing dataset, extra file, duplicate dataset, path traversal, wrong
    bucket, unknown schema version, and malformed canonical JSON are rejected.
 4. Changing a Parquet byte, size, CRC32C, generation, row count, schema, or

@@ -48,6 +48,15 @@ export class DuckDbQueryError extends DuckDbError {
   }
 }
 
+export class DuckDbReleaseConflictError extends DuckDbError {
+  constructor() {
+    super(
+      "Event details release does not match the requested event release",
+      "DUCKDB_RELEASE_CONFLICT",
+    );
+  }
+}
+
 export class DuckDbDependencyError extends DuckDbError {
   constructor(
     message = "DuckDB dependency unavailable",

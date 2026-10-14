@@ -6,6 +6,8 @@ import type { RegionPreferences } from "@/lib/preferences";
 
 /* USED FOR ALL EVENT DATA */
 export interface EventData {
+  /** DuckDB snapshot used to produce this event row; absent for BigQuery rows. */
+  eventReleaseId?: string;
   event_instance_id: number; // Unique identifier for the event instance
   event_date: string; // Date of the workout event
   event_name: string; // Name of the workout event

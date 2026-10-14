@@ -3,7 +3,7 @@ import {
   DuckDbDataset,
   DUCKDB_CONTRACT_VERSION,
   DUCKDB_SOURCE_READ_POLICY,
-  datasetsFor,
+  datasetsForProfile,
   schemaFor,
 } from "./constants";
 import { DuckDbReleaseError } from "./errors";
@@ -32,7 +32,7 @@ export interface ReleaseIndex {
   sourceOrder?: string;
   sourceReadPolicy?: string;
   datasets: Record<
-    DuckDbDataset,
+    string,
     {
       manifestUri: string;
       manifestGeneration: string;
@@ -74,7 +74,21 @@ export interface DatasetManifest {
 }
 
 const hex = /^[a-f0-9]{64}$/;
+const positiveDecimal = /^[1-9][0-9]*$/;
+const crc32c = /^[A-Za-z0-9+/]{6}==$/;
 const safeId = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+function requiredGeneration(o: Record<string, unknown>, key: string): string {
+  const value = string(o, key);
+  if (!positiveDecimal.test(value))
+    throw new DuckDbReleaseError(
+      `${key} must be a positive decimal generation`,
+    );
+  return value;
+}
+function validCrc32c(value: unknown): value is string {
+  if (typeof value !== "string" || !crc32c.test(value)) return false;
+  return Buffer.from(value, "base64").toString("base64") === value;
+}
 function object(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new DuckDbReleaseError(`${label} must be an object`);
@@ -133,8 +147,11 @@ export function sha256(bytes: Buffer): string {
 export function schemaFingerprint(
   dataset: DuckDbDataset,
   contractVersion: string = DUCKDB_CONTRACT_VERSION,
+  profile: "legacy" | "details" = "legacy",
 ): string {
-  return sha256(canonicalJson(schemaFor(dataset, contractVersion).columns));
+  return sha256(
+    canonicalJson(schemaFor(dataset, contractVersion, profile).columns),
+  );
 }
 
 function validUtcTimestamp(value: unknown): value is string {
@@ -204,6 +221,7 @@ export function validatePointer(value: unknown): Pointer {
     "producerRevision",
   ])
     string(o, key);
+  requiredGeneration(o, "manifestGeneration");
   if (!hex.test(o.manifestSha256 as string))
     throw new DuckDbReleaseError(
       "pointer manifestSha256 must be lowercase SHA-256",
@@ -228,20 +246,28 @@ export function validateRelease(value: unknown): ReleaseIndex {
   if (string(o, "sourceReadPolicy") !== DUCKDB_SOURCE_READ_POLICY)
     throw new DuckDbReleaseError("unsupported sourceReadPolicy");
   const datasets = object(o.datasets, "datasets");
-  const supportedDatasets = datasetsFor(contractVersion);
-  if (
-    Object.keys(datasets).sort().join(",") !==
-    [...supportedDatasets].sort().join(",")
-  )
-    throw new DuckDbReleaseError(
-      `release must contain exactly the supported ${supportedDatasets.length} datasets`,
+  let supportedDatasets: readonly DuckDbDataset[];
+  try {
+    supportedDatasets = datasetsForProfile(
+      contractVersion,
+      Object.keys(datasets),
     );
+  } catch {
+    throw new DuckDbReleaseError(
+      "release datasets must match exactly a supported dataset profile",
+    );
+  }
   for (const dataset of supportedDatasets) {
     const d = object(datasets[dataset], `${dataset} release entry`);
     string(d, "manifestUri");
-    string(d, "manifestGeneration");
+    requiredGeneration(d, "manifestGeneration");
     string(d, "schemaVersion");
-    if (d.schemaVersion !== schemaFor(dataset, contractVersion).schemaVersion)
+    const detailProfile = supportedDatasets.length === 11;
+    if (
+      d.schemaVersion !==
+      schemaFor(dataset, contractVersion, detailProfile ? "details" : "legacy")
+        .schemaVersion
+    )
       throw new DuckDbReleaseError(
         `${dataset} has an unsupported schemaVersion`,
       );
@@ -259,6 +285,7 @@ export function validateRelease(value: unknown): ReleaseIndex {
 export function validateManifest(
   value: unknown,
   dataset: DuckDbDataset,
+  profile: "legacy" | "details" = "legacy",
 ): DatasetManifest {
   const o = object(value, `${dataset} manifest`);
   if (
@@ -267,7 +294,7 @@ export function validateManifest(
   )
     throw new DuckDbReleaseError(`${dataset} manifest identity is invalid`);
   const contractVersion = o.contractVersion as string;
-  const spec = schemaFor(dataset, contractVersion);
+  const spec = schemaFor(dataset, contractVersion, profile);
   for (const k of ["schemaVersion", "schemaFingerprintSha256"]) string(o, k);
   requiredTimestamp(o, "sourceReadTimestampUtc");
   if (o.schemaVersion !== spec.schemaVersion)
@@ -293,7 +320,10 @@ export function validateManifest(
     throw new DuckDbReleaseError(
       `${dataset} columns do not match the consumer registry`,
     );
-  if (o.schemaFingerprintSha256 !== schemaFingerprint(dataset, contractVersion))
+  if (
+    o.schemaFingerprintSha256 !==
+    schemaFingerprint(dataset, contractVersion, profile)
+  )
     throw new DuckDbReleaseError(`${dataset} schema fingerprint mismatch`);
   integer(o, "rowCount");
   integer(o, "totalSizeBytes");
@@ -306,7 +336,10 @@ export function validateManifest(
   let totalRows = 0;
   for (const raw of o.objects) {
     const x = object(raw, `${dataset} object`);
-    for (const k of ["uri", "generation", "crc32c"]) string(x, k);
+    string(x, "uri");
+    requiredGeneration(x, "generation");
+    if (!validCrc32c(x.crc32c))
+      throw new DuckDbReleaseError(`${dataset} object crc32c is invalid`);
     integer(x, "sizeBytes");
     integer(x, "rowCount");
     if (paths.has(x.uri as string))
@@ -323,7 +356,7 @@ export function validateManifest(
     const golden = object(raw, `${dataset} golden`);
     string(golden, "name");
     string(golden, "uri");
-    string(golden, "generation");
+    requiredGeneration(golden, "generation");
     integer(golden, "sizeBytes");
     string(golden, "query");
     if (string(golden, "canonicalization") !== "rows-json-v1")
@@ -343,10 +376,7 @@ export function validateManifest(
       throw new DuckDbReleaseError(
         `${dataset} v2 golden requires a valid sha256`,
       );
-    if (
-      typeof golden.crc32c !== "string" ||
-      !/^[A-Za-z0-9+/]{6}==$/.test(golden.crc32c)
-    )
+    if (!validCrc32c(golden.crc32c))
       throw new DuckDbReleaseError(
         `${dataset} v2 golden requires a valid crc32c`,
       );

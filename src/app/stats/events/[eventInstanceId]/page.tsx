@@ -13,7 +13,7 @@
 
 import { notFound } from "next/navigation";
 import { requireAuth, getSessionUser } from "@/lib/auth/server";
-import { getEventById, getEventDetails } from "@/lib/bq/events";
+import { getEventById } from "@/lib/bq/events";
 import { cleanEventName } from "@/lib/utils";
 import { parseRegionPreferences } from "@/lib/preferences";
 import { Breadcrumb } from "@/components/breadcrumb";
@@ -21,7 +21,7 @@ import { buildBreadcrumb } from "@/lib/breadcrumb";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import {
   EventDetailsHeader,
-  EventDetailsBody,
+  EventDetailsContent,
 } from "@/components/EventDetailsContent";
 import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 import { DuckDbUnavailable } from "@/components/DuckDbUnavailable";
@@ -42,12 +42,8 @@ export default async function EventDetailPage({ params }: PageProps) {
   }
 
   let event;
-  let details;
   try {
-    [event, details] = await Promise.all([
-      getEventById(eventId, user.email),
-      getEventDetails(eventId, user.email),
-    ]);
+    event = await getEventById(eventId, user.email);
   } catch (error) {
     if (error instanceof DuckDbDependencyError) return <DuckDbUnavailable />;
     throw error;
@@ -87,9 +83,9 @@ export default async function EventDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        <EventDetailsBody
+        <EventDetailsContent
           event={event}
-          details={details}
+          eventInstanceId={event.event_instance_id}
           showFartsackGhost={
             parseRegionPreferences(event.preferencesJson).showFartsackGhostStats
           }

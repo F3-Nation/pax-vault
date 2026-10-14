@@ -8,8 +8,12 @@ import { nativeCandidateOpener } from "./runtime";
 import {
   DUCKDB_CONTRACT_VERSION,
   DUCKDB_DATASETS,
+  DUCKDB_DETAILS_DATASET,
+  DUCKDB_DETAILS_PROFILE_DATASETS,
+  DUCKDB_DETAILS_SCHEMA_REGISTRY,
   DUCKDB_SCHEMA_REGISTRY,
 } from "./constants";
+import { canonicalDuckDbRows, schemaFingerprint } from "./validation";
 
 const config: DuckDbConfig = {
   enabled: true,
@@ -78,6 +82,12 @@ describe("native DuckDB candidate", () => {
       writer.closeSync();
       const release = {
         pointer: fixturePointer,
+        release: {
+          contractVersion: DUCKDB_CONTRACT_VERSION,
+          datasets: Object.fromEntries(
+            DUCKDB_DATASETS.map((dataset) => [dataset, {}]),
+          ),
+        },
         parquetPaths,
       } as unknown as ReleaseFiles;
       const handle = await nativeCandidateOpener.open(dbPath, release, config);
@@ -158,11 +168,160 @@ describe("native DuckDB candidate", () => {
 
       const release = {
         pointer: fixturePointer,
-        parquetPaths: new Map([["pv_pax", parquetPaths]]),
+        release: {
+          contractVersion: DUCKDB_CONTRACT_VERSION,
+          datasets: Object.fromEntries(
+            DUCKDB_DATASETS.map((dataset) => [dataset, {}]),
+          ),
+        },
+        parquetPaths: new Map(
+          DUCKDB_DATASETS.map((dataset) => [
+            dataset,
+            dataset === "pv_pax" ? parquetPaths : [],
+          ]),
+        ),
       } as unknown as ReleaseFiles;
       await expect(
         nativeCandidateOpener.open(dbPath, release, config),
       ).rejects.toThrow(/physical schema does not match registry/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("opens and independently validates a split-profile details sidecar", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pax-duckdb-native-details-"));
+    try {
+      const { DuckDBInstance } = await import("@duckdb/node-api");
+      const writer = await DuckDBInstance.create(join(dir, "writer.duckdb"));
+      const connection = await writer.connect();
+      const parquet = join(dir, "pv_event_details-0.parquet");
+      const columns = DUCKDB_DETAILS_SCHEMA_REGISTRY.pv_event_details
+        .columns as readonly { name: string; logicalType: string }[];
+      const select = columns
+        .map(({ name, logicalType }) => {
+          const expression =
+            name === "event_id"
+              ? "CAST(7 AS INTEGER)"
+              : logicalType.endsWith("[]")
+                ? `[]::${logicalType}`
+                : `CAST(NULL AS ${logicalType})`;
+          return `${expression} AS "${name}"`;
+        })
+        .join(", ");
+      await connection.run(
+        `COPY (SELECT ${select}) TO '${parquet.replaceAll("'", "''")}' (FORMAT PARQUET)`,
+      );
+      connection.closeSync();
+      writer.closeSync();
+
+      const detailSchema = DUCKDB_DETAILS_SCHEMA_REGISTRY.pv_event_details;
+      const golden = canonicalDuckDbRows([[1n]]);
+      const manifest = {
+        dataset: DUCKDB_DETAILS_DATASET,
+        rowCount: 1,
+        objects: [{ rowCount: 1 }],
+        schemaFingerprintSha256: schemaFingerprint(
+          DUCKDB_DETAILS_DATASET,
+          DUCKDB_CONTRACT_VERSION,
+          "details",
+        ),
+      };
+      const release = {
+        pointer: fixturePointer,
+        release: {
+          contractVersion: DUCKDB_CONTRACT_VERSION,
+          datasets: Object.fromEntries(
+            DUCKDB_DETAILS_PROFILE_DATASETS.map((dataset) => [dataset, {}]),
+          ),
+        },
+        manifests: new Map([[DUCKDB_DETAILS_DATASET, manifest]]),
+        goldens: new Map([
+          [
+            DUCKDB_DETAILS_DATASET,
+            new Map([["candidate_transport_check", golden]]),
+          ],
+        ]),
+        parquetPaths: new Map([[DUCKDB_DETAILS_DATASET, [parquet]]]),
+      } as unknown as ReleaseFiles;
+      const handle = await nativeCandidateOpener.open(
+        join(dir, "details.duckdb"),
+        release,
+        config,
+      );
+      const query = await handle.connect();
+      await expect(
+        query.query("SELECT event_id FROM pv_event_details"),
+      ).resolves.toEqual([{ event_id: 7 }]);
+      query.close();
+      await handle.close();
+
+      const wrongSchemaPath = join(dir, "pv_event_details-extra.parquet");
+      const badWriter = await DuckDBInstance.create(
+        join(dir, "bad-writer.duckdb"),
+      );
+      const badWriteConnection = await badWriter.connect();
+      await badWriteConnection.run(
+        `COPY (SELECT ${select}, 'extra' AS hidden_field) TO '${wrongSchemaPath.replaceAll("'", "''")}' (FORMAT PARQUET)`,
+      );
+      badWriteConnection.closeSync();
+      badWriter.closeSync();
+      await expect(
+        nativeCandidateOpener.open(
+          join(dir, "bad-schema.duckdb"),
+          {
+            ...release,
+            parquetPaths: new Map([
+              [DUCKDB_DETAILS_DATASET, [wrongSchemaPath]],
+            ]),
+          },
+          config,
+        ),
+      ).rejects.toThrow(/physical schema does not match registry/);
+
+      const badCount = {
+        ...release,
+        manifests: new Map([
+          [DUCKDB_DETAILS_DATASET, { ...manifest, objects: [{ rowCount: 2 }] }],
+        ]),
+      } as unknown as ReleaseFiles;
+      await expect(
+        nativeCandidateOpener.open(
+          join(dir, "bad-count.duckdb"),
+          badCount,
+          config,
+        ),
+      ).rejects.toThrow(/partition row count mismatch/);
+      const badGolden = {
+        ...release,
+        goldens: new Map([
+          [
+            DUCKDB_DETAILS_DATASET,
+            new Map([
+              ["candidate_transport_check", canonicalDuckDbRows([[2n]])],
+            ]),
+          ],
+        ]),
+      };
+      await expect(
+        nativeCandidateOpener.open(
+          join(dir, "bad-golden.duckdb"),
+          badGolden,
+          config,
+        ),
+      ).rejects.toThrow(/verification golden mismatch/);
+
+      await expect(
+        nativeCandidateOpener.open(
+          join(dir, "missing-core.duckdb"),
+          {
+            ...release,
+            parquetPaths: new Map([["pv_pax", [parquet]]]),
+          },
+          config,
+        ),
+      ).rejects.toThrow(/materialized datasets/);
+      expect(detailSchema.schemaVersion).toBe("pv_event_details.v1");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

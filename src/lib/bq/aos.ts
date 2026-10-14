@@ -5,6 +5,7 @@ import { getDuckDbRuntime } from "@/lib/duckdb/factory";
 import {
   DuckDbQueryAdapter,
   DuckDbParams,
+  isDuckDbEnabled,
   selectDuckDbOrLegacy,
 } from "@/lib/duckdb/query";
 import {
@@ -18,14 +19,30 @@ import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
 
 type DuckDbExecutor = <T>(sql: string, params?: DuckDbParams) => Promise<T[]>;
 let injectedDuckDbQuery: DuckDbExecutor | undefined;
-export function setAoDuckDbQueryForTests(query?: DuckDbExecutor): void {
+let injectedDuckDbReleaseId: string | undefined;
+export function setAoDuckDbQueryForTests(
+  query?: DuckDbExecutor,
+  releaseId?: string,
+): void {
   injectedDuckDbQuery = query;
+  injectedDuckDbReleaseId = releaseId;
 }
 const executeDuckDb: DuckDbExecutor = async (sql, params) => {
   const adapter = injectedDuckDbQuery
     ? undefined
     : new DuckDbQueryAdapter(getDuckDbRuntime());
   return (injectedDuckDbQuery ?? adapter!.execute.bind(adapter))(sql, params);
+};
+const executeDuckDbEvents = async <T>(sql: string, params?: DuckDbParams) => {
+  if (injectedDuckDbQuery)
+    return {
+      rows: await injectedDuckDbQuery<T>(sql, params),
+      releaseId: injectedDuckDbReleaseId,
+    };
+  return new DuckDbQueryAdapter(getDuckDbRuntime()).executeWithRelease<T>(
+    sql,
+    params,
+  );
 };
 
 function duckAoFilter(aoId: number, opts?: StatsFilters) {
@@ -71,10 +88,14 @@ async function getAoEventsDuckDb(
   if (limited) {
     f.params.push(Number(opts!.limit));
   }
-  return executeDuckDb<EventData>(
+  const result = await executeDuckDbEvents<EventData>(
     `SELECT event_id AS event_instance_id, event_date, event_name, pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name, first_f_ind, second_f_ind, third_f_ind, types, tags, list_filter(attendance, x -> x.fartsack IS NOT TRUE) AS attendance, list_filter(attendance, x -> x.fartsack IS TRUE) AS fartsacks FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC${limited ? " LIMIT ?" : ""}`,
     f.params,
   );
+  return result.rows.map((event) => ({
+    ...event,
+    eventReleaseId: result.releaseId,
+  }));
 }
 
 /**
@@ -242,6 +263,7 @@ export async function getEvents(
         ? Number(opts!.limit)
         : undefined;
       const limitSql = limit ? `LIMIT ${limit}` : "";
+      const whereSql = buildEventsWhereSql(aoId, opts);
 
       const query = `-- AO EVENTS
     SELECT
@@ -262,7 +284,7 @@ export async function getEvents(
       ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance,
       ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS TRUE) AS fartsacks
     FROM pv_events
-    WHERE ao_org_id = ${aoId}
+    ${whereSql}
     ORDER BY event_date DESC, event_id DESC
     ${limitSql};
   `;
@@ -521,14 +543,30 @@ export async function getPageData(
       };
     },
   });
-  if (page.preferencesJson !== null) return page;
-  const preferences = await queryBigQuery<{ json_config: string | null }>(
-    "SELECT p.json_config FROM pv_regions_preferences p WHERE p.region_id = (SELECT region_id FROM pv_aos WHERE ao_id = @aoId LIMIT 1) LIMIT 1",
-    userIdentifier,
-    `fetch preferences for AO ${aoId}`,
-    { aoId },
-  );
-  return { ...page, preferencesJson: preferences[0]?.json_config ?? null };
+  const preferences =
+    page.preferencesJson === null
+      ? await queryBigQuery<{ json_config: string | null }>(
+          "SELECT p.json_config FROM pv_regions_preferences p WHERE p.region_id = (SELECT region_id FROM pv_aos WHERE ao_id = @aoId LIMIT 1) LIMIT 1",
+          userIdentifier,
+          `fetch preferences for AO ${aoId}`,
+          { aoId },
+        )
+      : [];
+  const pageWithPreferences = {
+    ...page,
+    preferencesJson:
+      page.preferencesJson ?? preferences[0]?.json_config ?? null,
+  };
+  if (
+    isDuckDbEnabled(process.env, "stats_ao") !==
+    isDuckDbEnabled(process.env, "events")
+  ) {
+    return {
+      ...pageWithPreferences,
+      events: await getEvents(aoId, userIdentifier, { ...opts, limit: 100 }),
+    };
+  }
+  return pageWithPreferences;
 }
 
 export async function searchAOsByName(
@@ -585,12 +623,12 @@ async function getAoPageDuckDbParity(
   opts?: StatsFilters,
 ): Promise<AOPageData> {
   const f = duckAoFilter(aoId, opts);
-  const [info, raw, upcoming] = await Promise.all([
+  const [info, eventResult, upcoming] = await Promise.all([
     executeDuckDb<AOInfo>(
       `SELECT ao_id, ao_name, region_id, region_name, logo_url, is_active, types, tags FROM pv_aos WHERE ao_id = ? LIMIT 1`,
       [aoId],
     ),
-    executeDuckDb<any>(
+    executeDuckDbEvents<any>(
       `SELECT event_id AS event_instance_id, event_date, event_name, pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name, first_f_ind, second_f_ind, third_f_ind, types, tags, attendance FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC`,
       f.params,
     ),
@@ -599,6 +637,7 @@ async function getAoPageDuckDbParity(
       [aoId],
     ),
   ]);
+  const raw = eventResult.rows;
   const attended = (e: any) =>
     (e.attendance ?? []).filter(
       (a: any) => a.fartsack !== true && a.user_id != null,
@@ -658,6 +697,7 @@ async function getAoPageDuckDbParity(
     info: info[0] ?? null,
     events: raw.slice(0, 100).map((e: any) => ({
       ...e,
+      eventReleaseId: eventResult.releaseId,
       attendance: attended(e),
       fartsacks: (e.attendance ?? []).filter((a: any) => a.fartsack === true),
     })),

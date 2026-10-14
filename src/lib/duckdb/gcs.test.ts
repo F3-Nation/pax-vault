@@ -3,6 +3,7 @@ import {
   DUCKDB_V2_CONTRACT_VERSION,
   DUCKDB_V2_DATASETS,
   schemaFor,
+  DUCKDB_DETAILS_PROFILE_DATASETS,
 } from "./constants";
 import { DuckDbConfig } from "./config";
 import {
@@ -141,6 +142,108 @@ function v2Fixture() {
   return { objects, pointer };
 }
 
+function detailsFixture() {
+  const data = v2Fixture();
+  const releaseUri = "gs://bucket/releases/r-v2/release.json";
+  const releaseObject = data.objects.get(releaseUri)!;
+  const release = JSON.parse(releaseObject.bytes.toString("utf8"));
+  const eventUri = "gs://bucket/releases/r-v2/pv_events/manifest.json";
+  const eventStored = data.objects.get(eventUri)!;
+  const eventManifest = JSON.parse(eventStored.bytes.toString("utf8"));
+  const eventSchema = schemaFor(
+    "pv_events",
+    DUCKDB_V2_CONTRACT_VERSION,
+    "details",
+  );
+  eventManifest.schemaVersion = eventSchema.schemaVersion;
+  eventManifest.columns = eventSchema.columns;
+  eventManifest.schemaFingerprintSha256 = schemaFingerprint(
+    "pv_events",
+    DUCKDB_V2_CONTRACT_VERSION,
+    "details",
+  );
+  data.objects.set(eventUri, {
+    ...eventStored,
+    bytes: canonicalJson(eventManifest),
+  });
+  release.datasets.pv_events.schemaVersion = eventSchema.schemaVersion;
+
+  const dataset = "pv_event_details";
+  const schema = schemaFor(dataset, DUCKDB_V2_CONTRACT_VERSION, "details");
+  const root = `gs://bucket/releases/r-v2/${dataset}`;
+  const parquet = Buffer.from("details-parquet");
+  const goldenBytes = canonicalJson([[1]]);
+  const goldenSpec = schema.goldenSpecifications[0];
+  const manifest = {
+    contractVersion: DUCKDB_V2_CONTRACT_VERSION,
+    dataset,
+    schemaVersion: schema.schemaVersion,
+    rowCount: 1,
+    totalSizeBytes: parquet.length,
+    schemaFingerprintSha256: schemaFingerprint(
+      dataset,
+      DUCKDB_V2_CONTRACT_VERSION,
+      "details",
+    ),
+    columns: schema.columns,
+    sourceReadTimestampUtc: "2026-09-23T13:10:00Z",
+    sourceOrder: release.sourceOrder,
+    sourceReadPolicy: "ordered-sequential-per-dataset",
+    goldens: [
+      {
+        name: goldenSpec.name,
+        uri: `${root}/goldens/candidate_transport_check.json`,
+        generation: "410",
+        sizeBytes: goldenBytes.length,
+        query: goldenSpec.query,
+        canonicalization: "rows-json-v1",
+        sha256: sha256(goldenBytes),
+        crc32c: crc32cBase64(goldenBytes),
+      },
+    ],
+    objects: [
+      {
+        uri: `${root}/partitions/pv_event_details-0.parquet`,
+        generation: "411",
+        sizeBytes: parquet.length,
+        rowCount: 1,
+        crc32c: crc32cBase64(parquet),
+      },
+    ],
+  };
+  const manifestUri = `${root}/manifest.json`;
+  data.objects.set(manifestUri, {
+    bytes: canonicalJson(manifest),
+    generation: "412",
+  });
+  data.objects.set(manifest.goldens[0].uri, {
+    bytes: goldenBytes,
+    generation: "410",
+  });
+  data.objects.set(manifest.objects[0].uri, {
+    bytes: parquet,
+    generation: "411",
+  });
+  release.datasets[dataset] = {
+    manifestUri,
+    manifestGeneration: "412",
+    schemaVersion: schema.schemaVersion,
+    sourceOrder: release.sourceOrder,
+    sourceReadPolicy: "ordered-sequential-per-dataset",
+    sourceReadTimestampUtc: manifest.sourceReadTimestampUtc,
+  };
+  const releaseBytes = canonicalJson(release);
+  data.objects.set(releaseUri, { bytes: releaseBytes, generation: "900" });
+  data.pointer.manifestSha256 = sha256(releaseBytes);
+  data.pointer.manifestGeneration = "900";
+  data.objects.set("gs://bucket/current.json", {
+    bytes: canonicalJson(data.pointer),
+    generation: "901",
+  });
+  expect(DUCKDB_DETAILS_PROFILE_DATASETS).toHaveLength(11);
+  return data;
+}
+
 function objectMapClient(
   objects: Map<string, { bytes: Buffer; generation: string }>,
 ): GcsClient {
@@ -202,6 +305,22 @@ describe("GCS release repository", () => {
       client.read("gs://bucket/current.json", "8"),
     ).rejects.toBeInstanceOf(DuckDbReleaseError);
   });
+  it("rejects a non-positive control-object generation", async () => {
+    const data = v2Fixture();
+    const client: GcsClient = {
+      read: async (uri) => ({
+        ...data.objects.get(uri)!,
+        generation: "0",
+      }),
+    };
+    const repository = new GcsReleaseRepository(client, config);
+    await expect(repository.readPointer()).rejects.toMatchObject({
+      message: "pointer validation failed",
+      cause: expect.objectContaining({
+        message: expect.stringMatching(/positive decimal generation/),
+      }),
+    });
+  });
   it("accepts a complete synthetic ten-dataset release", async () => {
     const fixtureData = fixture();
     const client: GcsClient = {
@@ -221,6 +340,297 @@ describe("GCS release repository", () => {
     expect(files.manifests.size).toBe(DUCKDB_V2_DATASETS.length);
     expect(files.parquetPaths.size).toBe(DUCKDB_V2_DATASETS.length);
   });
+  it("validates the eleven-dataset profile without reading detail data until requested", async () => {
+    const data = detailsFixture();
+    const reads: string[] = [];
+    let deferredGoldenMaxBytes = 0;
+    const client: GcsClient = {
+      read: async (uri, generation, maxBytes) => {
+        reads.push(uri);
+        if (uri.includes("pv_event_details/goldens/"))
+          deferredGoldenMaxBytes = maxBytes ?? 0;
+        const value = data.objects.get(uri)!;
+        if (generation && generation !== value.generation)
+          throw new Error("wrong generation");
+        return value;
+      },
+      streamTo: async (uri, generation) => {
+        const value = data.objects.get(uri)!;
+        if (generation !== value.generation)
+          throw new Error("wrong generation");
+        return {
+          generation,
+          sizeBytes: value.bytes.length,
+          crc32c: crc32cBase64(value.bytes),
+        };
+      },
+    };
+    const repository = new GcsReleaseRepository(client, config);
+    const current = await repository.readPointer();
+    const files = await repository.downloadRelease(
+      current.pointer,
+      current.generation,
+    );
+    const startupPointerReadCount = reads.filter(
+      (uri) => uri === "gs://bucket/current.json",
+    ).length;
+    expect(files.manifests.size).toBe(11);
+    expect(files.parquetPaths.has("pv_event_details")).toBe(false);
+    expect(files.parquetPaths.size).toBe(10);
+    expect(reads).not.toContain(
+      "gs://bucket/releases/r-v2/pv_event_details/partitions/pv_event_details-0.parquet",
+    );
+    expect(reads).not.toContain(
+      "gs://bucket/releases/r-v2/pv_event_details/goldens/candidate_transport_check.json",
+    );
+
+    const deferred = await repository.downloadDeferredDetails(files, "/stage");
+    expect(deferred.parquetPaths).toEqual([
+      "/stage/pv_event_details-0.parquet",
+    ]);
+    expect(deferred.goldens.size).toBe(1);
+    expect(deferredGoldenMaxBytes).toBe(
+      data.objects.get(
+        "gs://bucket/releases/r-v2/pv_event_details/goldens/candidate_transport_check.json",
+      )!.bytes.length,
+    );
+    expect(
+      reads.filter((uri) => uri === "gs://bucket/current.json"),
+    ).toHaveLength(startupPointerReadCount);
+  });
+  it("stages core files at the exact combined artifact budget without accessing missing details", async () => {
+    const data = detailsFixture();
+    const detailParquet =
+      "gs://bucket/releases/r-v2/pv_event_details/partitions/pv_event_details-0.parquet";
+    const detailGolden =
+      "gs://bucket/releases/r-v2/pv_event_details/goldens/candidate_transport_check.json";
+    data.objects.delete(detailParquet);
+    data.objects.delete(detailGolden);
+    const detailSizes = JSON.parse(
+      data.objects
+        .get("gs://bucket/releases/r-v2/pv_event_details/manifest.json")!
+        .bytes.toString("utf8"),
+    );
+    const totalDeclaredBytes =
+      detailSizes.totalSizeBytes +
+      detailSizes.goldens.reduce(
+        (total: number, golden: { sizeBytes: number }) =>
+          total + golden.sizeBytes,
+        0,
+      ) +
+      [...data.objects.entries()]
+        .filter(([uri]) =>
+          /\/(pv_pax|pv_events|pv_regions|pv_areas|pv_sectors|pv_aos|pv_upcoming|pv_kotter|pv_territories|pv_attendance)\/manifest\.json$/.test(
+            uri,
+          ),
+        )
+        .reduce((total, [, stored]) => {
+          const manifest = JSON.parse(stored.bytes.toString("utf8"));
+          return (
+            total +
+            manifest.totalSizeBytes +
+            manifest.goldens.reduce(
+              (sum: number, golden: { sizeBytes: number }) =>
+                sum + golden.sizeBytes,
+              0,
+            )
+          );
+        }, 0);
+    const detailDeclaredBytes =
+      detailSizes.totalSizeBytes +
+      detailSizes.goldens.reduce(
+        (total: number, golden: { sizeBytes: number }) =>
+          total + golden.sizeBytes,
+        0,
+      );
+    const coreDeclaredBytes = totalDeclaredBytes - detailDeclaredBytes;
+    const reads: string[] = [];
+    const streams: string[] = [];
+    const client: GcsClient = {
+      read: async (uri, generation, maxBytes) => {
+        reads.push(uri);
+        const value = data.objects.get(uri);
+        if (!value) throw new Error("missing fixture object");
+        if (generation && generation !== value.generation)
+          throw new Error("wrong generation");
+        if (maxBytes !== undefined && value.bytes.length > maxBytes)
+          throw new Error("declared read budget exceeded");
+        return value;
+      },
+      streamTo: async (uri, generation) => {
+        streams.push(uri);
+        const value = data.objects.get(uri)!;
+        return {
+          generation,
+          sizeBytes: value.bytes.length,
+          crc32c: crc32cBase64(value.bytes),
+        };
+      },
+    };
+    const exactRepository = new GcsReleaseRepository(client, {
+      ...config,
+      maxReleaseBytes: totalDeclaredBytes,
+    });
+    const current = await exactRepository.readPointer();
+    await exactRepository.downloadRelease(
+      current.pointer,
+      current.generation,
+      "/stage",
+    );
+    expect(reads).not.toContain(detailParquet);
+    expect(reads).not.toContain(detailGolden);
+    expect(streams).not.toContain(detailParquet);
+    expect(streams).toHaveLength(10);
+
+    const underBudgetRepository = new GcsReleaseRepository(client, {
+      ...config,
+      maxReleaseBytes: totalDeclaredBytes - 1,
+    });
+    await expect(
+      underBudgetRepository.downloadRelease(
+        current.pointer,
+        current.generation,
+        "/stage",
+      ),
+    ).rejects.toThrow(/download budget|golden budget/);
+
+    const coreOnlyBudgetRepository = new GcsReleaseRepository(client, {
+      ...config,
+      maxReleaseBytes: coreDeclaredBytes,
+    });
+    await expect(
+      coreOnlyBudgetRepository.downloadRelease(
+        current.pointer,
+        current.generation,
+        "/stage",
+      ),
+    ).rejects.toThrow(/download budget|golden budget/);
+  });
+  it("rejects invalid deferred detail declarations and charges them to release budget", async () => {
+    const invalid = detailsFixture();
+    const manifestUri =
+      "gs://bucket/releases/r-v2/pv_event_details/manifest.json";
+    const stored = invalid.objects.get(manifestUri)!;
+    const manifest = JSON.parse(stored.bytes.toString("utf8"));
+    manifest.columns[1].logicalType = "BLOB";
+    invalid.objects.set(manifestUri, {
+      ...stored,
+      bytes: canonicalJson(manifest),
+    });
+    const badRepository = new GcsReleaseRepository(
+      objectMapClient(invalid.objects),
+      config,
+    );
+    const current = await badRepository.readPointer();
+    await expect(
+      badRepository.downloadRelease(current.pointer, current.generation),
+    ).rejects.toThrow(/columns do not match/);
+
+    const oversized = detailsFixture();
+    const tightConfig = { ...config, maxReleaseBytes: 100 };
+    const budgetRepository = new GcsReleaseRepository(
+      objectMapClient(oversized.objects),
+      tightConfig,
+    );
+    const pointer = await budgetRepository.readPointer();
+    await expect(
+      budgetRepository.downloadRelease(pointer.pointer, pointer.generation),
+    ).rejects.toThrow(/download budget|golden budget/);
+  });
+  it.each(["generation", "crc"] as const)(
+    "rejects invalid detail object %s metadata before payload I/O",
+    async (invalidField) => {
+      const data = detailsFixture();
+      const manifestUri =
+        "gs://bucket/releases/r-v2/pv_event_details/manifest.json";
+      const stored = data.objects.get(manifestUri)!;
+      const manifest = JSON.parse(stored.bytes.toString("utf8"));
+      if (invalidField === "generation") manifest.objects[0].generation = "0";
+      else manifest.objects[0].crc32c = "invalid";
+      data.objects.set(manifestUri, {
+        ...stored,
+        bytes: canonicalJson(manifest),
+      });
+      const reads: string[] = [];
+      const streams: string[] = [];
+      const client: GcsClient = {
+        ...objectMapClient(data.objects),
+        read: async (uri, generation, maxBytes) => {
+          reads.push(uri);
+          return objectMapClient(data.objects).read(uri, generation, maxBytes);
+        },
+        streamTo: async (uri, generation) => {
+          streams.push(uri);
+          const value = await objectMapClient(data.objects).read(
+            uri,
+            generation,
+          );
+          return {
+            generation: value.generation,
+            sizeBytes: value.bytes.length,
+            crc32c: crc32cBase64(value.bytes),
+          };
+        },
+      };
+      const repository = new GcsReleaseRepository(client, config);
+      const current = await repository.readPointer();
+      await expect(
+        repository.downloadRelease(
+          current.pointer,
+          current.generation,
+          "/stage",
+        ),
+      ).rejects.toThrow();
+      expect(reads).not.toContain(
+        "gs://bucket/releases/r-v2/pv_event_details/partitions/pv_event_details-0.parquet",
+      );
+      expect(reads).not.toContain(
+        "gs://bucket/releases/r-v2/pv_event_details/goldens/candidate_transport_check.json",
+      );
+      expect(streams).not.toContain(
+        "gs://bucket/releases/r-v2/pv_event_details/partitions/pv_event_details-0.parquet",
+      );
+    },
+  );
+  it.each(["generation", "size", "crc"] as const)(
+    "checks deferred detail %s independently on demand and bounds by declared size",
+    async (invalidField) => {
+      const data = detailsFixture();
+      const declared = JSON.parse(
+        data.objects
+          .get("gs://bucket/releases/r-v2/pv_event_details/manifest.json")!
+          .bytes.toString("utf8"),
+      ).objects[0];
+      let streamMaxBytes = 0;
+      const client: GcsClient = {
+        ...objectMapClient(data.objects),
+        streamTo: async (_uri, generation, _destination, maxBytes) => {
+          streamMaxBytes = maxBytes ?? 0;
+          return {
+            generation:
+              invalidField === "generation"
+                ? `${generation}-wrong`
+                : generation,
+            sizeBytes:
+              invalidField === "size"
+                ? declared.sizeBytes - 1
+                : declared.sizeBytes,
+            crc32c: invalidField === "crc" ? "AAAAAA==" : declared.crc32c,
+          };
+        },
+      };
+      const repository = new GcsReleaseRepository(client, config);
+      const current = await repository.readPointer();
+      const files = await repository.downloadRelease(
+        current.pointer,
+        current.generation,
+      );
+      await expect(
+        repository.downloadDeferredDetails(files, "/stage"),
+      ).rejects.toThrow(/integrity mismatch/);
+      expect(streamMaxBytes).toBe(declared.sizeBytes);
+    },
+  );
   it("rejects pointer/release contract-version mixing in a v2 artifact", async () => {
     const data = v2Fixture();
     const repository = new GcsReleaseRepository(

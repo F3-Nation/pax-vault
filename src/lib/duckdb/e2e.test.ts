@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import {
   DUCKDB_CONTRACT_VERSION,
   DUCKDB_DATASETS,
-  DUCKDB_SCHEMA_REGISTRY,
+  DUCKDB_DETAILS_DATASET,
+  DUCKDB_DETAILS_SCHEMA_REGISTRY,
 } from "./constants";
 import { DuckDbConfig } from "./config";
 import { GcsClient, GcsReleaseRepository } from "./gcs";
@@ -32,13 +33,15 @@ const config = (dir: string): DuckDbConfig => ({
 });
 
 describe("complete generation-pinned DuckDB release", () => {
-  it("streams, validates, opens, and queries all ten synthetic Parquet datasets", async () => {
+  it("defers split-profile detail payloads until the first details lease", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pax-duckdb-e2e-"));
     try {
       const { DuckDBInstance } = await import("@duckdb/node-api");
       const writer = await DuckDBInstance.create(join(dir, "writer.duckdb"));
       const connection = await writer.connect();
       const objects = new Map<string, { bytes: Buffer; generation: string }>();
+      const streamedUris: string[] = [];
+      const readUris: string[] = [];
       const releaseId = "e2e-release";
       const root = `gs://e2e-bucket/releases/${releaseId}`;
       const sourceOrder = "20260101T000000.000000Z";
@@ -56,7 +59,7 @@ describe("complete generation-pinned DuckDB release", () => {
       for (const dataset of DUCKDB_DATASETS) {
         const parquetPath = join(dir, `${dataset}-0.parquet`);
         const select = (
-          DUCKDB_SCHEMA_REGISTRY[dataset].columns as readonly {
+          DUCKDB_DETAILS_SCHEMA_REGISTRY[dataset].columns as readonly {
             name: string;
             logicalType: string;
           }[]
@@ -89,7 +92,7 @@ describe("complete generation-pinned DuckDB release", () => {
         datasets[dataset] = {
           manifestUri: `${root}/${dataset}/manifest.json`,
           manifestGeneration: `${3000 + objects.size}`,
-          schemaVersion: DUCKDB_SCHEMA_REGISTRY[dataset].schemaVersion,
+          schemaVersion: DUCKDB_DETAILS_SCHEMA_REGISTRY[dataset].schemaVersion,
           sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
           sourceReadPolicy: "ordered-sequential-per-dataset",
           sourceOrder,
@@ -99,22 +102,69 @@ describe("complete generation-pinned DuckDB release", () => {
           generation: datasets[dataset].manifestGeneration as string,
         });
       }
+      const detailParquetPath = join(dir, "pv_event_details-0.parquet");
+      const detailSchema = DUCKDB_DETAILS_SCHEMA_REGISTRY.pv_event_details;
+      const detailSelect = (
+        detailSchema.columns as readonly {
+          name: string;
+          logicalType: string;
+        }[]
+      )
+        .map(({ name, logicalType }) => {
+          const expression =
+            name === "event_id"
+              ? "CAST(7 AS INTEGER)"
+              : `CAST(NULL AS ${logicalType})`;
+          return `${expression} AS "${name}"`;
+        })
+        .join(", ");
+      await connection.run(
+        `COPY (SELECT ${detailSelect}) TO '${detailParquetPath}' (FORMAT PARQUET)`,
+      );
       connection.closeSync();
       writer.closeSync();
+
+      const detailParquet = await readFile(detailParquetPath);
+      const detailParquetUri = `${root}/${DUCKDB_DETAILS_DATASET}/partitions/pv_event_details-0.parquet`;
+      const detailGoldenBytes = canonicalDuckDbRows([[1n]]);
+      const detailGoldenUri = `${root}/${DUCKDB_DETAILS_DATASET}/goldens/candidate_transport_check.json`;
+      const detailParquetGeneration = "7001";
+      const detailGoldenGeneration = "7002";
+      const detailManifestGeneration = "7003";
+      objects.set(detailParquetUri, {
+        bytes: detailParquet,
+        generation: detailParquetGeneration,
+      });
+      objects.set(detailGoldenUri, {
+        bytes: detailGoldenBytes,
+        generation: detailGoldenGeneration,
+      });
+      datasets[DUCKDB_DETAILS_DATASET] = {
+        manifestUri: `${root}/${DUCKDB_DETAILS_DATASET}/manifest.json`,
+        manifestGeneration: detailManifestGeneration,
+        schemaVersion: detailSchema.schemaVersion,
+        sourceReadTimestampUtc: "2026-01-01T00:10:00Z",
+        sourceReadPolicy: "ordered-sequential-per-dataset",
+        sourceOrder,
+      };
       for (const dataset of DUCKDB_DATASETS) {
         const parquetUri = `${root}/${dataset}/partitions/${dataset}-0.parquet`;
         const parquet = objects.get(parquetUri)!;
         const goldenUri = `${root}/${dataset}/goldens/candidate_transport_check.json`;
-        const schema = DUCKDB_SCHEMA_REGISTRY[dataset];
+        const schema = DUCKDB_DETAILS_SCHEMA_REGISTRY[dataset];
         const golden = objects.get(goldenUri)!;
         const manifest = {
           contractVersion: DUCKDB_CONTRACT_VERSION,
           dataset,
-          schemaVersion: DUCKDB_SCHEMA_REGISTRY[dataset].schemaVersion,
+          schemaVersion: DUCKDB_DETAILS_SCHEMA_REGISTRY[dataset].schemaVersion,
           rowCount: 1,
           totalSizeBytes: parquet.bytes.length,
-          schemaFingerprintSha256: schemaFingerprint(dataset),
-          columns: DUCKDB_SCHEMA_REGISTRY[dataset].columns,
+          schemaFingerprintSha256: schemaFingerprint(
+            dataset,
+            DUCKDB_CONTRACT_VERSION,
+            "details",
+          ),
+          columns: DUCKDB_DETAILS_SCHEMA_REGISTRY[dataset].columns,
           sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
           sourceReadPolicy: "ordered-sequential-per-dataset",
           sourceOrder,
@@ -146,6 +196,47 @@ describe("complete generation-pinned DuckDB release", () => {
           generation: entry.manifestGeneration,
         });
       }
+      const detailManifest = {
+        contractVersion: DUCKDB_CONTRACT_VERSION,
+        dataset: DUCKDB_DETAILS_DATASET,
+        schemaVersion: detailSchema.schemaVersion,
+        rowCount: 1,
+        totalSizeBytes: detailParquet.length,
+        schemaFingerprintSha256: schemaFingerprint(
+          DUCKDB_DETAILS_DATASET,
+          DUCKDB_CONTRACT_VERSION,
+          "details",
+        ),
+        columns: detailSchema.columns,
+        sourceReadTimestampUtc: "2026-01-01T00:10:00Z",
+        sourceReadPolicy: "ordered-sequential-per-dataset",
+        sourceOrder,
+        goldens: [
+          {
+            name: detailSchema.goldenSpecifications[0].name,
+            uri: detailGoldenUri,
+            generation: detailGoldenGeneration,
+            sizeBytes: detailGoldenBytes.length,
+            sha256: sha256(detailGoldenBytes),
+            crc32c: crc32cBase64(detailGoldenBytes),
+            query: detailSchema.goldenSpecifications[0].query,
+            canonicalization: "rows-json-v1",
+          },
+        ],
+        objects: [
+          {
+            uri: detailParquetUri,
+            generation: detailParquetGeneration,
+            sizeBytes: detailParquet.length,
+            crc32c: crc32cBase64(detailParquet),
+            rowCount: 1,
+          },
+        ],
+      };
+      objects.set(datasets[DUCKDB_DETAILS_DATASET].manifestUri, {
+        bytes: canonicalJson(detailManifest),
+        generation: detailManifestGeneration,
+      });
       const release = {
         contractVersion: DUCKDB_CONTRACT_VERSION,
         releaseId,
@@ -178,12 +269,14 @@ describe("complete generation-pinned DuckDB release", () => {
       });
       const client: GcsClient = {
         read: async (uri, generation) => {
+          readUris.push(uri);
           const object = objects.get(uri)!;
           if (generation && generation !== object.generation)
             throw new Error("generation mismatch");
           return object;
         },
         streamTo: async (uri, generation, destination, maxBytes) => {
+          streamedUris.push(uri);
           const object = objects.get(uri)!;
           if (
             object.generation !== generation ||
@@ -201,10 +294,18 @@ describe("complete generation-pinned DuckDB release", () => {
       const repository = new GcsReleaseRepository(client, config(dir));
       const runtime = new DuckDbRuntime(repository, config(dir));
       const lease = await runtime.acquire();
+      expect(streamedUris).not.toContain(detailParquetUri);
+      expect(readUris).not.toContain(detailGoldenUri);
       const rows = await lease.withConnection((query) =>
         query.query("SELECT COUNT(*) FROM pv_events"),
       );
       expect(rows).toEqual([{ "count_star()": 1n }]);
+      const detailRows = await lease.withDetailsConnection((query) =>
+        query.query("SELECT event_id FROM pv_event_details"),
+      );
+      expect(detailRows).toEqual([{ event_id: 7 }]);
+      expect(streamedUris).toContain(detailParquetUri);
+      expect(readUris).toContain(detailGoldenUri);
       lease.release();
       await runtime.close();
     } finally {

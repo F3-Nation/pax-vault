@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { DuckDbQueryError, DuckDbUnavailableError } from "./errors";
+import {
+  DuckDbQueryError,
+  DuckDbReleaseConflictError,
+  DuckDbReleaseError,
+  DuckDbUnavailableError,
+} from "./errors";
 import {
   DuckDbQueryAdapter,
   isDuckDbEnabled,
@@ -12,21 +17,23 @@ const lease = (
     sql: string,
     params?: unknown[] | Record<string, unknown>,
   ) => Promise<unknown[]>,
-): DuckDbLease => ({
-  release: vi.fn(),
-  releaseId: "r",
-  releaseSequence: 1,
-  withConnection: async <T>(
-    fn: (connection: DuckDbQueryConnection) => Promise<T>,
-  ) =>
-    fn({
-      query: async <R = unknown>(
-        sql: string,
-        params?: unknown[] | Record<string, unknown>,
-      ) => query(sql, params).then((rows) => rows as unknown as R[]),
-      close: vi.fn(),
-    }),
-});
+): DuckDbLease => {
+  const connection: DuckDbQueryConnection = {
+    query: async <R = unknown>(
+      sql: string,
+      params?: unknown[] | Record<string, unknown>,
+    ) => query(sql, params).then((rows) => rows as unknown as R[]),
+    close: vi.fn(),
+  };
+  return {
+    release: vi.fn(),
+    releaseId: "r",
+    releaseSequence: 1,
+    detailsDataset: "pv_events",
+    withConnection: async (fn) => fn(connection),
+    withDetailsConnection: async (fn) => fn(connection),
+  };
+};
 
 describe("DuckDB query adapter", () => {
   it("does not initialize a runtime when the feature is off", async () => {
@@ -182,6 +189,118 @@ describe("DuckDB query adapter", () => {
       ["SET TimeZone = 'UTC'", undefined],
       ["SELECT $name", { name: "x" }],
     ]);
+  });
+
+  it("returns the release identity from the exact lease used for the query", async () => {
+    const acquired = {
+      ...lease(async (sql) => (sql.startsWith("SET") ? [] : [{ id: 1 }])),
+      releaseId: "query-release",
+    };
+    const otherRelease = "later-status-release";
+    const adapter = new DuckDbQueryAdapter({ acquire: async () => acquired });
+    await expect(adapter.executeWithRelease("SELECT 1")).resolves.toEqual({
+      rows: [{ id: 1 }],
+      releaseId: "query-release",
+    });
+    expect(otherRelease).not.toBe(acquired.releaseId);
+    expect(acquired.release).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a details release mismatch before opening the details handle", async () => {
+    const acquired = lease(async () => []);
+    const detailsOpened = vi.fn();
+    const withDetailsConnection: DuckDbLease["withDetailsConnection"] = (
+      fn,
+    ) => {
+      detailsOpened();
+      return acquired.withDetailsConnection(fn);
+    };
+    const actualLease = {
+      ...acquired,
+      releaseId: "active",
+      withDetailsConnection,
+    };
+    const adapter = new DuckDbQueryAdapter({
+      acquire: async () => actualLease,
+    });
+    await expect(
+      adapter.executeDetailsForRelease(() => "SELECT 1", [], "stale"),
+    ).rejects.toBeInstanceOf(DuckDbReleaseConflictError);
+    expect(detailsOpened).not.toHaveBeenCalled();
+    expect(actualLease.release).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["legacy", "pv_events"],
+    ["details", "pv_event_details"],
+  ] as const)(
+    "queries the profile-owned details table (%s)",
+    async (profile, table) => {
+      const calls: string[] = [];
+      const acquired = lease(async (sql, params) => {
+        calls.push(sql);
+        if (sql.startsWith("SET")) return [];
+        expect(params).toEqual([42]);
+        return [{ id: 42 }];
+      });
+      const actualLease = {
+        ...acquired,
+        releaseId: "pinned",
+        detailsDataset: table,
+      };
+      const adapter = new DuckDbQueryAdapter({
+        acquire: async () => actualLease,
+      });
+      await expect(
+        adapter.executeDetailsForRelease(
+          (dataset) => `SELECT * FROM ${dataset} WHERE event_id = ?`,
+          [42],
+          "pinned",
+        ),
+      ).resolves.toEqual([{ id: 42 }]);
+      expect(calls[1]).toContain(`FROM ${table}`);
+      expect(actualLease.release).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("releases detail leases and normalizes failures without exposing them", async () => {
+    const release = vi.fn();
+    const acquired = {
+      ...lease(async (sql) => {
+        if (sql.startsWith("SET")) return [];
+        throw new Error("private failure");
+      }),
+      release,
+      releaseId: "pinned",
+    };
+    const adapter = new DuckDbQueryAdapter({ acquire: async () => acquired });
+    await expect(
+      adapter.executeDetailsForRelease(() => "SELECT 1", [], "pinned"),
+    ).rejects.toMatchObject({
+      code: "DUCKDB_QUERY",
+      message: "DuckDB query failed",
+    });
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("reports a deferred detail release failure as unavailable, not as a query failure", async () => {
+    const release = vi.fn();
+    const acquired = {
+      ...lease(async () => []),
+      release,
+      releaseId: "pinned",
+      withDetailsConnection: async () => {
+        throw new DuckDbReleaseError("private object path");
+      },
+    };
+    const adapter = new DuckDbQueryAdapter({ acquire: async () => acquired });
+    await expect(
+      adapter.executeDetailsForRelease(() => "SELECT 1", [], "pinned"),
+    ).rejects.toMatchObject({
+      code: "DUCKDB_DEPENDENCY",
+      message: "DuckDB dependency unavailable",
+    });
+    expect(release).toHaveBeenCalledOnce();
   });
 
   it("logs staging-only bounded timings without query data on success and failure", async () => {

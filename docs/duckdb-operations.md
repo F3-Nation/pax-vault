@@ -1,10 +1,10 @@
 # DuckDB Phase 3 operations runbook
 
 This runbook documents aspirational Phase-3 production cutover gates for the
-read-only `pv_*` DuckDB release consumer. The currently adopted effort is a
-breakable, staging-only, new-only POC; production remains BigQuery, and no
-production release or cutover is claimed. These production gates do not imply
-backward compatibility for the staging consumer. It complements
+read-only `pv_*` DuckDB release consumer. The current effort remains a
+staging-only POC; production remains BigQuery, and no production release or
+cutover is claimed. The staging consumer accepts exactly the legacy ten-dataset
+profile or the split eleven-dataset profile described here. It complements
 [`duckdb-migration-plan.md`](./duckdb-migration-plan.md) and the producer
 contract in [`duckdb-producer-contract.md`](./duckdb-producer-contract.md).
 
@@ -19,15 +19,16 @@ ticket. Do not replace placeholders in this document with guessed values.
 Before scheduling a rollout, the release owner and platform/SRE must attach
 evidence that:
 
-- [ ] For the current staging POC, the candidate uses `pv-release.v2` and
-      contains exactly ten datasets: the historical nine plus `pv_attendance`;
-      schema versions include `pv_pax.v3` and `pv_attendance.v1`. The local
-      mirror's nine-dataset sample is historical and is not a valid candidate.
-      Preserve immutable generation-pinned objects, complete manifests,
-      ordered-column fingerprints, and v2 read metadata.
+- [ ] The candidate uses `pv-release.v2` and exactly one supported profile:
+      ten core datasets with `pv_events.v2` (legacy rollback), or those ten
+      datasets plus mandatory `pv_event_details.v1` with `pv_events.v3` (split).
+      Both include `pv_attendance.v1` and `pv_territories`; the historical
+      nine-dataset mirror is invalid. Preserve immutable generation-pinned
+      objects, complete manifests, ordered-column fingerprints, and v2 read
+      metadata. Do not publish a split profile without the detail dataset.
 - [ ] For future production rollout, complete the serving-revision compatibility
-      and overlap gates below; they are not a backward-compatibility promise or
-      a requirement to preserve older releases in the staging POC.
+      and overlap gates below. Retain immutable legacy releases for the
+      supported rollback profile and configured recovery window.
 - [ ] For v2, release and entries use
       `ordered-sequential-per-dataset` plus matching `sourceOrder`; every entry
       and manifest carries its dataset's UTC read timestamp. Do not require a
@@ -38,17 +39,39 @@ evidence that:
       parity/conflict checks and source freshness/lag targets are deferred to
       rollout, not prerequisites for this implementation.
 - [ ] Future production candidate passes the compatibility registry for the
-      new and every serving revision; the staging POC remains strict new-only.
+      new and every serving revision; the staging POC remains limited to the
+      two exact profiles above.
 - [ ] The consumer has passed corruption, generation-change, pointer-race,
       failed-ADC, no-LKG, refresh-concurrency, and old/new revision overlap
       tests.
 - [ ] Native DuckDB packaging and startup extraction have been tested in the
       deployed Node runtime; no Edge/runtime path imports the native adapter.
-- [ ] The 328.61 MB compressed Parquet release (including the 322.88 MB events
-      object) fits the configured 536,870,912-byte release and 402,653,184-byte
-      per-object budgets. Measure active plus staging databases, download
+- [ ] For split releases, startup validates all eleven manifests/declarations
+      but downloads only the ten core datasets. The mandatory detail parquet
+      and golden payloads are fetched generation-pinned from that same immutable
+      release on the first authenticated details request. Sidecar physical
+      schema, row counts, and golden are validated independently; failure leaves
+      core readiness intact and uses a five-second retry cooldown.
+- [ ] At most one split-profile sidecar is loading or retained process-wide;
+      an overlapping newer release may continue serving core data but cannot
+      load another sidecar until the prior sidecar and its files drain.
+- [ ] Event pages render SSR header/roster first, then request detail content
+      after hydration. The client binds the details response to its `releaseId`
+      token; a 409 release conflict requires refreshing the page rather than
+      displaying mismatched event content.
+- [ ] The previously measured legacy release was 328.61 MB compressed (including
+      a 322.88 MB events object). Measure the split release's actual core and
+      detail sizes against the configured 536,870,912-byte combined release and
+      402,653,184-byte per-object budgets. Measure active plus staging databases, download
       buffers, startup, and revision overlap against Cloud Run memory and
       ephemeral-storage limits; compressed budgets do not prove runtime capacity.
+- [ ] Capacity-test staging's 512 MiB App Hosting memory against the 384 MB
+      per-DuckDB-handle memory limit, compressed release files in `/tmp`, and
+      overlapping candidate/active revisions. Core and lazy detail sidecars can
+      occupy separate handles, while refresh may overlap release directories.
+      This needs measurement and likely a staging memory increase before
+      deployment; do not silently change hosting config. No always-allocated CPU
+      or `minInstances` change is part of this phase.
 - [ ] BigQuery remains healthy for BQ-owned capabilities and is available as
       the explicitly controlled cutback target for migrated capabilities. This
       is not silent fallback behavior.
@@ -65,17 +88,19 @@ The serving runtime uses ADC and the GCS SDK. It does not use HMAC keys,
 DuckDB `httpfs`, embedded credentials, or request-time remote scans.
 
 For the staging POC, configure bucket `f3-analytics-nonprod`, release prefix
-`pax-vault/releases`, and control object `pax-vault/current.json`. The live
-staging pointer currently names `20261011T110818.964799Z-049e3ff018264f8eb14fd84cc84d1567`,
-a ten-dataset `pv-release.v2` release. The checked-in local mirror is a
+`pax-vault/releases`, and control object `pax-vault/current.json`. The previously
+recorded staging pointer named `20261011T110818.964799Z-049e3ff018264f8eb14fd84cc84d1567`,
+a legacy ten-dataset `pv-release.v2` release. The checked-in local mirror is a
 historical nine-dataset sample, not a current candidate. Record live GCS
 reads/generations and CAS evidence separately; the staging pointer is not a
 production release. Auth allowlist, PAX identity, and region permission
 reads use the v2 DuckDB release when `DUCKDB_ENABLED=true` and
 `DUCKDB_AUTH_ENABLED` is unset or true; otherwise they use BigQuery. A custom
 `AUTH_EMAIL_TABLE` is incompatible with DuckDB auth. Errors on the enabled
-DuckDB path do not silently fall back. Event details use the v2 DuckDB release
-when the events capability flag is on, and BigQuery when that flag is off.
+DuckDB path do not silently fall back. Event details use the selected DuckDB
+release profile when the events capability flag is on, and BigQuery when that
+flag is off. In the split profile, core event/roster data is available after
+startup while detail payloads are loaded lazily after authentication.
 Preferences and 8-box storage/writes remain BigQuery; 8-box owner-display reads
 also remain BigQuery. Scheduled ETL still reads `public.*`.
 Private `pv_pax` email/roles are never emitted by analytical projections.
@@ -129,8 +154,10 @@ The producer owner must provide a release handoff before application rollout:
 
 - `<RELEASE_ID>`, `<RELEASE_SEQUENCE>`, `<POINTER_OBJECT_GENERATION>`,
   `<MANIFEST_SHA256>`;
-- v2 contract version and read policy/order plus each dataset entry/manifest
-  UTC timestamp; reject unsupported v1 release contracts;
+- exact profile: legacy ten datasets with `pv_events.v2`, or split ten core
+  datasets plus mandatory `pv_event_details.v1` with `pv_events.v3`; include
+  the v2 contract version and read policy/order plus each dataset
+  entry/manifest UTC timestamp; reject unsupported v1 release contracts;
 - manifest/object generations, CRC32C values, sizes, row counts, schema
   fingerprints, and supported contract/schema versions; and
 - the immutable URI, generation, query, canonicalization identifier, and
@@ -186,7 +213,8 @@ the flag state and observed release tag at each step:
    `DUCKDB_AUTH_ENABLED` (unset/true uses DuckDB; off uses BigQuery; errors do
    not silently fall back). Keep preferences, 8-box storage/writes, 8-box
    owner-display reads, and other BQ-owned boundaries on BigQuery. Event detail
-   follows the events flag: v2 DuckDB on, BigQuery off.
+   follows the events flag: the selected DuckDB profile on, BigQuery off. Split
+   profile detail payloads are lazy-loaded after authentication.
 3. **Observe:** watch readiness, refresh/activation errors, 503s, query
    latency/errors, release skew, LKG age, memory, ephemeral storage, and
    shadow parity for the agreed observation window `<OBSERVATION_WINDOW>`.
@@ -319,13 +347,18 @@ timestamp. Use test identities and non-sensitive queries.
 
 ### Resource/query checks
 
-- [ ] The staging POC release contains exactly ten datasets, including
+- [ ] The staging POC release contains exactly one supported profile: legacy
+      ten datasets with `pv_events.v2`, or split ten core datasets plus
+      mandatory `pv_event_details.v1` with `pv_events.v3`. Both include
       `pv_attendance.v1`; `pv_pax.v3` includes nullable `lifetime_posts` and
-      `lifetime_qs` after `roles`. Validate full attendance column
-      order/types/nullability from the producer contract. Do not use the
-      historical nine-dataset mirror as a current smoke-test candidate.
+      `lifetime_qs` after `roles`. Validate column order/types/nullability from
+      the producer contract. Do not use the historical nine-dataset mirror.
 - [ ] Authenticated PAX, region, area, sector, AO, event, and search paths
       return expected shape/order for the enabled capability.
+- [ ] For split releases, verify an authenticated event detail request downloads
+      and validates the sidecar once, from the same release ID used for the core
+      response. Verify UI hydration does not show details from a mismatched
+      release token; on HTTP 409, refresh/reload to reconcile.
 - [ ] Mixed paths obtain auth allowlist, PAX identity, and region permissions
       from v2 DuckDB when the auth flags enable it and from BigQuery when they
       disable it; DuckDB errors do not silently fall back. Preferences,
@@ -357,8 +390,9 @@ timestamp, owner, and environment is incomplete.
 - [ ] Candidate release ID/sequence, pointer generation before/after, manifest
       SHA-256, contract/schema registry version, and retention decision.
 - [ ] Staging POC producer metadata (read order/policy and every dataset
-      timestamp), exact ten-dataset inventory, object generations/CRC32C, and transport
-      golden list/digests. Source parity/conflict checks, bounded drift checks,
+      timestamp), selected exact profile, object generations/CRC32C, and
+      transport golden list/digests. For split profiles, confirm lazy payload
+      loading and same-release pinning. Source parity/conflict checks, bounded drift checks,
       and freshness/lag targets are rollout follow-ups, not claimed evidence.
 - [ ] Staging native boot, ADC read/deny, refresh/LKG, resource peak, query,
       and flag cutback results with timestamps and request IDs.

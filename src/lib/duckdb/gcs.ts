@@ -20,7 +20,7 @@ import {
   crc32cUpdate,
   crc32cBase64,
 } from "./validation";
-import { datasetsFor, DuckDbDataset } from "./constants";
+import { datasetsForProfile, DuckDbDataset } from "./constants";
 import { assertDuckDbServerRuntime } from "./server";
 
 export interface GcsObject {
@@ -163,6 +163,10 @@ export interface ReleaseFiles {
   pointer: Pointer;
   pointerGeneration: string;
 }
+export interface DeferredDetailsFiles {
+  parquetPaths: string[];
+  goldens: Map<string, Buffer>;
+}
 
 export class GcsReleaseRepository {
   constructor(
@@ -176,6 +180,10 @@ export class GcsReleaseRepository {
     const uri = `gs://${this.config.bucket}/${this.config.controlObject}`;
     const object = await this.client.read(uri, undefined, 1024 * 1024);
     try {
+      if (!/^[1-9][0-9]*$/.test(object.generation))
+        throw new DuckDbReleaseError(
+          "pointer object generation must be a positive decimal generation",
+        );
       return {
         pointer: validatePointer(parseJson(object.bytes, "pointer")),
         generation: object.generation,
@@ -237,7 +245,11 @@ export class GcsReleaseRepository {
     const goldens = new Map<DuckDbDataset, Map<string, Buffer>>();
     let totalBytes = 0;
     const releasePaths = new Set<string>();
-    const datasets = datasetsFor(pointer.contractVersion);
+    const datasets = datasetsForProfile(
+      pointer.contractVersion,
+      Object.keys(release.datasets),
+    );
+    const detailsProfile = datasets.length === 11;
     for (const dataset of datasets) {
       const entry = release.datasets[dataset];
       const datasetPrefix = `gs://${this.config.bucket}/${this.config.prefix}/${pointer.releaseId}/${dataset}/`;
@@ -259,6 +271,7 @@ export class GcsReleaseRepository {
       const manifest = validateManifest(
         parseJson(manifestObject.bytes, `${dataset} manifest`),
         dataset,
+        detailsProfile ? "details" : "legacy",
       );
       if (manifest.contractVersion !== release.contractVersion)
         throw new DuckDbReleaseError(
@@ -343,7 +356,10 @@ export class GcsReleaseRepository {
             "DuckDB release exceeds configured download budget",
           );
         totalBytes += file.sizeBytes;
+        const deferredDetails =
+          detailsProfile && dataset === "pv_event_details";
         const output = `${stagingDir ?? ""}/${dataset}-${index}.parquet`;
+        if (deferredDetails) continue;
         outputPaths.push(output);
         if (stagingDir && !this.client.streamTo)
           throw new DuckDbReleaseError(
@@ -356,6 +372,7 @@ export class GcsReleaseRepository {
             output,
             Math.min(
               this.config.maxObjectBytes,
+              file.sizeBytes,
               this.config.maxReleaseBytes - (totalBytes - file.sizeBytes),
             ),
           );
@@ -373,6 +390,7 @@ export class GcsReleaseRepository {
             file.generation,
             Math.min(
               this.config.maxObjectBytes,
+              file.sizeBytes,
               this.config.maxReleaseBytes - (totalBytes - file.sizeBytes),
             ),
           );
@@ -425,12 +443,22 @@ export class GcsReleaseRepository {
             `${dataset} has a duplicate golden path`,
           );
         releasePaths.add(golden.uri);
+        if (
+          golden.sizeBytes > this.config.maxObjectBytes ||
+          totalBytes + golden.sizeBytes > this.config.maxReleaseBytes
+        )
+          throw new DuckDbReleaseError(
+            "DuckDB release exceeds configured golden budget",
+          );
+        totalBytes += golden.sizeBytes;
+        if (detailsProfile && dataset === "pv_event_details") continue;
         const goldenObject = await this.client.read(
           golden.uri,
           golden.generation,
           Math.min(
             this.config.maxObjectBytes,
-            this.config.maxReleaseBytes - totalBytes,
+            golden.sizeBytes,
+            this.config.maxReleaseBytes - (totalBytes - golden.sizeBytes),
           ),
         );
         if (goldenObject.generation !== golden.generation)
@@ -440,14 +468,6 @@ export class GcsReleaseRepository {
           );
         if (goldenObject.bytes.length !== golden.sizeBytes)
           throw new DuckDbReleaseError(`${dataset} golden size mismatch`);
-        if (
-          golden.sizeBytes > this.config.maxObjectBytes ||
-          totalBytes + golden.sizeBytes > this.config.maxReleaseBytes
-        )
-          throw new DuckDbReleaseError(
-            "DuckDB release exceeds configured golden budget",
-          );
-        totalBytes += golden.sizeBytes;
         if (golden.sha256 && sha256(goldenObject.bytes) !== golden.sha256)
           throw new DuckDbReleaseError(`${dataset} golden hash mismatch`);
         if (
@@ -465,7 +485,8 @@ export class GcsReleaseRepository {
           throw new DuckDbReleaseError(`${dataset} golden value mismatch`);
         datasetGoldens.set(golden.name, goldenObject.bytes);
       }
-      parquetPaths.set(dataset, outputPaths);
+      if (!(detailsProfile && dataset === "pv_event_details"))
+        parquetPaths.set(dataset, outputPaths);
       manifests.set(dataset, manifest);
       goldens.set(dataset, datasetGoldens);
     }
@@ -483,5 +504,66 @@ export class GcsReleaseRepository {
       pointer,
       pointerGeneration: expectedPointerGeneration,
     };
+  }
+
+  /** Downloads the validated immutable event-detail artifacts on demand. */
+  async downloadDeferredDetails(
+    releaseFiles: ReleaseFiles,
+    stagingDir: string,
+  ): Promise<DeferredDetailsFiles> {
+    assertDuckDbServerRuntime("GcsReleaseRepository.downloadDeferredDetails");
+    const manifest = releaseFiles.manifests.get("pv_event_details");
+    if (!manifest)
+      throw new DuckDbReleaseError("release has no deferred event details");
+    const dataset = "pv_event_details";
+    const parquetPaths: string[] = [];
+    const goldens = new Map<string, Buffer>();
+    for (const [index, file] of manifest.objects.entries()) {
+      const output = `${stagingDir}/${dataset}-${index}.parquet`;
+      if (!this.client.streamTo)
+        throw new DuckDbReleaseError(
+          "staged release download requires generation-pinned streaming support",
+        );
+      const streamed = await this.client.streamTo(
+        file.uri,
+        file.generation,
+        output,
+        Math.min(this.config.maxObjectBytes, file.sizeBytes),
+      );
+      if (
+        streamed.generation !== file.generation ||
+        streamed.sizeBytes !== file.sizeBytes ||
+        streamed.crc32c !== file.crc32c
+      )
+        throw new DuckDbReleaseError(`${dataset} streamed integrity mismatch`);
+      parquetPaths.push(output);
+    }
+    for (const golden of manifest.goldens) {
+      const object = await this.client.read(
+        golden.uri,
+        golden.generation,
+        Math.min(this.config.maxObjectBytes, golden.sizeBytes),
+      );
+      if (object.generation !== golden.generation)
+        throw new DuckDbReleaseError(
+          `${dataset} golden generation changed`,
+          "pointer-generation-race",
+        );
+      if (object.bytes.length !== golden.sizeBytes)
+        throw new DuckDbReleaseError(`${dataset} golden size mismatch`);
+      if (golden.sha256 && sha256(object.bytes) !== golden.sha256)
+        throw new DuckDbReleaseError(`${dataset} golden hash mismatch`);
+      if ("crc32c" in golden && golden.crc32c !== crc32cBase64(object.bytes))
+        throw new DuckDbReleaseError(`${dataset} golden CRC32C mismatch`);
+      if (
+        golden.canonicalValue !== undefined &&
+        !canonicalJson(parseJson(object.bytes, `${dataset} golden`)).equals(
+          canonicalJson(golden.canonicalValue),
+        )
+      )
+        throw new DuckDbReleaseError(`${dataset} golden value mismatch`);
+      goldens.set(golden.name, object.bytes);
+    }
+    return { parquetPaths, goldens };
   }
 }

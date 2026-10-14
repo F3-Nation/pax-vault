@@ -5,7 +5,12 @@ import { DuckDbConfig } from "./config";
 import { DuckDbUnavailableError, DuckDbReleaseError } from "./errors";
 import { GcsReleaseRepository, ReleaseFiles } from "./gcs";
 import { assertDuckDbServerRuntime } from "./server";
-import { schemaFor } from "./constants";
+import {
+  DUCKDB_DATASETS,
+  DUCKDB_DETAILS_DATASET,
+  datasetsForProfile,
+  schemaFor,
+} from "./constants";
 import {
   canonicalDuckDbRows,
   canonicalJson,
@@ -36,6 +41,43 @@ export interface CandidateOpener {
 export const nativeCandidateOpener: CandidateOpener = {
   async open(dbPath, release, config) {
     assertDuckDbServerRuntime("nativeCandidateOpener");
+    const inventory = Object.keys(release.release?.datasets ?? {});
+    let fullProfile: "legacy" | "details";
+    try {
+      fullProfile =
+        datasetsForProfile(release.pointer.contractVersion, inventory)
+          .length === 11
+          ? "details"
+          : "legacy";
+    } catch {
+      throw new DuckDbReleaseError(
+        "release inventory does not match a supported dataset profile",
+        "integrity-schema",
+      );
+    }
+    const materialized = [...release.parquetPaths.keys()].sort();
+    const coreKeys = [...DUCKDB_DATASETS].sort();
+    const selectedAsCore =
+      materialized.length === coreKeys.length &&
+      materialized.every((key, index) => key === coreKeys[index]);
+    const selectedAsDetails =
+      fullProfile === "details" &&
+      materialized.length === 1 &&
+      materialized[0] === DUCKDB_DETAILS_DATASET;
+    if (
+      (fullProfile === "legacy" && !selectedAsCore) ||
+      (fullProfile === "details" && !selectedAsCore && !selectedAsDetails)
+    )
+      throw new DuckDbReleaseError(
+        "materialized datasets do not match the selected release profile",
+        "integrity-schema",
+      );
+    if (selectedAsDetails && !release.manifests?.has(DUCKDB_DETAILS_DATASET))
+      throw new DuckDbReleaseError(
+        "event details sidecar is missing its validated manifest",
+        "integrity-schema",
+      );
+    const schemaProfile = fullProfile === "details" ? "details" : "legacy";
     // Dynamic import is intentional: disabled/config-invalid paths must not load
     // the native binding, and this module is server-only.
     const { DuckDBInstance } = await import("@duckdb/node-api");
@@ -46,7 +88,11 @@ export const nativeCandidateOpener: CandidateOpener = {
       const stagingConnection = await writable.connect();
       try {
         for (const [dataset, paths] of release.parquetPaths) {
-          const schema = schemaFor(dataset, release.pointer.contractVersion);
+          const schema = schemaFor(
+            dataset,
+            release.pointer.contractVersion,
+            schemaProfile,
+          );
           const columns = Array.isArray(schema.columns)
             ? schema.columns
             : Object.entries(schema.columns).map(([name, spec]) => ({
@@ -94,7 +140,11 @@ export const nativeCandidateOpener: CandidateOpener = {
       const connection = await instance.connect();
       try {
         for (const dataset of release.parquetPaths.keys()) {
-          const schema = schemaFor(dataset, release.pointer.contractVersion);
+          const schema = schemaFor(
+            dataset,
+            release.pointer.contractVersion,
+            schemaProfile,
+          );
           const columns = Array.isArray(schema.columns)
             ? schema.columns
             : Object.entries(schema.columns).map(([name, spec]) => ({
@@ -132,7 +182,11 @@ export const nativeCandidateOpener: CandidateOpener = {
               );
           if (
             sha256(canonicalJson(actualSchema)) !==
-            schemaFingerprint(dataset, release.pointer.contractVersion)
+            schemaFingerprint(
+              dataset,
+              release.pointer.contractVersion,
+              schemaProfile,
+            )
           )
             throw new DuckDbReleaseError(
               `${dataset} actual schema fingerprint mismatch`,
@@ -260,6 +314,8 @@ export const nativeCandidateOpener: CandidateOpener = {
 
 interface Active {
   handle: DuckDbHandle;
+  release: ReleaseFiles;
+  profile: "legacy" | "details";
   releaseId: string;
   releaseSequence: number;
   activatedAt: number;
@@ -268,6 +324,23 @@ interface Active {
   retired: boolean;
   directory: string;
   pointerGeneration: string;
+  detailsHandle?: DuckDbHandle;
+  detailsDirectory?: string;
+  detailsFlight?: Promise<DuckDbHandle>;
+  detailsFailureAt?: number;
+  detailsReservation?: symbol;
+  cleanupFlight?: Promise<void>;
+  handleClosed?: boolean;
+  detailsHandleClosed?: boolean;
+}
+
+interface PendingCleanup {
+  handle?: DuckDbHandle;
+  directory: string;
+  handleClosed: boolean;
+  releaseDetailsOwner?: Active;
+  detailsReservation?: symbol;
+  flight?: Promise<void>;
 }
 
 export interface DuckDbRuntimeStatus {
@@ -292,8 +365,12 @@ export interface DuckDbRuntimeStatus {
 export interface DuckDbLease {
   readonly releaseId: string;
   readonly releaseSequence: number;
+  readonly detailsDataset: "pv_events" | "pv_event_details";
   release(): void;
   withConnection<T>(
+    fn: (connection: DuckDbQueryConnection) => Promise<T>,
+  ): Promise<T>;
+  withDetailsConnection<T>(
     fn: (connection: DuckDbQueryConnection) => Promise<T>,
   ): Promise<T>;
 }
@@ -314,6 +391,9 @@ export class DuckDbRuntime {
   private lastRefreshDurationMs?: number;
   private lastRefreshStageDurationsMs?: Record<string, number>;
   private readonly retiredCleanup = new Set<Active>();
+  private readonly pendingCleanup = new Set<PendingCleanup>();
+  private detailsOwner?: Active;
+  private removeDirectory: typeof rm = rm;
   private refreshWaiterCount = 0;
   private lastRefreshRejectionCategory?: string;
 
@@ -373,6 +453,7 @@ export class DuckDbRuntime {
       } catch (cause) {
         throw new DuckDbUnavailableError(undefined, { cause });
       }
+      if (this.closed) throw new DuckDbUnavailableError();
     } else if (Date.now() - this.lastAttempt >= this.config.refreshTtlMs) {
       // Refresh is deliberately not awaited: LKG leases continue serving.
       void this.refresh().catch(() => undefined);
@@ -384,6 +465,7 @@ export class DuckDbRuntime {
       throw new DuckDbUnavailableError(
         "DuckDB last-known-good release has expired",
       );
+    if (this.closed || active.retired) throw new DuckDbUnavailableError();
     active.leases += 1;
     let released = false;
     let operations = 0;
@@ -392,41 +474,152 @@ export class DuckDbRuntime {
       active.leases -= 1;
       void this.cleanup(active);
     };
+    const withHandle = async <T>(
+      handlePromise: () => Promise<DuckDbHandle>,
+      fn: (connection: DuckDbQueryConnection) => Promise<T>,
+    ): Promise<T> => {
+      if (released || this.closed) throw new DuckDbUnavailableError();
+      // Guard synchronously before awaiting either lazy initialization or connect.
+      operations += 1;
+      let connection: DuckDbQueryConnection | undefined;
+      try {
+        const handle = await handlePromise();
+        connection = await handle.connect();
+        return await fn(connection);
+      } finally {
+        try {
+          connection?.close();
+        } finally {
+          operations -= 1;
+          finishLease();
+        }
+      }
+    };
     return {
       releaseId: active.releaseId,
       releaseSequence: active.releaseSequence,
+      detailsDataset:
+        active.profile === "legacy" ? "pv_events" : "pv_event_details",
       release: () => {
         if (released) return;
         released = true;
         finishLease();
       },
-      withConnection: async <T>(
-        fn: (connection: DuckDbQueryConnection) => Promise<T>,
-      ) => {
-        if (released) throw new DuckDbUnavailableError();
-        // This synchronous increment is the operation guard. It happens before
-        // the async native connection open, so release cannot retire the lease
-        // in the gap between admission and connection creation.
-        operations += 1;
-        let connection: DuckDbQueryConnection | undefined;
-        try {
-          connection = await active.handle.connect();
-          return await fn(connection);
-        } finally {
-          try {
-            connection?.close();
-          } finally {
-            operations -= 1;
-            finishLease();
-          }
-        }
-      },
+      withConnection: (fn) => withHandle(async () => active.handle, fn),
+      withDetailsConnection: (fn) =>
+        withHandle(
+          () =>
+            active.profile === "legacy"
+              ? Promise.resolve(active.handle)
+              : this.ensureDetailsHandle(active),
+          fn,
+        ),
     };
+  }
+
+  private async ensureDetailsHandle(active: Active): Promise<DuckDbHandle> {
+    if (this.closed) throw new DuckDbUnavailableError();
+    if (active.detailsHandle) return active.detailsHandle;
+    if (active.detailsFlight) return active.detailsFlight;
+    if (this.detailsOwner && this.detailsOwner !== active)
+      throw new DuckDbUnavailableError(
+        "DuckDB event details are owned by another release",
+      );
+    if (
+      [...this.pendingCleanup].some(
+        (pending) => pending.releaseDetailsOwner === active,
+      )
+    )
+      throw new DuckDbUnavailableError(
+        "DuckDB event details cleanup is still pending",
+      );
+    if (
+      active.detailsFailureAt !== undefined &&
+      Date.now() - active.detailsFailureAt < 5_000
+    )
+      throw new DuckDbUnavailableError("DuckDB event details are cooling down");
+    const manifest = active.release.manifests.get(DUCKDB_DETAILS_DATASET);
+    if (!manifest)
+      throw new DuckDbReleaseError(
+        "validated event details manifest is unavailable",
+        "integrity-schema",
+      );
+
+    const reservation = Symbol("duckdb-details-owner");
+    this.detailsOwner = active;
+    active.detailsReservation = reservation;
+    const attemptDirectory = join(active.directory, `.details-${randomUUID()}`);
+    const flight = (async () => {
+      let candidate: DuckDbHandle | undefined;
+      try {
+        await mkdir(attemptDirectory, { recursive: false });
+        const downloaded = await this.repository.downloadDeferredDetails(
+          active.release,
+          attemptDirectory,
+        );
+        if (this.closed) throw new DuckDbUnavailableError();
+        const sidecar: ReleaseFiles = {
+          ...active.release,
+          manifests: new Map([[DUCKDB_DETAILS_DATASET, manifest]]),
+          parquetPaths: new Map([
+            [DUCKDB_DETAILS_DATASET, downloaded.parquetPaths],
+          ]),
+          goldens: new Map([[DUCKDB_DETAILS_DATASET, downloaded.goldens]]),
+        };
+        candidate = await this.opener.open(
+          join(attemptDirectory, "event-details.duckdb"),
+          sidecar,
+          this.config,
+        );
+        if (this.closed) {
+          await candidate.close();
+          candidate = undefined;
+          throw new DuckDbUnavailableError();
+        }
+        active.detailsHandle = candidate;
+        active.detailsDirectory = attemptDirectory;
+        active.detailsFailureAt = undefined;
+        candidate = undefined;
+        return active.detailsHandle;
+      } catch (cause) {
+        active.detailsFailureAt = Date.now();
+        await this.disposePendingCleanup(
+          candidate,
+          attemptDirectory,
+          active,
+          reservation,
+        );
+        const category =
+          cause instanceof DuckDbReleaseError
+            ? cause.rejectionCategory
+            : cause instanceof DuckDbUnavailableError
+              ? "unavailable"
+              : "native-open";
+        this.reporter?.(
+          new DuckDbReleaseError(
+            "deferred detail initialization failed",
+            category,
+          ),
+          { outcome: "failure", rejectionCategory: category },
+        );
+        throw new DuckDbReleaseError(
+          "deferred detail initialization failed",
+          category,
+        );
+      }
+    })();
+    active.detailsFlight = flight;
+    try {
+      return await flight;
+    } finally {
+      if (active.detailsFlight === flight) active.detailsFlight = undefined;
+    }
   }
 
   async refresh(): Promise<void> {
     assertDuckDbServerRuntime("DuckDbRuntime.refresh");
     await this.retryRetiredCleanup();
+    if (this.closed) throw new DuckDbUnavailableError();
     this.refreshWaiterCount++;
     if (this.refreshFlight) {
       try {
@@ -468,13 +661,14 @@ export class DuckDbRuntime {
       `.candidate-${randomUUID()}`,
     );
     await mkdir(candidateDir, { recursive: true });
+    let candidate: DuckDbHandle | undefined;
     try {
       const { pointer, generation } = await stage("read_pointer", () =>
         this.repository.readPointer(),
       );
       if (this.active?.pointerGeneration === generation) {
         this.active.lastPointerValidatedAt = Date.now();
-        await rm(candidateDir, { recursive: true, force: true });
+        await this.disposePendingCleanup(undefined, candidateDir);
         this.recordRefreshTiming(refreshStartedAt, stages);
         return;
       }
@@ -489,23 +683,32 @@ export class DuckDbRuntime {
         );
       });
       const dbPath = join(candidateDir, "release.duckdb");
-      const candidate = await stage("open_validate", () =>
+      candidate = await stage("open_validate", () =>
         this.opener.open(dbPath, release, this.config),
       );
+      if (this.closed) throw new DuckDbUnavailableError();
       if (
         !(await stage("activation_check", () =>
           this.repository.isPointerCurrent(release.pointerGeneration),
         ))
       ) {
-        await candidate.close();
         throw new DuckDbReleaseError(
           "pointer changed immediately before activation",
           "pointer-generation-race",
         );
       }
+      if (this.closed) throw new DuckDbUnavailableError();
       const prior = this.active;
       this.active = {
         handle: candidate,
+        release,
+        profile:
+          datasetsForProfile(
+            release.pointer.contractVersion,
+            Object.keys(release.release.datasets),
+          ).length === 11
+            ? "details"
+            : "legacy",
         releaseId: release.pointer.releaseId,
         releaseSequence: release.pointer.releaseSequence,
         activatedAt: Date.now(),
@@ -515,6 +718,7 @@ export class DuckDbRuntime {
         directory: candidateDir,
         pointerGeneration: release.pointerGeneration,
       };
+      candidate = undefined;
       if (prior) {
         prior.retired = true;
         void this.cleanup(prior);
@@ -525,7 +729,8 @@ export class DuckDbRuntime {
       });
     } catch (cause) {
       this.recordRefreshTiming(refreshStartedAt, stages, {}, "failure");
-      await rm(candidateDir, { recursive: true, force: true });
+      await this.disposePendingCleanup(candidate, candidateDir);
+      candidate = undefined;
       if (
         cause instanceof DuckDbReleaseError ||
         cause instanceof DuckDbUnavailableError
@@ -541,26 +746,122 @@ export class DuckDbRuntime {
 
   private async cleanup(active: Active): Promise<void> {
     if (!active.retired || active.leases > 0) return;
+    if (active.detailsFlight) return;
+    if (this.detailsOwner === active && !active.detailsHandle) return;
+    if (active.cleanupFlight) return active.cleanupFlight;
+    const detailsReservation = active.detailsReservation;
+    const cleanupFlight = (async () => {
+      try {
+        if (!active.handleClosed) {
+          await active.handle.close();
+          active.handleClosed = true;
+        }
+        if (active.detailsHandle && !active.detailsHandleClosed) {
+          await active.detailsHandle.close();
+          active.detailsHandleClosed = true;
+        }
+        await this.removeDirectory(active.directory, {
+          recursive: true,
+          force: true,
+        });
+        this.retiredCleanup.delete(active);
+        if (
+          this.detailsOwner === active &&
+          active.detailsReservation === detailsReservation
+        ) {
+          this.detailsOwner = undefined;
+          active.detailsReservation = undefined;
+        }
+      } catch {
+        this.retiredCleanup.add(active);
+        this.lastCleanupFailureAt = Date.now();
+        this.reporter?.(
+          new DuckDbReleaseError(
+            "DuckDB resource cleanup failed",
+            "native-open",
+          ),
+          { event: "duckdb_cleanup", outcome: "failure" },
+        );
+        reportDuckDbRuntimeTelemetry({
+          event: "duckdb_cleanup",
+          outcome: "failure",
+          releaseId: active.releaseId,
+          generation: active.pointerGeneration,
+          pointerAgeMs: Math.max(0, Date.now() - active.lastPointerValidatedAt),
+          lkgState: this.status().lkgState,
+        });
+      }
+    })();
+    active.cleanupFlight = cleanupFlight;
     try {
-      await active.handle.close();
-      await rm(active.directory, { recursive: true, force: true });
-      this.retiredCleanup.delete(active);
-    } catch (cause) {
-      this.retiredCleanup.add(active);
-      this.lastCleanupFailureAt = Date.now();
-      this.reporter?.(cause);
-      reportDuckDbRuntimeTelemetry({
-        event: "duckdb_cleanup",
-        outcome: "failure",
-        releaseId: active.releaseId,
-        generation: active.pointerGeneration,
-        pointerAgeMs: Math.max(0, Date.now() - active.lastPointerValidatedAt),
-        lkgState: this.status().lkgState,
-      });
+      await cleanupFlight;
+    } finally {
+      if (active.cleanupFlight === cleanupFlight)
+        active.cleanupFlight = undefined;
+    }
+  }
+  private async disposePendingCleanup(
+    handle: DuckDbHandle | undefined,
+    directory: string,
+    releaseDetailsOwner?: Active,
+    detailsReservation?: symbol,
+  ): Promise<void> {
+    const pending: PendingCleanup = {
+      handle,
+      directory,
+      handleClosed: false,
+      releaseDetailsOwner,
+      detailsReservation,
+    };
+    this.pendingCleanup.add(pending);
+    await this.retryOnePendingCleanup(pending);
+  }
+  private async retryOnePendingCleanup(pending: PendingCleanup): Promise<void> {
+    if (pending.flight) return pending.flight;
+    const flight = (async () => {
+      try {
+        if (pending.handle && !pending.handleClosed) {
+          await pending.handle.close();
+          pending.handleClosed = true;
+        }
+        await this.removeDirectory(pending.directory, {
+          recursive: true,
+          force: true,
+        });
+        this.pendingCleanup.delete(pending);
+        if (
+          pending.releaseDetailsOwner &&
+          this.detailsOwner === pending.releaseDetailsOwner &&
+          pending.releaseDetailsOwner.detailsReservation ===
+            pending.detailsReservation
+        ) {
+          this.detailsOwner = undefined;
+          pending.releaseDetailsOwner.detailsReservation = undefined;
+          if (pending.releaseDetailsOwner.retired)
+            await this.cleanup(pending.releaseDetailsOwner);
+        }
+      } catch {
+        this.lastCleanupFailureAt = Date.now();
+        this.reporter?.(
+          new DuckDbReleaseError(
+            "DuckDB candidate cleanup failed",
+            "native-open",
+          ),
+          { event: "duckdb_cleanup", outcome: "failure" },
+        );
+      }
+    })();
+    pending.flight = flight;
+    try {
+      await flight;
+    } finally {
+      if (pending.flight === flight) pending.flight = undefined;
     }
   }
   private async retryRetiredCleanup(): Promise<void> {
     for (const active of [...this.retiredCleanup]) await this.cleanup(active);
+    for (const pending of [...this.pendingCleanup])
+      await this.retryOnePendingCleanup(pending);
   }
   private recordRefreshFailure(cause: unknown): void {
     this.refreshFailureCount++;

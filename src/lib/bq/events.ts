@@ -1,7 +1,12 @@
 import { queryBigQuery } from "@/lib/db";
 import { EventData, EventDetails } from "@/lib/types";
 import { getDuckDbRuntime } from "@/lib/duckdb/factory";
-import { DuckDbQueryAdapter, selectDuckDbOrLegacy } from "@/lib/duckdb/query";
+import {
+  DuckDbQueryAdapter,
+  isDuckDbEnabled,
+  selectDuckDbOrLegacy,
+} from "@/lib/duckdb/query";
+import { DuckDbReleaseConflictError } from "@/lib/duckdb/errors";
 
 /**
  * Fetch a single event's core data (name, date, AO/region, types, tags, and
@@ -20,9 +25,9 @@ export async function getEventById(
     capability: "events",
     env: process.env,
     duckdb: async () => {
-      const events = await new DuckDbQueryAdapter(
+      const result = await new DuckDbQueryAdapter(
         getDuckDbRuntime(),
-      ).execute<EventData>(
+      ).executeWithRelease<EventData>(
         `SELECT
         event_id AS event_instance_id, event_date, event_name, pax_count,
         fng_count, ao_org_id, ao_name, region_org_id, region_name,
@@ -35,7 +40,7 @@ export async function getEventById(
        LIMIT 1`,
         [eventInstanceId],
       );
-      const event = events[0];
+      const event = result.rows[0];
       if (!event) return null;
 
       // Preferences are intentionally still read from BigQuery: they are user
@@ -53,6 +58,7 @@ export async function getEventById(
       );
       return {
         ...event,
+        eventReleaseId: result.releaseId,
         preferencesJson: preferences[0]?.preferencesJson ?? null,
       };
     },
@@ -115,17 +121,16 @@ export async function getEventById(
 export async function getEventDetails(
   eventInstanceId: number,
   userIdentifier?: string,
+  releaseId?: string,
 ): Promise<EventDetails | null> {
-  return selectDuckDbOrLegacy({
-    capability: "events",
-    env: process.env,
-    duckdb: async () => {
-      // These detail fields are part of the v2 events release. Do not catch or
-      // fall back to BigQuery if this query fails while the capability is on.
-      const results = await new DuckDbQueryAdapter(
-        getDuckDbRuntime(),
-      ).execute<EventDetails>(
-        `SELECT
+  if (releaseId !== undefined) {
+    if (!releaseId) throw new DuckDbReleaseConflictError();
+    if (!isDuckDbEnabled(process.env, "events"))
+      throw new DuckDbReleaseConflictError();
+    const results = await new DuckDbQueryAdapter(
+      getDuckDbRuntime(),
+    ).executeDetailsForRelease<EventDetails>(
+      (dataset) => `SELECT
           event_id AS id,
           description,
           preblast,
@@ -133,17 +138,20 @@ export async function getEventDetails(
           backblast,
           backblast_rich,
           meta
-        FROM pv_events
+        FROM ${dataset}
         WHERE event_id = ?
         LIMIT 1`,
-        [eventInstanceId],
-      );
-      return normalizeEventDetailsMeta(results?.[0] ?? null);
-    },
-    legacy: async () => {
-      // Intentionally selecting rich + plain text variants; consumers decide
-      // which to render. BigQuery remains the disabled-capability path.
-      const query = `-- EVENT DETAILS
+      [eventInstanceId],
+      releaseId,
+    );
+    return normalizeEventDetailsMeta(results?.[0] ?? null);
+  }
+  if (isDuckDbEnabled(process.env, "events"))
+    throw new DuckDbReleaseConflictError();
+
+  // Intentionally selecting rich + plain text variants; consumers decide
+  // which to render. BigQuery remains the disabled-capability path.
+  const query = `-- EVENT DETAILS
         SELECT
           event_id AS id,
           description,
@@ -155,17 +163,15 @@ export async function getEventDetails(
         FROM pv_events
         WHERE event_id = @eventInstanceId
         LIMIT 1
-      `;
+  `;
 
-      const results = await queryBigQuery<EventDetails>(
-        query,
-        userIdentifier,
-        `fetch details for event instance ${eventInstanceId}`,
-        { eventInstanceId },
-      );
-      return normalizeEventDetailsMeta(results?.[0] ?? null);
-    },
-  });
+  const results = await queryBigQuery<EventDetails>(
+    query,
+    userIdentifier,
+    `fetch details for event instance ${eventInstanceId}`,
+    { eventInstanceId },
+  );
+  return normalizeEventDetailsMeta(results?.[0] ?? null);
 }
 
 function normalizeEventDetailsMeta(

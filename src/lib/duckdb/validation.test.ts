@@ -5,6 +5,8 @@ import {
   DUCKDB_V2_CONTRACT_VERSION,
   DUCKDB_V2_DATASETS,
   DUCKDB_V2_SCHEMA_REGISTRY,
+  DUCKDB_DETAILS_PROFILE_DATASETS,
+  DUCKDB_DETAILS_SCHEMA_REGISTRY,
   schemaFor,
 } from "./constants";
 import { DuckDbReleaseError } from "./errors";
@@ -125,6 +127,15 @@ describe("DuckDB release validation", () => {
     expect(validateRelease(release).datasets.pv_attendance.schemaVersion).toBe(
       "pv_attendance.v1",
     );
+    expect(() =>
+      validateRelease({
+        ...release,
+        datasets: {
+          ...datasets,
+          pv_pax: { ...datasets.pv_pax, manifestGeneration: "0" },
+        },
+      }),
+    ).toThrow(/positive decimal generation/);
     expect(() =>
       validateRelease({
         ...release,
@@ -466,6 +477,113 @@ describe("DuckDB release validation", () => {
         {
           ...manifest,
           goldens: [{ ...manifest.goldens[0], crc32c: undefined }],
+        },
+        "pv_pax",
+      ),
+    ).toThrow(/crc32c/);
+  });
+
+  it("accepts only the exact event-details profile and schemas", () => {
+    expect(DUCKDB_DETAILS_PROFILE_DATASETS).toHaveLength(11);
+    const order = "20260101T000000.000000Z";
+    const datasets = Object.fromEntries(
+      DUCKDB_DETAILS_PROFILE_DATASETS.map((dataset) => {
+        const schema = schemaFor(dataset, DUCKDB_CONTRACT_VERSION, "details");
+        return [
+          dataset,
+          {
+            manifestUri: `gs://bucket/releases/r-1/${dataset}/manifest.json`,
+            manifestGeneration: "1",
+            schemaVersion: schema.schemaVersion,
+            sourceReadTimestampUtc: "2026-01-01T00:00:00Z",
+            sourceReadPolicy: "ordered-sequential-per-dataset",
+            sourceOrder: order,
+          },
+        ];
+      }),
+    );
+    const release = {
+      contractVersion: DUCKDB_CONTRACT_VERSION,
+      releaseId: "r-1",
+      createdAtUtc: "2026-01-01T00:00:00Z",
+      producerRevision: "test",
+      sourceReadPolicy: "ordered-sequential-per-dataset",
+      sourceOrder: order,
+      datasets,
+    };
+    expect(
+      validateRelease(release).datasets.pv_event_details.schemaVersion,
+    ).toBe("pv_event_details.v1");
+    expect(DUCKDB_DETAILS_SCHEMA_REGISTRY.pv_events.schemaVersion).toBe(
+      "pv_events.v3",
+    );
+    expect(
+      (
+        DUCKDB_DETAILS_SCHEMA_REGISTRY.pv_events.columns as readonly {
+          name: string;
+        }[]
+      ).map(({ name }) => name),
+    ).not.toContain("description");
+    expect(() =>
+      validateRelease({
+        ...release,
+        datasets: { ...datasets, unknown_dataset: datasets.pv_events },
+      }),
+    ).toThrow(/datasets/);
+    expect(() =>
+      validateRelease({
+        ...release,
+        datasets: {
+          ...datasets,
+          pv_events: { ...datasets.pv_events, schemaVersion: "pv_events.v2" },
+        },
+      }),
+    ).toThrow(/schemaVersion/);
+    expect(DUCKDB_V2_SCHEMA_REGISTRY.pv_events.schemaVersion).toBe(
+      "pv_events.v2",
+    );
+  });
+
+  it("requires canonical CRC32C declarations and positive decimal generations", () => {
+    expect(() => validatePointer({ ...base, manifestGeneration: "0" })).toThrow(
+      /positive decimal generation/,
+    );
+    expect(() =>
+      validatePointer({ ...base, manifestGeneration: "01" }),
+    ).toThrow(/positive decimal generation/);
+    const manifest = datasetManifest("pv_pax");
+    expect(() =>
+      validateManifest(
+        {
+          ...manifest,
+          objects: [{ ...manifest.objects[0], generation: "-1" }],
+        },
+        "pv_pax",
+      ),
+    ).toThrow(/positive decimal generation/);
+    expect(() =>
+      validateManifest(
+        {
+          ...manifest,
+          objects: [{ ...manifest.objects[0], crc32c: "not-crc32" }],
+        },
+        "pv_pax",
+      ),
+    ).toThrow(/crc32c/);
+    expect(() =>
+      validateManifest(
+        {
+          ...manifest,
+          goldens: [{ ...manifest.goldens[0], generation: "0" }],
+        },
+        "pv_pax",
+      ),
+    ).toThrow(/positive decimal generation/);
+    expect(() =>
+      validateManifest(
+        {
+          ...manifest,
+          goldens: [{ ...manifest.goldens[0], crc32c: "AAAAAA=A" }],
         },
         "pv_pax",
       ),

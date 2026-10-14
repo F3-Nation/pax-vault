@@ -6,6 +6,7 @@ import {
   DuckDbQueryAdapter,
   DuckDbParams,
   DuckDbQueryOperation,
+  isDuckDbEnabled,
   selectDuckDbOrLegacy,
 } from "@/lib/duckdb/query";
 import {
@@ -27,8 +28,13 @@ type DuckDbExecutor = <T>(
   operation?: DuckDbQueryOperation,
 ) => Promise<T[]>;
 let injectedDuckDbQuery: DuckDbExecutor | undefined;
-export function setRegionDuckDbQueryForTests(query?: DuckDbExecutor): void {
+let injectedDuckDbReleaseId: string | undefined;
+export function setRegionDuckDbQueryForTests(
+  query?: DuckDbExecutor,
+  releaseId?: string,
+): void {
   injectedDuckDbQuery = query;
+  injectedDuckDbReleaseId = releaseId;
 }
 const executeDuckDb: DuckDbExecutor = async (sql, params, operation) => {
   const adapter = injectedDuckDbQuery
@@ -36,6 +42,23 @@ const executeDuckDb: DuckDbExecutor = async (sql, params, operation) => {
     : new DuckDbQueryAdapter(getDuckDbRuntime());
   if (injectedDuckDbQuery) return injectedDuckDbQuery(sql, params, operation);
   return adapter!.execute(sql, params, { operation });
+};
+const executeDuckDbEvents = async <T>(
+  sql: string,
+  params?: DuckDbParams,
+  operation?: DuckDbQueryOperation,
+) => {
+  if (injectedDuckDbQuery) {
+    return {
+      rows: await injectedDuckDbQuery<T>(sql, params, operation),
+      releaseId: injectedDuckDbReleaseId,
+    };
+  }
+  return new DuckDbQueryAdapter(getDuckDbRuntime()).executeWithRelease<T>(
+    sql,
+    params,
+    { operation },
+  );
 };
 
 function duckEventFilter(regionId: number | null, opts?: StatsFilters) {
@@ -120,7 +143,7 @@ async function getRegionEventsDuckDb(
   const limit =
     Number.isFinite(opts?.limit) && Number(opts?.limit) > 0 ? " LIMIT ?" : "";
   if (limit) f.params.push(Number(opts!.limit));
-  return executeDuckDb<EventData>(
+  const result = await executeDuckDbEvents<EventData>(
     `SELECT event_id AS event_instance_id, event_date, event_name,
       pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name,
       first_f_ind, second_f_ind, third_f_ind, types, tags,
@@ -129,6 +152,10 @@ async function getRegionEventsDuckDb(
     FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC${limit}`,
     f.params,
   );
+  return result.rows.map((event) => ({
+    ...event,
+    eventReleaseId: result.releaseId,
+  }));
 }
 
 /**
@@ -553,7 +580,7 @@ export async function getPageData(
   /** Raw `json_config` for this region; null when never saved. */
   preferencesJson: string | null;
 }> {
-  return selectDuckDbOrLegacy({
+  const page = await selectDuckDbOrLegacy({
     capability: "stats_region",
     env: process.env,
     duckdb: () => getRegionPageDuckDbParity(regionId, userIdentifier, opts),
@@ -1094,6 +1121,19 @@ export async function getPageData(
       };
     },
   });
+  if (
+    isDuckDbEnabled(process.env, "stats_region") !==
+    isDuckDbEnabled(process.env, "events")
+  ) {
+    return {
+      ...page,
+      events: await getEvents(regionId, userIdentifier, {
+        ...opts,
+        limit: 100,
+      }),
+    };
+  }
+  return page;
 }
 
 /** Native DuckDB page read.  This is intentionally separate from the legacy
@@ -1174,7 +1214,7 @@ async function getRegionPageDuckDbParityImpl(
 ): Promise<RegionPageData> {
   const f = duckEventFilter(regionId, opts);
   const allFilter = duckEventFilter(null, opts);
-  const [info, raw, upcoming, kotter, pax] = await timeRegionPhase(
+  const [info, eventResult, upcoming, kotter, pax] = await timeRegionPhase(
     "initial_five_reads",
     () =>
       Promise.all([
@@ -1183,7 +1223,7 @@ async function getRegionPageDuckDbParityImpl(
           [regionId],
           "region_info",
         ),
-        executeDuckDb<any>(
+        executeDuckDbEvents<any>(
           `SELECT event_id AS event_instance_id, event_date, event_name, pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name, first_f_ind, second_f_ind, third_f_ind, types, tags, attendance FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC`,
           f.params,
           "region_events",
@@ -1205,6 +1245,7 @@ async function getRegionPageDuckDbParityImpl(
         ),
       ]),
   );
+  const raw = eventResult.rows;
   let career: any[] = [];
   if (pax.some((p: any) => p.user_id != null)) {
     // Nationwide totals are authoritative in the PAX snapshot; attendance is
@@ -1240,6 +1281,7 @@ async function getRegionPageDuckDbParityImpl(
     process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
   const display = raw.slice(0, 100).map((e: any) => ({
     ...e,
+    eventReleaseId: eventResult.releaseId,
     attendance: (e.attendance ?? []).filter((a: any) => a.fartsack !== true),
     fartsacks: (e.attendance ?? []).filter((a: any) => a.fartsack === true),
   })) as EventData[];

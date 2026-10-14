@@ -6,6 +6,7 @@ vi.mock("@/lib/db", () => ({ queryBigQuery }));
 import {
   buildRegionAchievements,
   getRegionInfo,
+  getEvents,
   getPageData,
   setRegionDuckDbQueryForTests,
 } from "./regions";
@@ -168,6 +169,8 @@ describe("region DuckDB migration", () => {
     queryBigQuery.mockReset();
     setRegionDuckDbQueryForTests(undefined);
     process.env.DUCKDB_ENABLED = "false";
+    delete process.env.DUCKDB_STATS_REGION_ENABLED;
+    delete process.env.DUCKDB_EVENTS_ENABLED;
   });
 
   it("preserves BigQuery behavior when disabled", async () => {
@@ -189,6 +192,22 @@ describe("region DuckDB migration", () => {
     expect(queryBigQuery).not.toHaveBeenCalled();
   });
 
+  it("annotates direct event rows with the query lease release", async () => {
+    process.env.DUCKDB_ENABLED = "true";
+    setRegionDuckDbQueryForTests(
+      vi.fn().mockResolvedValue([
+        {
+          event_instance_id: 9,
+          attendance: [],
+        },
+      ]),
+      "release-for-events",
+    );
+    await expect(getEvents(2)).resolves.toMatchObject([
+      { event_instance_id: 9, eventReleaseId: "release-for-events" },
+    ]);
+  });
+
   it("propagates DuckDB failures", async () => {
     process.env.DUCKDB_ENABLED = "true";
     setRegionDuckDbQueryForTests(
@@ -196,6 +215,35 @@ describe("region DuckDB migration", () => {
     );
     await expect(getRegionInfo(3)).rejects.toThrow("duckdb failed");
     expect(queryBigQuery).not.toHaveBeenCalled();
+  });
+
+  it("selects region page events independently in both mixed modes", async () => {
+    process.env.DUCKDB_ENABLED = "true";
+    process.env.DUCKDB_STATS_REGION_ENABLED = "false";
+    process.env.DUCKDB_EVENTS_ENABLED = "true";
+    queryBigQuery.mockResolvedValue([
+      { events: [{ event_instance_id: 1 }], preferencesJson: "{}" },
+    ]);
+    setRegionDuckDbQueryForTests(
+      vi.fn().mockResolvedValue([{ event_instance_id: 2, attendance: [] }]),
+    );
+    const duckEventsPage = await getPageData(4);
+    expect(duckEventsPage.events).toMatchObject([{ event_instance_id: 2 }]);
+    expect(duckEventsPage.events).not.toMatchObject([
+      { event_instance_id: 1 },
+    ]);
+
+    process.env.DUCKDB_STATS_REGION_ENABLED = "true";
+    process.env.DUCKDB_EVENTS_ENABLED = "false";
+    queryBigQuery.mockReset().mockResolvedValue([
+      { event_instance_id: 3 },
+    ]);
+    setRegionDuckDbQueryForTests(vi.fn().mockResolvedValue([]));
+    const bigQueryEventsPage = await getPageData(4);
+    expect(bigQueryEventsPage.events).toMatchObject([
+      { event_instance_id: 3 },
+    ]);
+    expect(queryBigQuery).toHaveBeenCalled();
   });
 
   it("records staging region phases and fixed DuckDB operation labels", async () => {

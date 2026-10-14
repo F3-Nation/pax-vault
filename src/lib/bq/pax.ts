@@ -1,6 +1,10 @@
 import { queryBigQuery } from "@/lib/db";
 import { getDuckDbRuntime } from "@/lib/duckdb/factory";
-import { DuckDbQueryAdapter, selectDuckDbOrLegacy } from "@/lib/duckdb/query";
+import {
+  DuckDbQueryAdapter,
+  isDuckDbEnabled,
+  selectDuckDbOrLegacy,
+} from "@/lib/duckdb/query";
 import {
   ActivityWindow,
   EventData,
@@ -317,7 +321,7 @@ export async function getEvents(
         clauses.push(
           `${opts?.categoryMode === "exclude" ? "NOT " : ""}(${categories.map((x) => `${["", "first_f_ind", "second_f_ind", "third_f_ind"][x]} = 1`).join(" OR ")})`,
         );
-      const rows = await adapter.execute<EventData>(
+      const result = await adapter.executeWithRelease<EventData>(
         `SELECT event_id AS event_instance_id, event_date, event_name, pax_count,
           fng_count, ao_org_id, ao_name, region_org_id, region_name,
           first_f_ind, second_f_ind, third_f_ind, types, tags,
@@ -328,9 +332,11 @@ export async function getEvents(
          ORDER BY event_date DESC, event_id DESC${limit === undefined ? "" : " LIMIT ?"}`,
         limit === undefined ? params : [...params, limit],
       );
-      const attendedRows = rows.filter((event) =>
-        (event.attendance ?? []).some((a) => Number(a.user_id) === paxId),
-      );
+      const attendedRows = result.rows
+        .filter((event) =>
+          (event.attendance ?? []).some((a) => Number(a.user_id) === paxId),
+        )
+        .map((event) => ({ ...event, eventReleaseId: result.releaseId }));
       return attendedRows.length ? attendedRows : null;
     },
     legacy: async () => getEventsLegacy(paxId, userIdentifier, opts),
@@ -345,6 +351,7 @@ async function getEventsLegacy(
   // LIMIT is optional. Keep it numeric-only.
   const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
   const limitSql = limit ? `LIMIT ${limit}` : "";
+  const whereSql = buildEventsWhereSql(paxId, opts);
 
   const query = `-- PAX EVENTS
     SELECT
@@ -365,12 +372,7 @@ async function getEventsLegacy(
       ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance,
       ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS TRUE) AS fartsacks
     FROM pv_events
-    WHERE EXISTS (
-      SELECT 1
-      FROM UNNEST(attendance) a
-      WHERE a.user_id = ${paxId}
-        AND a.fartsack IS NOT TRUE
-    )
+    ${whereSql}
     ORDER BY event_date DESC, event_id DESC
     ${limitSql};
   `;
@@ -549,12 +551,22 @@ export async function getPageData(
   ao_weekly: PaxAOWeeklyActivity[] | null;
   activity_window: ActivityWindow;
 }> {
-  return selectDuckDbOrLegacy({
+  const page = await selectDuckDbOrLegacy({
     capability: "stats_pax",
     env: process.env,
     duckdb: () => getPaxPageDataDuckDb(paxId, opts),
     legacy: () => getPaxPageDataLegacy(paxId, userIdentifier, opts),
   });
+  if (
+    isDuckDbEnabled(process.env, "stats_pax") !==
+    isDuckDbEnabled(process.env, "events")
+  ) {
+    return {
+      ...page,
+      events: await getEvents(paxId, userIdentifier, { ...opts, limit: 100 }),
+    };
+  }
+  return page;
 }
 
 async function getPaxPageDataLegacy(
@@ -1081,7 +1093,7 @@ async function getPaxPageDataDuckDb(
         : `(${parts.join(" OR ")})`,
     );
   }
-  const queriedEvents = await adapter.execute<EventData>(
+  const eventResult = await adapter.executeWithRelease<EventData>(
     `SELECT event_id AS event_instance_id, event_date, event_name, pax_count,
             fng_count, ao_org_id, ao_name, region_org_id, region_name,
             first_f_ind, second_f_ind, third_f_ind, types, tags,
@@ -1093,9 +1105,12 @@ async function getPaxPageDataDuckDb(
   );
   // Fetch fartsack-only rows so their counts participate, but keep them out of
   // the attended event stream and its Q/efficiency metrics.
-  const events = queriedEvents.filter((event) =>
-    (event.attendance ?? []).some((a) => Number(a.user_id) === paxId),
-  );
+  const queriedEvents = eventResult.rows;
+  const events = queriedEvents
+    .filter((event) =>
+      (event.attendance ?? []).some((a) => Number(a.user_id) === paxId),
+    )
+    .map((event) => ({ ...event, eventReleaseId: eventResult.releaseId }));
   const attended = events.flatMap((event) => event.attendance ?? []);
   const self = attended.filter((a) => Number(a.user_id) === paxId);
   const isTrue = (value: unknown) =>

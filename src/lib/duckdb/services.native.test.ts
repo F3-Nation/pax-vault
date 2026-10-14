@@ -327,6 +327,7 @@ describe("migrated service functions on the pinned native release fixture", () =
   it("matches the full ordered event shape and performs the intentional preference merge", async () => {
     expect(await getEventById(2, "fixture@example.com")).toEqual({
       ...GOLDEN_EVENT,
+      eventReleaseId: SOURCE_SNAPSHOT,
       preferencesJson: '{"compact":true}',
     });
     expect(queryBigQuery).toHaveBeenCalledTimes(1);

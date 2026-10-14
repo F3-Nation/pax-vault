@@ -12,7 +12,20 @@ vi.mock("@/lib/duckdb/factory", () => ({
 vi.mock("@/lib/duckdb/query", () => ({
   DuckDbQueryAdapter: class {
     execute = duckQueryMock;
+    executeWithRelease = async (...args: unknown[]) => ({
+      rows: await duckQueryMock(...args),
+      releaseId: "core-release",
+    });
+    executeDetailsForRelease = async (
+      sqlForDataset: (dataset: "pv_events" | "pv_event_details") => string,
+      params: unknown[],
+      releaseId: string,
+    ) => duckQueryMock(sqlForDataset("pv_event_details"), params, releaseId);
   },
+  isDuckDbEnabled: (env: NodeJS.ProcessEnv, capability: string) =>
+    capability === "events" &&
+    env.DUCKDB_ENABLED === "true" &&
+    env.DUCKDB_EVENTS_ENABLED !== "false",
   selectDuckDbOrLegacy: async (selection: {
     env?: NodeJS.ProcessEnv;
     duckdb: () => Promise<unknown>;
@@ -25,7 +38,7 @@ vi.mock("@/lib/duckdb/query", () => ({
 }));
 
 import { queryBigQuery } from "@/lib/db";
-import { getEventDetails } from "./events";
+import { getEventById, getEventDetails } from "./events";
 
 function lastCall(): [
   string,
@@ -156,7 +169,9 @@ describe("bq/events.ts", () => {
       },
     ]);
 
-    await expect(getEventDetails(321, "ignored@example.com")).resolves.toEqual({
+    await expect(
+      getEventDetails(321, "ignored@example.com", "core-release"),
+    ).resolves.toEqual({
       id: 321,
       description: "DuckDB event",
       preblast: null,
@@ -167,7 +182,7 @@ describe("bq/events.ts", () => {
     });
     expect(duckQueryMock).toHaveBeenCalledOnce();
     const [sql, params] = duckQueryMock.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain("FROM pv_events");
+    expect(sql).toContain("FROM pv_event_details");
     expect(sql).toContain("WHERE event_id = ?");
     expect(sql).toContain("preblast_rich");
     expect(sql).toContain("backblast_rich");
@@ -192,7 +207,9 @@ describe("bq/events.ts", () => {
     process.env.DUCKDB_ENABLED = "true";
     duckQueryMock.mockResolvedValue([]);
 
-    await expect(getEventDetails(999)).resolves.toBeNull();
+    await expect(
+      getEventDetails(999, undefined, "release"),
+    ).resolves.toBeNull();
     expect(bigQueryMock).not.toHaveBeenCalled();
   });
 
@@ -209,12 +226,43 @@ describe("bq/events.ts", () => {
         meta: null,
       },
     ]);
-    const details = await getEventDetails(111);
+    const details = await getEventDetails(111, undefined, "release");
     expect(details?.meta).toBeNull();
 
     const error = new Error("DuckDB detail query failed");
     duckQueryMock.mockRejectedValueOnce(error);
-    await expect(getEventDetails(112)).rejects.toBe(error);
+    await expect(getEventDetails(112, undefined, "release")).rejects.toBe(
+      error,
+    );
     expect(bigQueryMock).not.toHaveBeenCalled();
+  });
+
+  it("attaches the exact lease token to DuckDB core event data", async () => {
+    process.env.DUCKDB_ENABLED = "true";
+    duckQueryMock.mockResolvedValue([{ event_instance_id: 1 }]);
+    await expect(getEventById(1)).resolves.toMatchObject({
+      event_instance_id: 1,
+      eventReleaseId: "core-release",
+    });
+  });
+
+  it("rejects pinned details when events capability is disabled", async () => {
+    process.env.DUCKDB_ENABLED = "true";
+    process.env.DUCKDB_EVENTS_ENABLED = "false";
+    await expect(
+      getEventDetails(1, undefined, "old-release"),
+    ).rejects.toMatchObject({
+      code: "DUCKDB_RELEASE_CONFLICT",
+    });
+    expect(bigQueryMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects tokenless details when DuckDB serves events instead of using BigQuery", async () => {
+    process.env.DUCKDB_ENABLED = "true";
+    await expect(getEventDetails(1)).rejects.toMatchObject({
+      code: "DUCKDB_RELEASE_CONFLICT",
+    });
+    expect(bigQueryMock).not.toHaveBeenCalled();
+    expect(duckQueryMock).not.toHaveBeenCalled();
   });
 });
