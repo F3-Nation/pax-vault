@@ -444,12 +444,12 @@ export default function SearchModal({
             <div className="px-4 py-2 border-t border-divider text-xs text-default-400">
               Seeing duplicate PAX results?{" "}
               <a
-                href="https://docs.google.com/document/d/1e7tmuY3irKDt9oy1URQVcxPwxyet1ZY_bVZhGvhESEw/edit?tab=t.5anzgzo1iu9#heading=h.w93pdbdrmr21"
+                href="https://forms.gle/XYcE4bwh55Qzvj5T6"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary hover:underline"
               >
-                Consult the FAQ guide on how to merge accounts.
+                Submit a request to merge accounts.
               </a>
             </div>
           </div>
