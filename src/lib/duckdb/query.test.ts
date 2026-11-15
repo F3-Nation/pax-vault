@@ -9,6 +9,7 @@ import {
   DuckDbQueryAdapter,
   isDuckDbEnabled,
   selectDuckDbOrLegacy,
+  shadowParityDigest,
 } from "./query";
 import type { DuckDbLease, DuckDbQueryConnection } from "./runtime";
 
@@ -135,28 +136,50 @@ describe("DuckDB query adapter", () => {
     vi.restoreAllMocks();
   });
 
-  it("marks truncated shadow comparisons inconclusive", async () => {
+  it("compares full shadow payloads and ignores release-only fields", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
-    const large = Array.from({ length: 20 }, (_, index) => ({ index }));
     const env = {
       DUCKDB_ENABLED: "true",
       DUCKDB_EVENTS_ENABLED: "false",
       DUCKDB_SHADOW_ENABLED: "true",
       DUCKDB_SHADOW_SAMPLE_RATE: "1",
     } as unknown as NodeJS.ProcessEnv;
-    await expect(
-      selectDuckDbOrLegacy({
+    const rows = (releaseId?: string, lastName = "row-99") =>
+      Array.from({ length: 100 }, (_, index) => ({
+        index,
+        name: index === 99 ? lastName : `row-${index}`,
+        ...(releaseId ? { eventReleaseId: releaseId } : {}),
+      }));
+    const run = async (duck: unknown[]) => {
+      info.mockClear();
+      await selectDuckDbOrLegacy({
         env,
         capability: "events",
-        legacy: async () => large,
-        duckdb: async () => large,
-      }),
-    ).resolves.toBe(large);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(info.mock.calls.join(" ")).toContain('"equal":false');
-    expect(info.mock.calls.join(" ")).toContain('"inconclusive":true');
+        legacy: async () => rows(),
+        duckdb: async () => duck,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return info.mock.calls.join(" ");
+    };
+
+    const same = await run(rows("release-1"));
+    expect(same).toContain('"equal":true');
+    expect(same).toContain('"inconclusive":false');
+
+    // A difference in the last of 100 rows is still detected.
+    const different = await run(rows("release-1", "changed"));
+    expect(different).toContain('"equal":false');
+    expect(different).toContain('"inconclusive":false');
+    expect(different).not.toContain("changed");
     vi.restoreAllMocks();
+  });
+
+  it("digests independently of key order", () => {
+    expect(shadowParityDigest({ a: 1, b: [{ c: 2, d: 3 }] })).toBe(
+      shadowParityDigest({ b: [{ d: 3, c: 2 }], a: 1 }),
+    );
+    expect(shadowParityDigest({ a: 1 })).not.toBe(shadowParityDigest({ a: 2 }));
   });
 
   it("uses UTC and named bindings, normalizing nested values", async () => {

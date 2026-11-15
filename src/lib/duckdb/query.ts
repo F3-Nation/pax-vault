@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   DuckDbDependencyError,
   DuckDbQueryError,
@@ -259,48 +260,36 @@ function shadowTimeoutMs(env: NodeJS.ProcessEnv): number {
 const shadowSlots = { active: 0 };
 const SHADOW_MAX_CONCURRENCY = 2;
 
-function boundedParityValue(
-  value: unknown,
-  state: { truncated: boolean },
-  depth = 0,
-): unknown {
-  if (depth > 3) {
-    state.truncated = true;
-    return "<truncated>";
-  }
-  if (depth > 3 || value === null || typeof value !== "object") {
-    return typeof value === "bigint" ? String(value) : value;
-  }
-  if (Array.isArray(value)) {
-    if (value.length > 16) state.truncated = true;
-    return {
-      length: value.length,
-      items: value
-        .slice(0, 16)
-        .map((item) => boundedParityValue(item, state, depth + 1)),
-    };
-  }
-  const entries = Object.entries(value as Record<string, unknown>)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(0, 16);
-  if (Object.keys(value as object).length > 16) state.truncated = true;
+/** Fields only the DuckDB path adds; they can never match BigQuery. */
+const RELEASE_ONLY_PARITY_KEYS = new Set(["eventReleaseId"]);
+
+function canonicalParityValue(value: unknown): unknown {
+  if (typeof value === "bigint") return String(value);
+  if (value === null || typeof value !== "object") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonicalParityValue);
   return Object.fromEntries(
-    entries.map(([key, item]) => [
-      key,
-      boundedParityValue(item, state, depth + 1),
-    ]),
+    Object.entries(value as Record<string, unknown>)
+      .filter(
+        ([key, item]) =>
+          item !== undefined && !RELEASE_ONLY_PARITY_KEYS.has(key),
+      )
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, item]) => [key, canonicalParityValue(item)]),
   );
 }
 
-function parityValue(value: unknown): { value: string; truncated: boolean } {
-  const state = { truncated: false };
+/**
+ * Digest of the whole normalized value. Hashing keeps the comparison complete
+ * for page-sized payloads without retaining or logging any row content.
+ */
+export function shadowParityDigest(value: unknown): string | undefined {
   try {
-    return {
-      value: JSON.stringify(boundedParityValue(value, state)) ?? "undefined",
-      truncated: state.truncated,
-    };
+    return createHash("sha256")
+      .update(JSON.stringify(canonicalParityValue(value)) ?? "undefined")
+      .digest("hex");
   } catch {
-    return { value: "<unserializable>", truncated: true };
+    return undefined;
   }
 }
 
@@ -324,19 +313,17 @@ async function runShadow<T>(
       ),
     ]);
     // Only the boolean result is emitted. Never log query parameters or rows.
-    const actual = parityValue(result);
-    const expected = parityValue(served);
+    const actual = shadowParityDigest(result);
+    const expected = shadowParityDigest(served);
+    const inconclusive = actual === undefined || expected === undefined;
     console.info(
       JSON.stringify({
         app: "pax-vault",
         level: "info",
         metric: "duckdb_shadow_parity",
         capability: selection.capability ?? "global",
-        equal:
-          !actual.truncated &&
-          !expected.truncated &&
-          actual.value === expected.value,
-        inconclusive: actual.truncated || expected.truncated,
+        equal: !inconclusive && actual === expected,
+        inconclusive,
       }),
     );
   } catch {
