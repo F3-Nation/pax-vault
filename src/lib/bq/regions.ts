@@ -1,5 +1,5 @@
 /* The DuckDB row adapter returns schema-dependent nested structs. */
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { queryBigQuery } from "@/lib/db";
 import { getDuckDbRuntime } from "@/lib/duckdb/factory";
 import {
@@ -1330,7 +1330,7 @@ async function getRegionPageDuckDbParityImpl(
     breakdown.set(id, x);
   }
   const leaderMap = new Map<number, Leaders>();
-  for (const { e, a } of rows) {
+  for (const { a } of rows) {
     const id = Number(a.user_id);
     const x = leaderMap.get(id) ?? {
       user_id: id,
@@ -1759,160 +1759,10 @@ function buildRegionAchievementsFromTotals(
       };
     })
     .filter((p) => p.qualifies)
-    .map(({ qualifies: _qualifies, ...p }) => p)
+    .map((p) => {
+      const { qualifies, ...rest } = p;
+      void qualifies;
+      return rest;
+    })
     .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
-}
-
-async function getRegionPageDuckDb(
-  regionId: number,
-  userIdentifier?: string,
-  opts?: StatsFilters,
-): Promise<RegionPageData> {
-  const [infoRows, events, upcoming, kotter] = await Promise.all([
-    executeDuckDb<RegionInfo>(
-      `SELECT region_id, region_name, area_id, area_name, logo_url, is_active, aos, types, tags FROM pv_regions WHERE region_id = ? LIMIT 1`,
-      [regionId],
-    ),
-    getRegionEventsDuckDb(regionId, { ...opts, limit: 100 }),
-    executeDuckDb<EventUpcoming>(
-      `SELECT start_date, start_time, ao_name, ao_org_id, location_name, event_name, event_type, event_category, q_list FROM pv_upcoming WHERE region_org_id = ? ORDER BY start_date, start_time, ao_name LIMIT 50`,
-      [regionId],
-    ),
-    executeDuckDb<RegionKotterList>(
-      `SELECT user_id, f3_name, avatar_url, kotter_status, total_events, first_event_date, days_since_last_event, last_event_date, last_event_name, last_event_ao_name, last_event_ao_org_id, bestie_list FROM pv_kotter WHERE home_region_id = ? ORDER BY days_since_last_event, last_event_date, f3_name`,
-      [regionId],
-    ),
-  ]);
-  const active = new Set<number>(),
-    users = new Set<number>(),
-    qs = new Set<number>();
-  const farts = new Map<
-    number,
-    { user_id: number; f3_name: string; count: number }
-  >();
-  const ghosts = new Map<
-    number,
-    { user_id: number; f3_name: string; count: number }
-  >();
-  let fng = 0,
-    pax = 0;
-  const breakdown = new Map<
-    number,
-    { ao_id: number; ao_name: string; beatdowns: number }
-  >();
-  for (const event of events) {
-    fng += Number(event.fng_count ?? 0);
-    pax += Number(event.pax_count ?? 0);
-    const ao = Number(event.ao_org_id ?? 0);
-    const key = ao;
-    const b = breakdown.get(key) ?? {
-      ao_id: key,
-      ao_name: event.ao_name ?? "(No AO)",
-      beatdowns: 0,
-    };
-    b.beatdowns++;
-    breakdown.set(key, b);
-    for (const a of event.attendance ?? []) {
-      const id = Number(a.user_id);
-      if (!Number.isFinite(id)) continue;
-      users.add(id);
-      if (a.q_ind) qs.add(id);
-      if (
-        new Date(String(event.event_date)).getTime() >=
-        Date.now() - 30 * 86400000
-      )
-        active.add(id);
-      if (a.fartsack) {
-        const x = farts.get(id) ?? {
-          user_id: id,
-          f3_name: a.f3_name,
-          count: 0,
-        };
-        x.count++;
-        farts.set(id, x);
-      }
-      if (a.ghost) {
-        const x = ghosts.get(id) ?? {
-          user_id: id,
-          f3_name: a.f3_name,
-          count: 0,
-        };
-        x.count++;
-        ghosts.set(id, x);
-      }
-    }
-  }
-  const kings = (m: typeof farts) => {
-    const max = Math.max(0, ...[...m.values()].map((x) => x.count));
-    return [...m.values()]
-      .filter((x) => x.count === max && max > 0)
-      .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
-  };
-  const leaderMap = new Map<number, Leaders>();
-  for (const e of events)
-    for (const a of e.attendance ?? []) {
-      const id = Number(a.user_id);
-      const l = leaderMap.get(id) ?? {
-        user_id: id,
-        f3_name: a.f3_name,
-        posts: 0,
-        qs: 0,
-        avatar_url: a.avatar_url ?? undefined,
-      };
-      l.posts++;
-      if (a.q_ind) l.qs++;
-      leaderMap.set(id, l);
-    }
-  const summary: RegionSummary = {
-    event_count: events.length,
-    ao_count: breakdown.size,
-    active_pax: active.size,
-    unique_pax: users.size,
-    unique_qs: qs.size,
-    fng_count: fng,
-    pax_count_average: events.length ? pax / events.length : 0,
-    fartsack_kings: kings(farts),
-    ghost_kings: kings(ghosts),
-  };
-  const leaders = [...leaderMap.values()]
-    .sort((a, b) => b.posts - a.posts || b.qs - a.qs)
-    .slice(0, 100);
-  const chartMap = new Map<string, ChartData>();
-  for (const e of events) {
-    const date = String(e.event_date).slice(0, 10);
-    const c = chartMap.get(date) ?? {
-      date,
-      pax_count: 0,
-      fng_count: 0,
-      q_count: 0,
-      unique_pax_count: 0,
-      unique_q_count: 0,
-    };
-    c.pax_count += Number(e.pax_count ?? 0);
-    c.fng_count += Number(e.fng_count ?? 0);
-    const ids = new Set<number>(),
-      qids = new Set<number>();
-    for (const a of e.attendance ?? []) {
-      ids.add(Number(a.user_id));
-      if (a.q_ind) qids.add(Number(a.user_id));
-    }
-    c.q_count += qids.size;
-    c.unique_pax_count += ids.size;
-    c.unique_q_count += qids.size;
-    chartMap.set(date, c);
-  }
-  return {
-    info: infoRows[0] ?? null,
-    events,
-    summary,
-    leaders,
-    upcoming,
-    kotter,
-    charts: [...chartMap.values()].sort((a, b) => a.date.localeCompare(b.date)),
-    achievements: [],
-    aoBreakdown: [...breakdown.values()].sort(
-      (a, b) => b.beatdowns - a.beatdowns || a.ao_name.localeCompare(b.ao_name),
-    ),
-    preferencesJson: null,
-  };
 }

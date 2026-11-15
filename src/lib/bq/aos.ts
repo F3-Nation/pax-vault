@@ -1,5 +1,5 @@
 /* The DuckDB row adapter returns schema-dependent nested structs. */
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { queryBigQuery } from "@/lib/db";
 import { getDuckDbRuntime } from "@/lib/duckdb/factory";
 import {
@@ -719,101 +719,6 @@ async function getAoPageDuckDbParity(
       fartsack_kings: kings("fartsack"),
       ghost_kings: kings("ghost"),
     },
-    preferencesJson: null,
-  };
-}
-
-async function getAoPageDuckDb(
-  aoId: number,
-  userIdentifier?: string,
-  opts?: StatsFilters,
-): Promise<AOPageData> {
-  const [infoRows, events, upcoming] = await Promise.all([
-    executeDuckDb<AOInfo>(
-      `SELECT ao_id, ao_name, region_id, region_name, logo_url, is_active, types, tags FROM pv_aos WHERE ao_id = ? LIMIT 1`,
-      [aoId],
-    ),
-    getAoEventsDuckDb(aoId, { ...opts, limit: 100 }),
-    executeDuckDb<EventUpcoming>(
-      `SELECT start_date, start_time, ao_name, ao_org_id, location_name, event_name, event_type, event_category, q_list FROM pv_upcoming WHERE ao_org_id = ? ORDER BY start_date, start_time, ao_name LIMIT 50`,
-      [aoId],
-    ),
-  ]);
-  const users = new Set<number>(),
-    active = new Set<number>(),
-    qs = new Set<number>();
-  let fng = 0,
-    pax = 0;
-  const kings = (flag: "fartsack" | "ghost") => {
-    const counts = new Map<
-      number,
-      { user_id: number; f3_name: string; count: number }
-    >();
-    for (const e of events)
-      for (const a of e.attendance ?? [])
-        if (a[flag]) {
-          const x = counts.get(Number(a.user_id)) ?? {
-            user_id: Number(a.user_id),
-            f3_name: a.f3_name,
-            count: 0,
-          };
-          x.count++;
-          counts.set(x.user_id, x);
-        }
-    const max = Math.max(0, ...[...counts.values()].map((x) => x.count));
-    return [...counts.values()]
-      .filter((x) => x.count === max && max > 0)
-      .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
-  };
-  const leaderMap = new Map<number, Leaders>();
-  for (const e of events) {
-    fng += Number(e.fng_count ?? 0);
-    pax += Number(e.pax_count ?? 0);
-    for (const a of e.attendance ?? []) {
-      const id = Number(a.user_id);
-      users.add(id);
-      if (a.q_ind) qs.add(id);
-      if (
-        new Date(String(e.event_date)).getTime() >=
-        Date.now() - 30 * 86400000
-      )
-        active.add(id);
-      const l = leaderMap.get(id) ?? {
-        user_id: id,
-        f3_name: a.f3_name,
-        posts: 0,
-        qs: 0,
-        avatar_url: a.avatar_url ?? undefined,
-      };
-      l.posts++;
-      if (a.q_ind) l.qs++;
-      leaderMap.set(id, l);
-    }
-  }
-  const firstEvent = events.reduce<string | null>((first, event) => {
-    const date = String(event.event_date);
-    return first === null || date < first ? date : first;
-  }, null);
-  return {
-    info: infoRows[0] ?? null,
-    events,
-    upcoming,
-    leaders: [...leaderMap.values()]
-      .sort((a, b) => b.posts - a.posts)
-      .slice(0, 100),
-    summary: {
-      event_count: events.length,
-      first_event_date: firstEvent,
-      active_pax: active.size,
-      unique_pax: users.size,
-      unique_qs: qs.size,
-      fng_count: fng,
-      pax_count_average: events.length ? pax / events.length : 0,
-      fartsack_kings: kings("fartsack"),
-      ghost_kings: kings("ghost"),
-    },
-    // Preferences are BQ-owned and are intentionally absent from the pure
-    // DuckDB shadow implementation.
     preferencesJson: null,
   };
 }
