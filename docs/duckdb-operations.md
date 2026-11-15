@@ -65,11 +65,11 @@ evidence that:
       402,653,184-byte per-object budgets. Measure active plus staging databases, download
       buffers, startup, and revision overlap against Cloud Run memory and
       ephemeral-storage limits; compressed budgets do not prove runtime capacity.
-- [ ] Capacity-test staging's 512 MiB App Hosting memory against the 384 MB
+- [ ] Capacity-test staging's 2048 MiB App Hosting memory against the 384 MB
       per-DuckDB-handle memory limit, compressed release files in `/tmp`, and
       overlapping candidate/active revisions. Core and lazy detail sidecars can
       occupy separate handles, while refresh may overlap release directories.
-      This needs measurement and likely a staging memory increase before
+      Staging was raised from 512 MiB on paper sizing; this still needs measurement before
       deployment; do not silently change hosting config. No always-allocated CPU
       or `minInstances` change is part of this phase.
 - [ ] BigQuery remains healthy for BQ-owned capabilities and is available as

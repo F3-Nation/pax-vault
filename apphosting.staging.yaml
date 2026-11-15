@@ -1,7 +1,9 @@
 # Overrides just for Staging
 runConfig:
   minInstances: 1
-  memoryMiB: 512
+  # Sized for a refresh overlap: two releases in memory-backed /tmp plus two
+  # DuckDB handles at DUCKDB_MEMORY_LIMIT plus the Node heap (~1.6GB worst case).
+  memoryMiB: 2048
 
 env:
   # Staging Clear Text
