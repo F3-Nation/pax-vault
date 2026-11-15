@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { getEvents } from "@/lib/bq/pax";
 import { getSessionUser } from "@/lib/auth/server";
+import { reportError } from "@/lib/observability";
 import { parseFilterSearchParams } from "@/lib/filters";
 import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 
@@ -50,8 +51,12 @@ export async function GET(
         { error: "PAX event data is temporarily unavailable." },
         { status: 503 },
       );
+    const errorId = reportError(error, {
+      scope: "api/pax/events",
+      user: user.email,
+    });
     return NextResponse.json(
-      { error: "PAX event lookup failed." },
+      { error: "PAX event lookup failed.", errorId },
       { status: 500 },
     );
   }

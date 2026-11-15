@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { getEventDetails } from "@/lib/bq/events";
 import { getSessionUser } from "@/lib/auth/server";
+import { reportError } from "@/lib/observability";
 import {
   DuckDbDependencyError,
   DuckDbReleaseConflictError,
@@ -83,8 +84,12 @@ export async function GET(
         { status: 503, headers: { "Cache-Control": "no-store" } },
       );
     }
+    const errorId = reportError(error, {
+      scope: "api/events",
+      user: user.email,
+    });
     return NextResponse.json(
-      { error: "Event lookup failed." },
+      { error: "Event lookup failed.", errorId },
       { status: 500, headers: { "Cache-Control": "no-store" } },
     );
   }

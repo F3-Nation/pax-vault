@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { getPageData } from "@/lib/bq/sectors";
 import { getSessionUser } from "@/lib/auth/server";
+import { reportError } from "@/lib/observability";
 import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 
 export async function GET(
@@ -46,8 +47,12 @@ export async function GET(
         { error: "Sector data is temporarily unavailable." },
         { status: 503 },
       );
+    const errorId = reportError(error, {
+      scope: "api/sector/events",
+      user: user.email,
+    });
     return NextResponse.json(
-      { error: "Sector lookup failed." },
+      { error: "Sector lookup failed.", errorId },
       { status: 500 },
     );
   }

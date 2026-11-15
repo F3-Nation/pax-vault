@@ -89,4 +89,20 @@ describe("event details API release pinning", () => {
     ).toBe(400);
     expect(getEventDetails).not.toHaveBeenCalled();
   });
+
+  it("reports unexpected failures and returns the error id", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    getEventDetails.mockRejectedValue(new Error("bigquery exploded"));
+    const response = await GET(request("?releaseId=release-1"), context("12"));
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.errorId).toEqual(expect.any(String));
+    expect(consoleError).toHaveBeenCalledOnce();
+    expect(String(consoleError.mock.calls[0][0])).toContain(
+      '"scope":"api/events"',
+    );
+    consoleError.mockRestore();
+  });
 });

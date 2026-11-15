@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { getEvents } from "@/lib/bq/regions";
 import { getSessionUser } from "@/lib/auth/server";
+import { reportError } from "@/lib/observability";
 import { parseFilterSearchParams } from "@/lib/filters";
 import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 
@@ -50,8 +51,12 @@ export async function GET(
         { error: "Region event data is temporarily unavailable." },
         { status: 503 },
       );
+    const errorId = reportError(error, {
+      scope: "api/region/events",
+      user: user.email,
+    });
     return NextResponse.json(
-      { error: "Region event lookup failed." },
+      { error: "Region event lookup failed.", errorId },
       { status: 500 },
     );
   }
