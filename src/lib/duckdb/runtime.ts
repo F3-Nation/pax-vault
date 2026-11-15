@@ -375,6 +375,9 @@ export interface DuckDbLease {
   ): Promise<T>;
 }
 
+/** First retry delay after a failed refresh; doubles up to `refreshTtlMs`. */
+export const REFRESH_FAILURE_BASE_COOLDOWN_MS = 5_000;
+
 export class DuckDbRuntime {
   private active: Active | undefined;
   private refreshFlight: Promise<void> | undefined;
@@ -396,6 +399,9 @@ export class DuckDbRuntime {
   private removeDirectory: typeof rm = rm;
   private refreshWaiterCount = 0;
   private lastRefreshRejectionCategory?: string;
+  private consecutiveRefreshFailures = 0;
+  private refreshRetryAt = 0;
+  private lastRefreshError: unknown;
 
   constructor(
     private readonly repository: GcsReleaseRepository,
@@ -629,9 +635,29 @@ export class DuckDbRuntime {
       }
       return;
     }
+    // After a failed refresh, fail fast until the cooldown passes instead of
+    // starting another pointer read and release download per caller.
+    if (Date.now() < this.refreshRetryAt) {
+      this.refreshWaiterCount--;
+      throw this.lastRefreshError;
+    }
     this.lastAttempt = Date.now();
     this.refreshFlight = this.performRefresh()
+      .then(() => {
+        this.consecutiveRefreshFailures = 0;
+        this.refreshRetryAt = 0;
+        this.lastRefreshError = undefined;
+      })
       .catch((cause) => {
+        this.consecutiveRefreshFailures++;
+        this.lastRefreshError = cause;
+        this.refreshRetryAt =
+          Date.now() +
+          Math.min(
+            this.config.refreshTtlMs,
+            REFRESH_FAILURE_BASE_COOLDOWN_MS *
+              2 ** Math.min(this.consecutiveRefreshFailures - 1, 16),
+          );
         this.recordRefreshFailure(cause);
         throw cause;
       })

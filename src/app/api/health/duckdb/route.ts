@@ -24,7 +24,8 @@ export async function GET() {
     try {
       // Explicitly await refresh rather than acquire(): acquire intentionally
       // preserves a stale LKG while a background refresh runs, which is not
-      // sufficient for a readiness decision.
+      // sufficient for a readiness decision. The runtime's failure cooldown
+      // keeps repeated probes from starting back-to-back downloads.
       await runtimeService.refresh();
     } catch {
       // Status below intentionally contains no exception details.
@@ -48,7 +49,9 @@ export async function GET() {
     error: !ready,
   });
   return NextResponse.json(
-    { status: status.state, ready, duckdb: status },
+    // Public and unauthenticated: release ids, lease counts and failure
+    // categories go to telemetry above, not the response body.
+    { status: status.state, ready },
     { status: ready ? 200 : 503, headers: { "Cache-Control": "no-store" } },
   );
 }

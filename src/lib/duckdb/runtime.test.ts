@@ -3,7 +3,11 @@ import * as fsPromises from "node:fs/promises";
 import { dirname } from "node:path";
 import { DuckDbConfig } from "./config";
 import { DuckDbUnavailableError, DuckDbReleaseError } from "./errors";
-import { categorizeDuckDbRejection, DuckDbRuntime } from "./runtime";
+import {
+  categorizeDuckDbRejection,
+  DuckDbRuntime,
+  REFRESH_FAILURE_BASE_COOLDOWN_MS,
+} from "./runtime";
 import { ReleaseFiles } from "./gcs";
 import {
   DUCKDB_CONTRACT_VERSION,
@@ -185,7 +189,9 @@ describe("DuckDB local lifecycle", () => {
     await expect(fsPromises.access(paths[0])).resolves.toBeUndefined();
     await expect(runtime.refresh()).rejects.toBeInstanceOf(DuckDbReleaseError);
     await expect(fsPromises.access(paths[0])).rejects.toThrow();
-    expect(closeAttempts).toBe(3);
+    // The second refresh is inside the failure cooldown: it retries the
+    // pending cleanup but opens no new candidate.
+    expect(closeAttempts).toBe(2);
     await runtime.close();
   });
   it("retains a directory when removal fails and retries it at a later boundary", async () => {
@@ -304,6 +310,43 @@ describe("DuckDB local lifecycle", () => {
     await expect(
       new DuckDbRuntime(f.repo as never, config, opener()).acquire(),
     ).rejects.toBeInstanceOf(DuckDbUnavailableError);
+  });
+  it("fails fast during the refresh cooldown, then retries with backoff", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fakeRepo();
+      let downloads = 0;
+      f.repo.downloadRelease = async () => {
+        downloads++;
+        throw new Error("network");
+      };
+      const runtime = new DuckDbRuntime(f.repo as never, config, opener());
+      await expect(runtime.acquire()).rejects.toBeInstanceOf(
+        DuckDbUnavailableError,
+      );
+      await expect(runtime.acquire()).rejects.toBeInstanceOf(
+        DuckDbUnavailableError,
+      );
+      await expect(runtime.refresh()).rejects.toThrow();
+      expect(downloads).toBe(1);
+      expect(runtime.status().refreshWaiterCount).toBe(0);
+
+      vi.advanceTimersByTime(REFRESH_FAILURE_BASE_COOLDOWN_MS);
+      await expect(runtime.refresh()).rejects.toThrow();
+      expect(downloads).toBe(2);
+
+      // Second consecutive failure doubles the wait.
+      vi.advanceTimersByTime(REFRESH_FAILURE_BASE_COOLDOWN_MS);
+      await expect(runtime.refresh()).rejects.toThrow();
+      expect(downloads).toBe(2);
+      vi.advanceTimersByTime(REFRESH_FAILURE_BASE_COOLDOWN_MS);
+
+      f.repo.downloadRelease = async () => release("r-1", 1);
+      await runtime.refresh();
+      expect(runtime.status().state).toBe("ready");
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it("activates a candidate and drains retired leases before close", async () => {
     const closed: string[] = [];
