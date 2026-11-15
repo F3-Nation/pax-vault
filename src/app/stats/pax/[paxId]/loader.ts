@@ -17,10 +17,9 @@ import {
 } from "@/lib/types";
 import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 import { getPageData } from "@/lib/bq/pax";
-import { cacheStatsData, getStatsReleaseIdentity } from "@/lib/cache";
+import { cacheStatsPageData } from "@/lib/cache";
 import { StatsFilters } from "@/lib/filters";
 import { normalizeDeep } from "@/lib/normalize";
-import { isDuckDbEnabled } from "@/lib/duckdb/query";
 
 /**
  * Load all data required for the pax stats page.
@@ -33,12 +32,6 @@ export async function loadPaxData(
   filters?: StatsFilters,
 ): Promise<PaxData | null> {
   try {
-    const mixedBackends =
-      isDuckDbEnabled(process.env, "stats_pax") !==
-      isDuckDbEnabled(process.env, "events");
-    const releaseIdentity = mixedBackends
-      ? undefined
-      : getStatsReleaseIdentity("stats_pax");
     // Cache key is entity-scoped (PAX + filters), NOT user-scoped — the
     // normalization runs inside the cache so the cached value is plain JSON.
     const fetchAndNormalize = async () => {
@@ -70,15 +63,12 @@ export async function loadPaxData(
 
       return mergedSafe;
     };
-    return mixedBackends
-      ? await fetchAndNormalize()
-      : await cacheStatsData<PaxData>(
-          fetchAndNormalize,
-          ["pax-page-data", String(paxId), JSON.stringify(filters ?? {})],
-          [`pax-${paxId}`],
-          releaseIdentity,
-          "stats_pax",
-        );
+    return await cacheStatsPageData<PaxData>(
+      fetchAndNormalize,
+      ["pax-page-data", String(paxId), JSON.stringify(filters ?? {})],
+      [`pax-${paxId}`],
+      "stats_pax",
+    );
   } catch (err) {
     if (err instanceof DuckDbDependencyError) throw err;
     console.error("Error fetching PAX data:", err);

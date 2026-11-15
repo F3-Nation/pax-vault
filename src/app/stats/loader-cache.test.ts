@@ -82,7 +82,7 @@ describe.each(["region", "ao", "pax"] as const)(
       vi.clearAllMocks();
     });
 
-    it("bypasses cache for mixed flags and retains same-mode cache behavior", async () => {
+    it("caches mixed flags separately from same-mode entries", async () => {
       const fetcher = getFetcher[page];
       fetcher.mockImplementation(async () =>
         response(page, fetcher.mock.calls.length),
@@ -107,15 +107,15 @@ describe.each(["region", "ao", "pax"] as const)(
         events: { eventReleaseId: string }[];
       };
       expect(mixedFirst.events[0].eventReleaseId).toBe("events-2");
-      expect(mixedSecond.events[0].eventReleaseId).toBe("events-3");
+      expect(mixedSecond.events[0].eventReleaseId).toBe("events-2");
 
       vi.stubEnv("DUCKDB_EVENTS_ENABLED", "true");
       vi.stubEnv(statsFlag[page], "false");
       const otherMixed = (await load(9)) as {
         events: { eventReleaseId: string }[];
       };
-      expect(otherMixed.events[0].eventReleaseId).toBe("events-4");
-      expect(fetcher).toHaveBeenCalledTimes(4);
+      expect(otherMixed.events[0].eventReleaseId).toBe("events-3");
+      expect(fetcher).toHaveBeenCalledTimes(3);
     });
 
     it("gets a fresh event release after a pointer change when stats use BigQuery", async () => {
@@ -133,9 +133,13 @@ describe.each(["region", "ao", "pax"] as const)(
       runtimeStatus.activePointerGeneration = "2";
       const after = (await load(9)) as typeof before;
       expect(before.events[0].eventReleaseId).toBe("release-1");
+      const afterAgain = (await load(9)) as typeof before;
       expect(after.events[0].eventReleaseId).toBe("release-2");
+      expect(afterAgain.events[0].eventReleaseId).toBe("release-2");
+      // One entry per release: the mixed page is cached, keyed on the events
+      // release, so a pointer change misses instead of serving the old list.
       expect(fetcher).toHaveBeenCalledTimes(2);
-      expect(cacheStore.size).toBe(0);
+      expect(cacheStore.size).toBe(2);
     });
   },
 );

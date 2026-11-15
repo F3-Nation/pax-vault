@@ -22,10 +22,9 @@ import {
 import { DuckDbDependencyError, DuckDbQueryError } from "@/lib/duckdb/errors";
 import { getPageData } from "@/lib/bq/regions";
 import { parseRegionPreferences } from "@/lib/preferences";
-import { cacheStatsData, getStatsReleaseIdentity } from "@/lib/cache";
+import { cacheStatsPageData } from "@/lib/cache";
 import { StatsFilters } from "@/lib/filters";
 import { normalizeDeep } from "@/lib/normalize";
-import { isDuckDbEnabled } from "@/lib/duckdb/query";
 
 function logRegionTiming(
   operation: string,
@@ -63,12 +62,6 @@ export async function loadRegionData(
   let cacheComputed = false;
   let cacheOutcome: "success" | "failure" = "failure";
   try {
-    const mixedBackends =
-      isDuckDbEnabled(process.env, "stats_region") !==
-      isDuckDbEnabled(process.env, "events");
-    const releaseIdentity = mixedBackends
-      ? undefined
-      : getStatsReleaseIdentity("stats_region");
     // Cache key is entity-scoped (region + filters), NOT user-scoped — the
     // normalization runs inside the cache so the cached value is plain JSON.
     const fetchAndNormalize = async () => {
@@ -137,18 +130,15 @@ export async function loadRegionData(
         );
       }
     };
-    const result = mixedBackends
-      ? await fetchAndNormalize()
-      : await cacheStatsData<RegionData>(
-          async () => {
-            cacheComputed = true;
-            return fetchAndNormalize();
-          },
-          ["region-page-data", String(regionId), JSON.stringify(filters ?? {})],
-          [`region-${regionId}`],
-          releaseIdentity,
-          "stats_region",
-        );
+    const result = await cacheStatsPageData<RegionData>(
+      async () => {
+        cacheComputed = true;
+        return fetchAndNormalize();
+      },
+      ["region-page-data", String(regionId), JSON.stringify(filters ?? {})],
+      [`region-${regionId}`],
+      "stats_region",
+    );
     cacheOutcome = "success";
     return result;
   } catch (err) {

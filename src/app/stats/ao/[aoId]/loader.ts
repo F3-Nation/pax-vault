@@ -18,10 +18,9 @@ import {
 import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 import { getPageData } from "@/lib/bq/aos";
 import { parseRegionPreferences } from "@/lib/preferences";
-import { cacheStatsData, getStatsReleaseIdentity } from "@/lib/cache";
+import { cacheStatsPageData } from "@/lib/cache";
 import { StatsFilters } from "@/lib/filters";
 import { normalizeDeep } from "@/lib/normalize";
-import { isDuckDbEnabled } from "@/lib/duckdb/query";
 
 /**
  * Load all data required for the AO stats page.
@@ -34,12 +33,6 @@ export async function loadAOData(
   filters?: StatsFilters,
 ): Promise<AOData | null> {
   try {
-    const mixedBackends =
-      isDuckDbEnabled(process.env, "stats_ao") !==
-      isDuckDbEnabled(process.env, "events");
-    const releaseIdentity = mixedBackends
-      ? undefined
-      : getStatsReleaseIdentity("stats_ao");
     // Cache key is entity-scoped (AO + filters), NOT user-scoped — the
     // normalization runs inside the cache so the cached value is plain JSON.
     const fetchAndNormalize = async () => {
@@ -71,15 +64,12 @@ export async function loadAOData(
 
       return mergedSafe;
     };
-    return mixedBackends
-      ? await fetchAndNormalize()
-      : await cacheStatsData<AOData>(
-          fetchAndNormalize,
-          ["ao-page-data", String(aoId), JSON.stringify(filters ?? {})],
-          [`ao-${aoId}`],
-          releaseIdentity,
-          "stats_ao",
-        );
+    return await cacheStatsPageData<AOData>(
+      fetchAndNormalize,
+      ["ao-page-data", String(aoId), JSON.stringify(filters ?? {})],
+      [`ao-${aoId}`],
+      "stats_ao",
+    );
   } catch (err) {
     if (err instanceof DuckDbDependencyError) throw err;
     console.error("Error fetching AO data:", err);

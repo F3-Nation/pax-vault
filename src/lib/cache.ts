@@ -123,3 +123,43 @@ export function cacheStatsData<T>(
     return value;
   });
 }
+
+/**
+ * Cache a stats page whose payload combines a stats capability with the
+ * events capability (PAX, AO and region pages embed an events list).
+ *
+ * During an incremental rollout the two can sit on different backends. The
+ * entry is then keyed on both backends and fenced by the release of whichever
+ * side reads DuckDB, so a mixed configuration keeps the cache and still picks
+ * up a new release.
+ */
+export function cacheStatsPageData<T>(
+  fetcher: () => Promise<T>,
+  keyParts: string[],
+  tags: string[],
+  statsCapability: DuckDbCapability,
+): Promise<T> {
+  const statsOnDuckDb = isDuckDbEnabled(process.env, statsCapability);
+  const eventsOnDuckDb = isDuckDbEnabled(process.env, "events");
+  if (statsOnDuckDb === eventsOnDuckDb) {
+    return cacheStatsData(
+      fetcher,
+      keyParts,
+      tags,
+      getStatsReleaseIdentity(statsCapability),
+      statsCapability,
+    );
+  }
+  const duckDbCapability = statsOnDuckDb ? statsCapability : "events";
+  const backend = (onDuckDb: boolean) => (onDuckDb ? "duckdb" : "bigquery");
+  return cacheStatsData(
+    fetcher,
+    [
+      ...keyParts,
+      `backends:stats=${backend(statsOnDuckDb)},events=${backend(eventsOnDuckDb)}`,
+    ],
+    tags,
+    getStatsReleaseIdentity(duckDbCapability),
+    duckDbCapability,
+  );
+}
