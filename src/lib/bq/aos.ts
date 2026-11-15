@@ -315,7 +315,24 @@ export async function getPageData(
   const page = await selectDuckDbOrLegacy({
     capability: "stats_ao",
     env: process.env,
-    duckdb: () => getAoPageDuckDbParity(aoId, userIdentifier, opts),
+    duckdb: async () => {
+      // Region preferences are application-owned and stay in BigQuery, so the
+      // DuckDB page needs this one extra lookup. The legacy query below
+      // already projects the column itself.
+      const [duckPage, preferences] = await Promise.all([
+        getAoPageDuckDbParity(aoId, userIdentifier, opts),
+        queryBigQuery<{ json_config: string | null }>(
+          "SELECT p.json_config FROM pv_regions_preferences p WHERE p.region_id = (SELECT region_id FROM pv_aos WHERE ao_id = @aoId LIMIT 1) LIMIT 1",
+          userIdentifier,
+          `fetch preferences for AO ${aoId}`,
+          { aoId },
+        ),
+      ]);
+      return {
+        ...duckPage,
+        preferencesJson: preferences?.[0]?.json_config ?? null,
+      };
+    },
     legacy: async () => {
       // Build WHERE clause from common filters.
       const whereSql = buildEventsWhereSql(aoId, opts);
@@ -543,30 +560,16 @@ export async function getPageData(
       };
     },
   });
-  const preferences =
-    page.preferencesJson === null
-      ? await queryBigQuery<{ json_config: string | null }>(
-          "SELECT p.json_config FROM pv_regions_preferences p WHERE p.region_id = (SELECT region_id FROM pv_aos WHERE ao_id = @aoId LIMIT 1) LIMIT 1",
-          userIdentifier,
-          `fetch preferences for AO ${aoId}`,
-          { aoId },
-        )
-      : [];
-  const pageWithPreferences = {
-    ...page,
-    preferencesJson:
-      page.preferencesJson ?? preferences[0]?.json_config ?? null,
-  };
   if (
     isDuckDbEnabled(process.env, "stats_ao") !==
     isDuckDbEnabled(process.env, "events")
   ) {
     return {
-      ...pageWithPreferences,
+      ...page,
       events: await getEvents(aoId, userIdentifier, { ...opts, limit: 100 }),
     };
   }
-  return pageWithPreferences;
+  return page;
 }
 
 export async function searchAOsByName(

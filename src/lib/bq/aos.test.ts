@@ -51,4 +51,20 @@ describe("AO DuckDB migration", () => {
     expect(bigQueryEventsPage.events).toMatchObject([{ event_instance_id: 3 }]);
     expect(queryBigQuery).toHaveBeenCalled();
   });
+
+  it("runs one BigQuery query for a legacy AO page with no saved preferences", async () => {
+    queryBigQuery.mockResolvedValue([{ events: [], preferencesJson: null }]);
+    const page = await getPageData(4);
+    expect(page.preferencesJson).toBeNull();
+    expect(queryBigQuery).toHaveBeenCalledOnce();
+  });
+
+  it("reads region preferences from BigQuery for a DuckDB AO page", async () => {
+    process.env.DUCKDB_ENABLED = "true";
+    setAoDuckDbQueryForTests(vi.fn().mockResolvedValue([]));
+    queryBigQuery.mockResolvedValue([{ json_config: '{"a":1}' }]);
+    const page = await getPageData(4);
+    expect(page.preferencesJson).toBe('{"a":1}');
+    expect(queryBigQuery).toHaveBeenCalledOnce();
+  });
 });
