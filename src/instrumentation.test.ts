@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { register } from "./instrumentation";
 
-const { getDuckDbRuntime, refresh } = vi.hoisted(() => ({
+const { getDuckDbRuntime, refresh, reportError } = vi.hoisted(() => ({
   getDuckDbRuntime: vi.fn(),
   refresh: vi.fn(),
+  reportError: vi.fn(),
 }));
+
+vi.mock("./lib/observability", () => ({ reportError }));
 
 vi.mock("./lib/duckdb/factory", () => ({
   getDuckDbRuntime,
@@ -63,12 +66,29 @@ describe("register", () => {
     expect(registrationFinished).toBe(true);
   });
 
-  it("propagates refresh failure so startup does not become ready", async () => {
+  it("reports a refresh failure without blocking startup", async () => {
     vi.stubEnv("NEXT_RUNTIME", "nodejs");
     vi.stubEnv("DUCKDB_ENABLED", "true");
     const failure = new Error("refresh failed");
     refresh.mockRejectedValue(failure);
 
-    await expect(register()).rejects.toBe(failure);
+    await expect(register()).resolves.toBeUndefined();
+    expect(reportError).toHaveBeenCalledWith(failure, {
+      scope: "instrumentation/duckdb-prewarm",
+    });
+  });
+
+  it("reports a configuration failure without blocking startup", async () => {
+    vi.stubEnv("NEXT_RUNTIME", "nodejs");
+    vi.stubEnv("DUCKDB_ENABLED", "true");
+    const failure = new Error("bad bucket");
+    getDuckDbRuntime.mockImplementation(() => {
+      throw failure;
+    });
+
+    await expect(register()).resolves.toBeUndefined();
+    expect(reportError).toHaveBeenCalledWith(failure, {
+      scope: "instrumentation/duckdb-prewarm",
+    });
   });
 });
