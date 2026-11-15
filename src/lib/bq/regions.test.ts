@@ -229,20 +229,14 @@ describe("region DuckDB migration", () => {
     );
     const duckEventsPage = await getPageData(4);
     expect(duckEventsPage.events).toMatchObject([{ event_instance_id: 2 }]);
-    expect(duckEventsPage.events).not.toMatchObject([
-      { event_instance_id: 1 },
-    ]);
+    expect(duckEventsPage.events).not.toMatchObject([{ event_instance_id: 1 }]);
 
     process.env.DUCKDB_STATS_REGION_ENABLED = "true";
     process.env.DUCKDB_EVENTS_ENABLED = "false";
-    queryBigQuery.mockReset().mockResolvedValue([
-      { event_instance_id: 3 },
-    ]);
+    queryBigQuery.mockReset().mockResolvedValue([{ event_instance_id: 3 }]);
     setRegionDuckDbQueryForTests(vi.fn().mockResolvedValue([]));
     const bigQueryEventsPage = await getPageData(4);
-    expect(bigQueryEventsPage.events).toMatchObject([
-      { event_instance_id: 3 },
-    ]);
+    expect(bigQueryEventsPage.events).toMatchObject([{ event_instance_id: 3 }]);
     expect(queryBigQuery).toHaveBeenCalled();
   });
 

@@ -3,11 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { queryBigQuery } = vi.hoisted(() => ({ queryBigQuery: vi.fn() }));
 vi.mock("@/lib/db", () => ({ queryBigQuery }));
 
-import {
-  getPageData,
-  searchAOsByName,
-  setAoDuckDbQueryForTests,
-} from "./aos";
+import { getPageData, searchAOsByName, setAoDuckDbQueryForTests } from "./aos";
 
 describe("AO DuckDB migration", () => {
   beforeEach(() => {
@@ -45,20 +41,14 @@ describe("AO DuckDB migration", () => {
     );
     const duckEventsPage = await getPageData(4);
     expect(duckEventsPage.events).toMatchObject([{ event_instance_id: 2 }]);
-    expect(duckEventsPage.events).not.toMatchObject([
-      { event_instance_id: 1 },
-    ]);
+    expect(duckEventsPage.events).not.toMatchObject([{ event_instance_id: 1 }]);
 
     process.env.DUCKDB_STATS_AO_ENABLED = "true";
     process.env.DUCKDB_EVENTS_ENABLED = "false";
-    queryBigQuery.mockReset().mockResolvedValue([
-      { event_instance_id: 3 },
-    ]);
+    queryBigQuery.mockReset().mockResolvedValue([{ event_instance_id: 3 }]);
     setAoDuckDbQueryForTests(vi.fn().mockResolvedValue([]));
     const bigQueryEventsPage = await getPageData(4);
-    expect(bigQueryEventsPage.events).toMatchObject([
-      { event_instance_id: 3 },
-    ]);
+    expect(bigQueryEventsPage.events).toMatchObject([{ event_instance_id: 3 }]);
     expect(queryBigQuery).toHaveBeenCalled();
   });
 });
