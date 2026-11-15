@@ -337,7 +337,9 @@ export async function getEvents(
           (event.attendance ?? []).some((a) => Number(a.user_id) === paxId),
         )
         .map((event) => ({ ...event, eventReleaseId: result.releaseId }));
-      return attendedRows.length ? attendedRows : null;
+      // Like the BigQuery path, zero matches is an empty list, not "PAX not
+      // found" (the route maps null to 404).
+      return attendedRows;
     },
     legacy: async () => getEventsLegacy(paxId, userIdentifier, opts),
   });

@@ -139,7 +139,7 @@ describe("PAX backend selection", () => {
     process.env.DUCKDB_ENABLED = "true";
     duckQuery.mockResolvedValue([]);
     await expect(searchUsersByName("fixture")).resolves.toEqual([]);
-    await expect(getEvents(7)).resolves.toBeNull();
+    await expect(getEvents(7)).resolves.toEqual([]);
     await expect(getPaxPageData(7)).resolves.toMatchObject({
       info: null,
       summary: null,
