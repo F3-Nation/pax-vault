@@ -259,15 +259,21 @@ describe("region DuckDB migration", () => {
             lifetime_qs: 0,
           },
         ];
+      // The page aggregate comes back as one row computed in DuckDB.
       if (sql.includes("FROM pv_events"))
         return [
           {
-            event_instance_id: 10,
-            event_date: "2024-01-01",
-            region_org_id: 3,
-            attendance: [
-              { user_id: 7, f3_name: "Member", q_ind: 1, fartsack: false },
+            event_count: 1,
+            leaders: [
+              {
+                user_id: 7,
+                f3_name: "Member",
+                posts: 1,
+                qs: 1,
+                avatar_url: null,
+              },
             ],
+            events: [{ event_instance_id: 10, event_date: "2024-01-01" }],
           },
         ];
       return [];
@@ -292,8 +298,7 @@ describe("region DuckDB migration", () => {
       expect.arrayContaining([
         "initial_five_reads",
         "career_aggregate",
-        "javascript_transform_pre_leader",
-        "javascript_transform_post_leader",
+        "leader_career",
         "preferences_bigquery",
         "total",
       ]),

@@ -19,8 +19,20 @@ import {
   ChartData,
   RegionAchievementPax,
   RegionAOBreakdown,
+  PaxLeader,
 } from "@/lib/types";
 import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
+import {
+  chartCtes,
+  CHARTS_PROJECTION,
+  chartUnit,
+  displayEventsProjection,
+  eventBaseCtes,
+  kingsCtes,
+  KINGS_PROJECTION,
+  sortKings,
+  totalsCtes,
+} from "./duckdb-stats";
 
 type DuckDbExecutor = <T>(
   sql: string,
@@ -1145,9 +1157,7 @@ type RegionPageData = Awaited<ReturnType<typeof getPageData>>;
 type RegionPhase =
   | "initial_five_reads"
   | "career_aggregate"
-  | "javascript_transform_pre_leader"
   | "leader_career"
-  | "javascript_transform_post_leader"
   | "preferences_bigquery"
   | "total";
 
@@ -1196,7 +1206,7 @@ async function timeRegionPhase<T>(
   }
 }
 
-/** DuckDB implementation deliberately works from raw, unbounded events. */
+/** DuckDB implementation: aggregates in SQL over one scan of the region's events. */
 async function getRegionPageDuckDbParity(
   regionId: number,
   userIdentifier?: string,
@@ -1214,7 +1224,10 @@ async function getRegionPageDuckDbParityImpl(
 ): Promise<RegionPageData> {
   const f = duckEventFilter(regionId, opts);
   const allFilter = duckEventFilter(null, opts);
-  const [info, eventResult, upcoming, kotter, pax] = await timeRegionPhase(
+  const range = buildRangeDates(opts?.range);
+  const rangeStart = opts?.startDate ?? range.startDate;
+  const rangeEnd = opts?.endDate ?? range.endDate;
+  const [info, aggregate, upcoming, kotter, pax] = await timeRegionPhase(
     "initial_five_reads",
     () =>
       Promise.all([
@@ -1223,8 +1236,48 @@ async function getRegionPageDuckDbParityImpl(
           [regionId],
           "region_info",
         ),
-        executeDuckDbEvents<any>(
-          `SELECT event_id AS event_instance_id, event_date, event_name, pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name, first_f_ind, second_f_ind, third_f_ind, types, tags, attendance FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC`,
+        // One scan of the region's events; every aggregate below is computed
+        // in DuckDB and comes back as a single row.
+        executeDuckDbEvents<RegionAggregateRow>(
+          `WITH ${eventBaseCtes(f.where, true)},
+           ${kingsCtes()},
+           ${totalsCtes()},
+           ${chartCtes(chartUnit(rangeStart, rangeEnd))},
+           leader_rows AS (
+             SELECT user_id, any_value(f3_name) AS f3_name,
+                    any_value(avatar_url) AS avatar_url,
+                    count(*) AS posts,
+                    count(*) FILTER (WHERE is_q) AS qs
+               FROM present GROUP BY user_id
+              ORDER BY posts DESC, qs DESC, user_id
+              LIMIT 100
+           ),
+           ao_rows AS (
+             SELECT COALESCE(ao_org_id, 0) AS ao_id,
+                    COALESCE(
+                      arg_max_null(ao_name, (event_date, event_id)), '(No AO)'
+                    ) AS ao_name,
+                    count(*) AS beatdowns,
+                    max(event_date) AS last_date,
+                    arg_max(event_id, (event_date, event_id)) AS last_event_id
+               FROM filtered GROUP BY 1
+           )
+           SELECT e.event_count, e.ao_count, a.active_pax, a.unique_pax,
+                  a.unique_qs, e.fng_count, e.pax_count_average,
+                  ${KINGS_PROJECTION},
+                  ${displayEventsProjection()},
+                  (SELECT list({
+                     'user_id': user_id, 'f3_name': f3_name, 'posts': posts,
+                     'qs': qs, 'avatar_url': avatar_url
+                   } ORDER BY posts DESC, qs DESC, user_id) FROM leader_rows
+                  ) AS leaders,
+                  -- Newest-first, so the stable JS sort breaks ties by recency.
+                  (SELECT list({
+                     'ao_id': ao_id, 'ao_name': ao_name, 'beatdowns': beatdowns
+                   } ORDER BY last_date DESC, last_event_id DESC) FROM ao_rows
+                  ) AS ao_breakdown,
+                  ${CHARTS_PROJECTION}
+             FROM event_totals e CROSS JOIN attendance_totals a`,
           f.params,
           "region_events",
         ),
@@ -1245,7 +1298,7 @@ async function getRegionPageDuckDbParityImpl(
         ),
       ]),
   );
-  const raw = eventResult.rows;
+  const row = aggregate.rows[0];
   let career: any[] = [];
   if (pax.some((p: any) => p.user_id != null)) {
     // Nationwide totals are authoritative in the PAX snapshot; attendance is
@@ -1277,83 +1330,18 @@ async function getRegionPageDuckDbParityImpl(
     if (process.env.ENVIRONMENT === "staging")
       logRegionPhase("career_aggregate", careerAggregateStarted, "success");
   }
-  const transformPreLeaderStarted =
-    process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
-  const display = raw.slice(0, 100).map((e: any) => ({
-    ...e,
-    eventReleaseId: eventResult.releaseId,
-    attendance: (e.attendance ?? []).filter((a: any) => a.fartsack !== true),
-    fartsacks: (e.attendance ?? []).filter((a: any) => a.fartsack === true),
-  })) as EventData[];
-  const attended = (e: any) =>
-    (e.attendance ?? []).filter(
-      (a: any) => a.fartsack !== true && a.user_id != null,
-    );
-  const rows = raw.flatMap((e: any) => {
-    const byUser = new Map<number, any>();
-    for (const a of attended(e)) {
-      const userId = Number(a.user_id);
-      const existing = byUser.get(userId);
-      if (!existing || (a.q_ind === 1 && existing.q_ind !== 1))
-        byUser.set(userId, existing ? { ...existing, q_ind: 1 } : a);
-    }
-    return [...byUser.values()].map((a: any) => ({ e, a }));
-  });
-  const ids = (field: (a: any) => boolean) =>
-    new Set(
-      rows.filter((x: any) => field(x.a)).map((x: any) => Number(x.a.user_id)),
-    );
-  const countFlags = (flag: string) => {
-    const m = new Map<number, any>();
-    for (const e of raw)
-      for (const a of e.attendance ?? [])
-        if (a[flag] === true) {
-          const id = Number(a.user_id);
-          const x = m.get(id) ?? { user_id: id, f3_name: a.f3_name, count: 0 };
-          x.count++;
-          m.set(id, x);
-        }
-    const max = Math.max(0, ...[...m.values()].map((x) => x.count));
-    return [...m.values()]
-      .filter((x) => max > 0 && x.count === max)
-      .sort((a, b) => String(a.f3_name).localeCompare(String(b.f3_name)));
-  };
-  const breakdown = new Map<number, RegionAOBreakdown>();
-  for (const e of raw) {
-    const id = Number(e.ao_org_id ?? 0);
-    const x = breakdown.get(id) ?? {
-      ao_id: id,
-      ao_name: e.ao_name ?? "(No AO)",
-      beatdowns: 0,
-    };
-    x.beatdowns++;
-    breakdown.set(id, x);
-  }
-  const leaderMap = new Map<number, Leaders>();
-  for (const { a } of rows) {
-    const id = Number(a.user_id);
-    const x = leaderMap.get(id) ?? {
-      user_id: id,
-      f3_name: a.f3_name,
-      posts: 0,
-      qs: 0,
-      avatar_url: a.avatar_url ?? undefined,
-      all_posts: 0,
-      all_qs: 0,
-    };
-    x.posts++;
-    if (a.q_ind === 1) x.qs++;
-    leaderMap.set(id, x);
-  }
-  const leaderList = [...leaderMap.values()]
-    .sort((a, b) => b.posts - a.posts || b.qs - a.qs)
-    .slice(0, 100);
-  if (process.env.ENVIRONMENT === "staging")
-    logRegionPhase(
-      "javascript_transform_pre_leader",
-      transformPreLeaderStarted,
-      "success",
-    );
+  const leaderList: Leaders[] = (row?.leaders ?? []).map((leader) => ({
+    user_id: Number(leader.user_id),
+    f3_name: leader.f3_name,
+    posts: Number(leader.posts),
+    qs: Number(leader.qs),
+    avatar_url: leader.avatar_url ?? undefined,
+    all_posts: 0,
+    all_qs: 0,
+  }));
+  const leaderMap = new Map(
+    leaderList.map((leader) => [leader.user_id, leader]),
+  );
   if (leaderList.length) {
     const targets = leaderList.map((leader) => leader.user_id);
     const leaderStarted =
@@ -1436,121 +1424,6 @@ async function getRegionPageDuckDbParityImpl(
     if (process.env.ENVIRONMENT === "staging")
       logRegionPhase("leader_career", leaderStarted, "success");
   }
-  const transformPostLeaderStarted =
-    process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
-  const now = Date.now(),
-    active = new Set<number>();
-  for (const { e, a } of rows)
-    if (new Date(String(e.event_date)).getTime() >= now - 30 * 86400000)
-      active.add(Number(a.user_id));
-  let paxCount = 0,
-    fngCount = 0;
-  for (const e of raw) {
-    paxCount += Number(e.pax_count ?? 0);
-    fngCount += Number(e.fng_count ?? 0);
-  }
-  const summary: RegionSummary = {
-    event_count: raw.length,
-    ao_count: new Set(
-      raw
-        .filter((e: any) => e.ao_org_id != null)
-        .map((e: any) => Number(e.ao_org_id)),
-    ).size,
-    active_pax: active.size,
-    unique_pax: ids(() => true).size,
-    unique_qs: ids((a) => a.q_ind === 1).size,
-    fng_count: fngCount,
-    pax_count_average: raw.length ? paxCount / raw.length : 0,
-    fartsack_kings: countFlags("fartsack"),
-    ghost_kings: countFlags("ghost"),
-  };
-  const range = buildRangeDates(opts?.range),
-    start = opts?.startDate ?? range.startDate,
-    end =
-      opts?.endDate ?? range.endDate ?? new Date().toISOString().slice(0, 10);
-  const days = start
-      ? (Date.parse(end) - Date.parse(start)) / 86400000
-      : Infinity,
-    unit = days > 365 ? "month" : days > 180 ? "week" : "day";
-  const bucket = (s: string) => {
-    const d = new Date(`${s.slice(0, 10)}T00:00:00Z`);
-    if (unit === "month") return `${s.slice(0, 7)}-01`;
-    if (unit === "week") {
-      d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-    }
-    return d.toISOString().slice(0, 10);
-  };
-  const charts = new Map<string, ChartData>();
-  const chartPax = new Map<string, Set<number>>(),
-    chartQs = new Map<string, Set<number>>();
-  for (const e of raw) {
-    const date = bucket(String(e.event_date));
-    const x = charts.get(date) ?? {
-      date,
-      pax_count: 0,
-      fng_count: 0,
-      q_count: 0,
-      unique_pax_count: 0,
-      unique_q_count: 0,
-    };
-    const as = attended(e);
-    x.pax_count += Number(e.pax_count ?? 0);
-    x.fng_count += Number(e.fng_count ?? 0);
-    x.q_count += new Set(
-      as.filter((a: any) => a.q_ind === 1).map((a: any) => Number(a.user_id)),
-    ).size;
-    x.unique_pax_count += new Set(as.map((a: any) => Number(a.user_id))).size;
-    x.unique_q_count += new Set(
-      as.filter((a: any) => a.q_ind === 1).map((a: any) => Number(a.user_id)),
-    ).size;
-    charts.set(date, x);
-  }
-  for (const e of raw) {
-    const date = bucket(String(e.event_date));
-    const as = attended(e);
-    const p = chartPax.get(date) ?? new Set<number>(),
-      q = chartQs.get(date) ?? new Set<number>();
-    for (const a of as) {
-      p.add(Number(a.user_id));
-      if (a.q_ind === 1) q.add(Number(a.user_id));
-    }
-    chartPax.set(date, p);
-    chartQs.set(date, q);
-  }
-  for (const [date, x] of charts) {
-    x.unique_pax_count = chartPax.get(date)?.size ?? 0;
-    x.unique_q_count = chartQs.get(date)?.size ?? 0;
-  }
-  const chartList = [...charts.values()].sort((a, b) =>
-    a.date.localeCompare(b.date),
-  );
-  if (chartList.length > 1) {
-    const filled = new Map(charts),
-      cursor = new Date(`${chartList[0].date}T00:00:00Z`),
-      last = new Date(`${chartList.at(-1)!.date}T00:00:00Z`);
-    while (cursor <= last) {
-      const key = cursor.toISOString().slice(0, 10);
-      if (!filled.has(key))
-        filled.set(key, {
-          date: key,
-          pax_count: 0,
-          fng_count: 0,
-          q_count: 0,
-          unique_pax_count: 0,
-          unique_q_count: 0,
-        });
-      if (unit === "month") cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-      else cursor.setUTCDate(cursor.getUTCDate() + (unit === "week" ? 7 : 1));
-    }
-    charts.clear();
-    for (const [key, value] of filled) charts.set(key, value);
-  }
-  if (process.env.ENVIRONMENT === "staging")
-    logRegionPhase(
-      "javascript_transform_post_leader",
-      transformPostLeaderStarted,
-      "success",
-    );
   const prefs = await timeRegionPhase("preferences_bigquery", () =>
     queryBigQuery<{ json_config: string | null }>(
       "SELECT json_config FROM pv_regions_preferences WHERE region_id = @regionId LIMIT 1",
@@ -1561,18 +1434,58 @@ async function getRegionPageDuckDbParityImpl(
   );
   return {
     info: info[0] ?? null,
-    events: display,
-    summary,
+    events: (row?.events ?? []).map((event) => ({
+      ...event,
+      eventReleaseId: aggregate.releaseId,
+    })),
+    summary: {
+      event_count: Number(row?.event_count ?? 0),
+      ao_count: Number(row?.ao_count ?? 0),
+      active_pax: Number(row?.active_pax ?? 0),
+      unique_pax: Number(row?.unique_pax ?? 0),
+      unique_qs: Number(row?.unique_qs ?? 0),
+      fng_count: Number(row?.fng_count ?? 0),
+      pax_count_average: Number(row?.pax_count_average ?? 0),
+      fartsack_kings: sortKings(row?.fartsack_kings),
+      ghost_kings: sortKings(row?.ghost_kings),
+    },
     leaders: leaderList,
     upcoming,
     kotter,
-    charts: [...charts.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    charts: row?.charts ?? [],
     achievements: buildRegionAchievementsFromTotals(pax, career),
-    aoBreakdown: [...breakdown.values()].sort(
-      (a, b) => b.beatdowns - a.beatdowns || a.ao_name.localeCompare(b.ao_name),
-    ),
+    aoBreakdown: (row?.ao_breakdown ?? [])
+      .map((ao) => ({
+        ao_id: Number(ao.ao_id),
+        ao_name: ao.ao_name,
+        beatdowns: Number(ao.beatdowns),
+      }))
+      .sort(
+        (a, b) =>
+          b.beatdowns - a.beatdowns || a.ao_name.localeCompare(b.ao_name),
+      ),
     preferencesJson: prefs[0]?.json_config ?? null,
   };
+}
+
+interface RegionAggregateRow {
+  event_count: number;
+  ao_count: number;
+  active_pax: number;
+  unique_pax: number;
+  unique_qs: number;
+  fng_count: number;
+  pax_count_average: number;
+  fartsack_kings: PaxLeader[] | null;
+  ghost_kings: PaxLeader[] | null;
+  events: EventData[] | null;
+  leaders:
+    | (Pick<Leaders, "user_id" | "f3_name" | "posts" | "qs"> & {
+        avatar_url: string | null;
+      })[]
+    | null;
+  ao_breakdown: RegionAOBreakdown[] | null;
+  charts: ChartData[] | null;
 }
 
 export function buildRegionAchievements(

@@ -14,6 +14,7 @@ import {
   PaxAOWeeklyActivity,
 } from "@/lib/types";
 import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
+import { utcToday } from "./duckdb-stats";
 import {
   ACTIVITY_MAX_WEEKS,
   ACTIVITY_WEEKS,
@@ -1095,191 +1096,237 @@ async function getPaxPageDataDuckDb(
         : `(${parts.join(" OR ")})`,
     );
   }
-  const eventResult = await adapter.executeWithRelease<EventData>(
-    `SELECT event_id AS event_instance_id, event_date, event_name, pax_count,
-            fng_count, ao_org_id, ao_name, region_org_id, region_name,
-            first_f_ind, second_f_ind, third_f_ind, types, tags,
-            list_filter(attendance, a -> a.fartsack IS NOT TRUE) AS attendance,
-            list_filter(attendance, a -> a.fartsack IS TRUE) AS fartsacks
-       FROM pv_events WHERE ${clauses.join(" AND ")}
-       ORDER BY event_date DESC, event_id DESC`,
-    params,
+  if (!Number.isSafeInteger(paxId)) throw new Error("Invalid PAX id");
+  const activityWindow = buildActivityWindow(opts);
+  // `self` lambdas inline the (validated integer) PAX id; every other value
+  // is bound. Positional order: the WHERE params, then the activity window.
+  const self = (extra = "") =>
+    `len(list_filter(attendance, a -> a.user_id = ${paxId}${extra}))`;
+  const aggregate = await adapter.executeWithRelease<PaxAggregateRow>(
+    `WITH filtered AS MATERIALIZED (
+       -- Every event listing the PAX, including ones they fartsacked.
+       SELECT event_id, event_date, event_name, pax_count, fng_count,
+              ao_org_id, ao_name, region_org_id, region_name,
+              first_f_ind, second_f_ind, third_f_ind, types, tags, attendance,
+              ${self(" AND a.fartsack IS NOT TRUE")} AS self_entries,
+              ${self(" AND a.fartsack IS NOT TRUE AND a.q_ind = 1")} AS self_qs,
+              ${self(" AND a.fartsack IS NOT TRUE AND a.ghost IS TRUE")} AS self_ghosts,
+              ${self(" AND a.fartsack IS TRUE")} AS self_fartsacks
+         FROM pv_events WHERE ${clauses.join(" AND ")}
+     ),
+     attended AS MATERIALIZED (
+       SELECT * FROM filtered WHERE self_entries > 0
+     ),
+     others AS MATERIALIZED (
+       -- Everyone else who was actually at an event the PAX attended.
+       SELECT e.event_id, e.self_qs > 0 AS self_q, a.user_id, a.f3_name
+         FROM attended e, UNNEST(e.attendance) AS u(a)
+        WHERE a.fartsack IS NOT TRUE
+          AND a.user_id IS NOT NULL AND a.user_id <> ${paxId}
+     ),
+     co_attendance AS (
+       SELECT user_id, any_value(f3_name) AS f3_name, count(*) AS count
+         FROM others GROUP BY user_id
+     ),
+     ao_rows AS (
+       SELECT ao_org_id,
+              arg_max_null(ao_name, (event_date, event_id)) AS ao_name,
+              arg_max_null(region_org_id, (event_date, event_id)) AS region_org_id,
+              arg_max_null(region_name, (event_date, event_id)) AS region_name,
+              max(event_date) AS last_date,
+              arg_max(event_id, (event_date, event_id)) AS last_event_id,
+              count(*) AS total_events,
+              count(*) FILTER (WHERE self_qs > 0) AS total_q_count
+         FROM attended GROUP BY ao_org_id
+     ),
+     weekly_rows AS (
+       SELECT ao_org_id,
+              strftime(CAST(date_trunc('week', event_date) AS DATE), '%Y-%m-%d') AS week,
+              arg_max_null(ao_name, (event_date, event_id)) AS ao_name,
+              arg_max_null(region_org_id, (event_date, event_id)) AS region_org_id,
+              arg_max_null(region_name, (event_date, event_id)) AS region_name,
+              max(event_date) AS last_date,
+              arg_max(event_id, (event_date, event_id)) AS last_event_id,
+              count(*) AS posts
+         FROM attended
+        WHERE ao_org_id IS NOT NULL
+          AND CAST(date_trunc('week', event_date) AS DATE)
+              BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)
+        GROUP BY 1, 2
+     )
+     SELECT
+       (SELECT count(*) FROM filtered) AS listed_count,
+       (SELECT count(*) FROM attended) AS event_count,
+       (SELECT COALESCE(sum(self_qs), 0) FROM attended) AS q_count,
+       (SELECT COALESCE(sum(self_ghosts), 0) FROM attended) AS ghost_count,
+       (SELECT COALESCE(sum(self_fartsacks), 0) FROM filtered) AS fartsack_count,
+       ${paxEdgeEvent("first_event", "", "ASC")},
+       ${paxEdgeEvent("last_event", "", "DESC")},
+       ${paxEdgeEvent("first_q", "WHERE self_qs > 0", "ASC")},
+       ${paxEdgeEvent("last_q", "WHERE self_qs > 0", "DESC")},
+       (SELECT count(DISTINCT user_id) FROM others) AS unique_users_met,
+       (SELECT count(DISTINCT user_id) FROM others WHERE self_q) AS unique_pax_when_q,
+       -- Ties for bestie are settled alphabetically in JS.
+       (SELECT list({'user_id': user_id, 'f3_name': f3_name, 'count': count})
+          FROM co_attendance
+         WHERE count = (SELECT max(count) FROM co_attendance)) AS besties,
+       -- Newest-first, so the stable JS sorts below break ties by recency.
+       (SELECT list(ao_rows ORDER BY last_date DESC, last_event_id DESC)
+          FROM ao_rows) AS ao_breakdown,
+       (SELECT list(weekly_rows ORDER BY last_date DESC, last_event_id DESC)
+          FROM weekly_rows) AS ao_weekly,
+       (SELECT list({
+          'event_instance_id': event_id, 'event_date': event_date,
+          'event_name': event_name, 'pax_count': pax_count,
+          'fng_count': fng_count, 'ao_org_id': ao_org_id, 'ao_name': ao_name,
+          'region_org_id': region_org_id, 'region_name': region_name,
+          'first_f_ind': first_f_ind, 'second_f_ind': second_f_ind,
+          'third_f_ind': third_f_ind, 'types': types, 'tags': tags,
+          'attendance': list_filter(attendance, a -> a.fartsack IS NOT TRUE),
+          'fartsacks': list_filter(attendance, a -> a.fartsack IS TRUE)
+        } ORDER BY event_date DESC, event_id DESC)
+          FROM (SELECT * FROM attended
+                 ORDER BY event_date DESC, event_id DESC
+                 LIMIT ${PAX_PAGE_EVENT_LIMIT})
+       ) AS events`,
+    [...params, activityWindow.start, activityWindow.end],
   );
-  // Fetch fartsack-only rows so their counts participate, but keep them out of
-  // the attended event stream and its Q/efficiency metrics.
-  const queriedEvents = eventResult.rows;
-  const events = queriedEvents
-    .filter((event) =>
-      (event.attendance ?? []).some((a) => Number(a.user_id) === paxId),
-    )
-    .map((event) => ({ ...event, eventReleaseId: eventResult.releaseId }));
-  const attended = events.flatMap((event) => event.attendance ?? []);
-  const self = attended.filter((a) => Number(a.user_id) === paxId);
-  const isTrue = (value: unknown) =>
-    value === true || value === 1 || value === "1";
-  const qEvents = self.filter((a) => isTrue(a.q_ind));
-  const fartsacks = queriedEvents
-    .flatMap((event) => event.fartsacks ?? [])
-    .filter((a) => Number(a.user_id) === paxId).length;
-  const summary: PaxSummary | null = queriedEvents.length
+  const row = aggregate.rows[0];
+  const listedCount = Number(row?.listed_count ?? 0);
+  const eventCount = Number(row?.event_count ?? 0);
+  const day = (value: string | null | undefined) =>
+    value ? String(value).slice(0, 10) : null;
+  const firstEventDate = day(row?.first_event?.event_date);
+  const bestie = [...(row?.besties ?? [])].sort((a, b) =>
+    (a.f3_name ?? "").localeCompare(b.f3_name ?? ""),
+  )[0];
+  const daysSinceFirst = firstEventDate
+    ? (Date.parse(`${utcToday()}T00:00:00Z`) -
+        Date.parse(`${firstEventDate}T00:00:00Z`)) /
+      86_400_000
+    : NaN;
+  // A PAX listed only as a fartsack still gets a (zeroed) summary.
+  const summary: PaxSummary | null = listedCount
     ? {
-        event_count: events.length,
-        q_count: qEvents.length,
-        ghost_count: self.filter((a) => isTrue(a.ghost)).length,
-        fartsack_count: fartsacks,
-        fng_date:
-          infoRows[0]?.start_date_override ??
-          (String(events.at(-1)?.event_date ?? "").slice(0, 10) || null),
-        first_event_date:
-          String(events.at(-1)?.event_date ?? "").slice(0, 10) || null,
-        first_event_ao_id: events.at(-1)?.ao_org_id ?? null,
-        first_event_ao_name: events.at(-1)?.ao_name ?? null,
-        last_event_date:
-          String(events[0]?.event_date ?? "").slice(0, 10) || null,
-        last_event_ao_id: events[0]?.ao_org_id ?? null,
-        last_event_ao_name: events[0]?.ao_name ?? null,
-        bestie_user_id: null,
-        bestie_user_count: 0,
-        bestie_f3_name: null,
-        unique_users_met: new Set(
-          attended
-            .filter((a) => Number(a.user_id) !== paxId)
-            .map((a) => a.user_id),
-        ).size,
-        first_q_date: null,
-        first_q_ao_id: null,
-        first_q_ao_name: null,
-        last_q_date: null,
-        last_q_ao_id: null,
-        last_q_ao_name: null,
-        unique_pax_when_q: 0,
-        effective_percentage: null,
+        event_count: eventCount,
+        q_count: Number(row?.q_count ?? 0),
+        ghost_count: Number(row?.ghost_count ?? 0),
+        fartsack_count: Number(row?.fartsack_count ?? 0),
+        fng_date: infoRows[0]?.start_date_override ?? firstEventDate,
+        first_event_date: firstEventDate,
+        first_event_ao_id: row?.first_event?.ao_org_id ?? null,
+        first_event_ao_name: row?.first_event?.ao_name ?? null,
+        last_event_date: day(row?.last_event?.event_date),
+        last_event_ao_id: row?.last_event?.ao_org_id ?? null,
+        last_event_ao_name: row?.last_event?.ao_name ?? null,
+        bestie_user_id: bestie ? Number(bestie.user_id) : null,
+        bestie_user_count: bestie ? Number(bestie.count) : 0,
+        bestie_f3_name: bestie?.f3_name ?? null,
+        unique_users_met: Number(row?.unique_users_met ?? 0),
+        first_q_date: day(row?.first_q?.event_date),
+        first_q_ao_id: row?.first_q?.ao_org_id ?? null,
+        first_q_ao_name: row?.first_q?.ao_name ?? null,
+        last_q_date: day(row?.last_q?.event_date),
+        last_q_ao_id: row?.last_q?.ao_org_id ?? null,
+        last_q_ao_name: row?.last_q?.ao_name ?? null,
+        unique_pax_when_q: Number(row?.unique_pax_when_q ?? 0),
+        effective_percentage:
+          daysSinceFirst > 0 ? (eventCount / daysSinceFirst) * 100 : null,
       }
     : null;
-  if (summary) {
-    const qRows = events.filter((event) =>
-      (event.attendance ?? []).some(
-        (a) => Number(a.user_id) === paxId && isTrue(a.q_ind),
-      ),
-    );
-    const qPeople = new Set<number>();
-    const coAttendance = new Map<
-      number,
-      { name: string | null; count: number }
-    >();
-    for (const event of events) {
-      const present = (event.attendance ?? []).filter(
-        (a) => Number(a.user_id) !== paxId,
-      );
-      const selfPresent = (event.attendance ?? []).some(
-        (a) => Number(a.user_id) === paxId,
-      );
-      if (selfPresent)
-        for (const person of present) {
-          const prior = coAttendance.get(Number(person.user_id)) ?? {
-            name: person.f3_name ?? null,
-            count: 0,
-          };
-          prior.count++;
-          coAttendance.set(Number(person.user_id), prior);
-        }
-    }
-    for (const event of qRows)
-      for (const person of event.attendance ?? [])
-        if (Number(person.user_id) !== paxId)
-          qPeople.add(Number(person.user_id));
-    const bestie = [...coAttendance.entries()].sort(
-      (a, b) =>
-        b[1].count - a[1].count ||
-        (a[1].name ?? "").localeCompare(b[1].name ?? ""),
-    )[0];
-    if (bestie) {
-      summary.bestie_user_id = bestie[0];
-      summary.bestie_user_count = bestie[1].count;
-      summary.bestie_f3_name = bestie[1].name;
-    }
-    const first = events.at(-1);
-    const firstQ = qRows.at(-1);
-    const lastQ = qRows[0];
-    summary.first_q_date = firstQ
-      ? String(firstQ.event_date).slice(0, 10)
-      : null;
-    summary.first_q_ao_id = firstQ?.ao_org_id ?? null;
-    summary.first_q_ao_name = firstQ?.ao_name ?? null;
-    summary.last_q_date = lastQ ? String(lastQ.event_date).slice(0, 10) : null;
-    summary.last_q_ao_id = lastQ?.ao_org_id ?? null;
-    summary.last_q_ao_name = lastQ?.ao_name ?? null;
-    summary.unique_pax_when_q = qPeople.size;
-    const firstDate = first
-      ? Date.parse(`${String(first.event_date).slice(0, 10)}T00:00:00Z`)
-      : NaN;
-    const today = Date.parse(
-      `${new Date().toISOString().slice(0, 10)}T00:00:00Z`,
-    );
-    const days = (today - firstDate) / 86400000;
-    summary.effective_percentage =
-      days > 0 ? (summary.event_count / days) * 100 : null;
-  }
-  const breakdownMap = new Map<number | null, PaxAOBreakdown>();
-  const weeklyMap = new Map<string, PaxAOWeeklyActivity>();
-  for (const event of events) {
-    const mine = (event.attendance ?? []).some(
-      (a) => Number(a.user_id) === paxId,
-    );
-    if (!mine) continue;
-    const ao = event.ao_org_id == null ? null : Number(event.ao_org_id);
-    const current = breakdownMap.get(ao) ?? {
-      ao_org_id: ao ?? 0,
-      ao_name: event.ao_name ?? "Unknown AO",
-      region_org_id: event.region_org_id,
-      region_name: event.region_name,
-      total_events: 0,
-      total_q_count: 0,
-    };
-    current.total_events++;
-    if (
-      (event.attendance ?? []).some(
-        (a) => Number(a.user_id) === paxId && isTrue(a.q_ind),
-      )
-    )
-      current.total_q_count++;
-    breakdownMap.set(ao, current);
-    if (event.ao_org_id != null) {
-      const date = new Date(
-        `${String(event.event_date).slice(0, 10)}T00:00:00Z`,
-      );
-      const monday = new Date(
-        date.getTime() - ((date.getUTCDay() + 6) % 7) * 86400000,
-      );
-      const week = monday.toISOString().slice(0, 10);
-      const activityWindow = buildActivityWindow(opts);
-      if (week < activityWindow.start || week > activityWindow.end) continue;
-      const key = `${ao}:${week}`;
-      const row = weeklyMap.get(key) ?? {
-        ao_org_id: ao as number,
-        ao_name: event.ao_name ?? "Unknown AO",
-        region_org_id: event.region_org_id,
-        region_name: event.region_name,
-        week,
-        posts: 0,
-      };
-      row.posts++;
-      weeklyMap.set(key, row);
-    }
-  }
+  const events = (row?.events ?? []).map((event) => ({
+    ...event,
+    eventReleaseId: aggregate.releaseId,
+  }));
   return {
     info: infoRows[0] ?? null,
     events: events.length ? events : null,
     summary,
-    ao_breakdown: [...breakdownMap.values()].sort(
-      (a, b) =>
-        b.total_events - a.total_events ||
-        (a.ao_name ?? "").localeCompare(b.ao_name ?? ""),
-    ),
-    ao_weekly: [...weeklyMap.values()].sort(
-      (a, b) =>
-        a.week.localeCompare(b.week) || a.ao_name.localeCompare(b.ao_name),
-    ),
-    activity_window: buildActivityWindow(opts),
+    ao_breakdown: (row?.ao_breakdown ?? [])
+      .map((ao) => ({
+        ao_org_id: ao.ao_org_id ?? 0,
+        ao_name: ao.ao_name ?? "Unknown AO",
+        region_org_id: ao.region_org_id,
+        region_name: ao.region_name,
+        total_events: Number(ao.total_events),
+        total_q_count: Number(ao.total_q_count),
+      }))
+      .sort(
+        (a, b) =>
+          b.total_events - a.total_events ||
+          (a.ao_name ?? "").localeCompare(b.ao_name ?? ""),
+      ),
+    ao_weekly: (row?.ao_weekly ?? [])
+      .map((week) => ({
+        ao_org_id: week.ao_org_id,
+        ao_name: week.ao_name ?? "Unknown AO",
+        region_org_id: week.region_org_id,
+        region_name: week.region_name,
+        week: week.week,
+        posts: Number(week.posts),
+      }))
+      .sort(
+        (a, b) =>
+          a.week.localeCompare(b.week) || a.ao_name.localeCompare(b.ao_name),
+      ),
+    activity_window: activityWindow,
   };
+}
+
+/** Matches the BigQuery page query, which lists the newest 100 events. */
+const PAX_PAGE_EVENT_LIMIT = 100;
+
+/** The PAX's earliest or latest attended event, as a nullable struct. */
+function paxEdgeEvent(
+  alias: string,
+  where: string,
+  direction: "ASC" | "DESC",
+): string {
+  return `(SELECT {'event_date': strftime(event_date, '%Y-%m-%d'),
+                   'ao_org_id': ao_org_id, 'ao_name': ao_name}
+             FROM attended ${where}
+            ORDER BY event_date ${direction}, event_id ${direction}
+            LIMIT 1) AS ${alias}`;
+}
+
+interface PaxEdgeEvent {
+  event_date: string;
+  ao_org_id: number | null;
+  ao_name: string | null;
+}
+
+interface PaxAggregateRow {
+  listed_count: number;
+  event_count: number;
+  q_count: number;
+  ghost_count: number;
+  fartsack_count: number;
+  first_event: PaxEdgeEvent | null;
+  last_event: PaxEdgeEvent | null;
+  first_q: PaxEdgeEvent | null;
+  last_q: PaxEdgeEvent | null;
+  unique_users_met: number;
+  unique_pax_when_q: number;
+  besties: { user_id: number; f3_name: string | null; count: number }[] | null;
+  ao_breakdown:
+    | {
+        ao_org_id: number | null;
+        ao_name: string | null;
+        region_org_id: number;
+        region_name: string;
+        total_events: number;
+        total_q_count: number;
+      }[]
+    | null;
+  ao_weekly:
+    | {
+        ao_org_id: number;
+        ao_name: string | null;
+        region_org_id: number;
+        region_name: string;
+        week: string;
+        posts: number;
+      }[]
+    | null;
+  events: EventData[] | null;
 }

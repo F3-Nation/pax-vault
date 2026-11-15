@@ -570,15 +570,137 @@ describe("migrated service functions on the pinned native release fixture", () =
     expect(page.ao_weekly).toEqual([
       expect.objectContaining({ ao_org_id: 7, posts: 2 }),
     ]);
+    // Membership is a list predicate in the WHERE of the single page query,
+    // so the scan is filtered before any attendance is unnested.
     const membershipSql = executedSql.find((sql) =>
-      /SELECT event_id AS event_instance_id[\s\S]*FROM pv_events WHERE list_contains/i.test(
-        sql,
-      ),
+      /FROM pv_events WHERE list_contains/i.test(sql),
     );
     expect(membershipSql).toMatch(
-      /list_contains\(list_transform\(attendance, a -> a\.user_id\), \?\)/i,
+      /FROM pv_events WHERE list_contains\(list_transform\(attendance, a -> a\.user_id\), \?\)/i,
     );
-    expect(membershipSql).not.toMatch(/UNNEST\(attendance\)/i);
+  });
+
+  it("keeps PAX null-AO, fartsack-only, and FNG-date semantics in SQL", async () => {
+    await native.run(`
+      INSERT INTO pv_pax VALUES
+        (70,'Fixture',1,'Alpha Region',NULL,'active',NULL,[],[],[],[],NULL,NULL),
+        (71,'Sleeper',1,'Alpha Region',NULL,'active',NULL,[],[],[],[],NULL,NULL);
+      INSERT INTO pv_events VALUES
+        (7002, DATE '2026-01-02', 'Attended', 1, 0, NULL, NULL, 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 1, 0, 0, [], [],
+          [{user_id:70,f3_name:'Fixture',q_ind:1,fartsack:false,ghost:true,avatar_url:NULL},
+           {user_id:10,f3_name:'Ace',q_ind:0,fartsack:false,ghost:false,avatar_url:NULL}]),
+        (7001, DATE '2026-01-01', 'Slept in', 1, 0, NULL, NULL, 1, 'Alpha Region', 3, 'Area One', 5, 'Sector Five', 1, 0, 0, [], [],
+          [{user_id:70,f3_name:'Fixture',q_ind:0,fartsack:true,ghost:false,avatar_url:NULL},
+           {user_id:71,f3_name:'Sleeper',q_ind:0,fartsack:true,ghost:false,avatar_url:NULL}])
+    `);
+
+    const page = await getPaxPage(70);
+    expect(page.summary).toMatchObject({
+      event_count: 1,
+      q_count: 1,
+      ghost_count: 1,
+      fartsack_count: 1,
+      fng_date: "2026-01-02",
+      first_event_date: "2026-01-02",
+      first_event_ao_id: null,
+      bestie_user_id: 10,
+      bestie_user_count: 1,
+      bestie_f3_name: "Ace",
+      unique_users_met: 1,
+      unique_pax_when_q: 1,
+    });
+    expect(page.events?.map((event) => event.event_instance_id)).toEqual([
+      7002,
+    ]);
+    expect(page.ao_breakdown).toEqual([
+      expect.objectContaining({
+        ao_org_id: 0,
+        ao_name: "Unknown AO",
+        total_events: 1,
+        total_q_count: 1,
+      }),
+    ]);
+    expect(page.ao_weekly).toEqual([]);
+
+    // Listed only as a no-show: a zeroed summary, not "no data".
+    const sleeper = await getPaxPage(71);
+    expect(sleeper.summary).toMatchObject({
+      event_count: 0,
+      fartsack_count: 1,
+      first_event_date: null,
+      effective_percentage: null,
+    });
+    expect(sleeper.events).toBeNull();
+  });
+
+  it("excludes NULL child ids from distinct counts but keeps their breakdown row", async () => {
+    await native.run(`
+      INSERT INTO pv_events VALUES
+        (8001, DATE '2026-01-01', 'No region', 2, 0, NULL, NULL, NULL, NULL, 77, 'Area 77', 99, 'Sector 99', 1, 0, 0, [], [],
+          [{user_id:10,f3_name:'Ace',q_ind:1,fartsack:false,ghost:false,avatar_url:NULL}]),
+        (8002, DATE '2026-01-02', 'No area', 4, 1, NULL, NULL, NULL, NULL, NULL, NULL, 99, 'Sector 99', 1, 0, 0, [], [],
+          [{user_id:10,f3_name:'Ace',q_ind:0,fartsack:false,ghost:false,avatar_url:NULL},
+           {user_id:11,f3_name:'Boo',q_ind:0,fartsack:true,ghost:false,avatar_url:NULL}])
+    `);
+
+    const area = await getAreaPage(77);
+    expect(area.summary).toMatchObject({
+      event_count: 1,
+      region_count: 0,
+      ao_count: 0,
+      unique_pax: 1,
+      unique_qs: 1,
+    });
+    expect(area.regionBreakdown).toEqual([
+      {
+        region_id: null,
+        region_name: "",
+        event_count: 1,
+        ao_count: 0,
+        active_pax: 0,
+        unique_pax: 1,
+        unique_qs: 1,
+        fng_count: 0,
+        pax_count_average: 2,
+      },
+    ]);
+
+    const sector = await getSectorPage(99);
+    expect(sector.summary).toMatchObject({
+      event_count: 2,
+      area_count: 1,
+      ao_count: 0,
+      unique_pax: 1,
+      unique_qs: 1,
+      fng_count: 1,
+      pax_count_average: 3,
+      fartsack_kings: [{ user_id: 11, f3_name: "Boo", count: 1 }],
+    });
+    expect(sector.areaBreakdown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ area_id: 77, event_count: 1, unique_pax: 1 }),
+        expect.objectContaining({ area_id: null, event_count: 1, ao_count: 0 }),
+      ]),
+    );
+    expect(sector.areaBreakdown).toHaveLength(2);
+  });
+
+  it("aggregates the AO page in one DuckDB query", async () => {
+    const page = await getAoPage(7);
+    expect(page.summary).toMatchObject({
+      event_count: 2,
+      first_event_date: "2024-01-03",
+      unique_pax: 1,
+    });
+    expect(page.leaders).toEqual([
+      { user_id: 10, f3_name: "Ace", posts: 1, qs: 1 },
+    ]);
+    // No query returns the AO's raw events: the aggregate is a single row.
+    const aggregateSql = executedSql.filter((sql) =>
+      /FROM pv_events/i.test(sql),
+    );
+    expect(aggregateSql).toHaveLength(1);
+    expect(aggregateSql[0]).toMatch(/LIMIT 100/);
   });
 
   it("executes a region page without filters on native DuckDB", async () => {
