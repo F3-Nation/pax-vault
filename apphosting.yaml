@@ -92,3 +92,38 @@ env:
     secret: session-secret
     availability:
       - RUNTIME
+
+  # DuckDB read path for analytical pv_* data (see docs/duckdb-operations.md).
+  # Capability flags (DUCKDB_SEARCH_ENABLED, DUCKDB_EVENTS_ENABLED,
+  # DUCKDB_STATS_*_ENABLED, DUCKDB_AUTH_ENABLED) are left unset so every
+  # capability inherits DUCKDB_ENABLED; set one to "false" to cut just that
+  # capability back to BigQuery, or DUCKDB_ENABLED to "false" to cut back all.
+  - variable: DUCKDB_ENABLED
+    value: "true"
+    availability:
+      - RUNTIME
+  - variable: DUCKDB_SHADOW_ENABLED
+    value: "false"
+  - variable: DUCKDB_SHADOW_TIMEOUT_MS
+    value: "500"
+  - variable: DUCKDB_GCS_BUCKET
+    value: "f3-analytics"
+  - variable: DUCKDB_GCS_PREFIX
+    value: "pax-vault/releases"
+  - variable: DUCKDB_GCS_CONTROL_OBJECT
+    value: "pax-vault/current.json"
+  - variable: DUCKDB_CACHE_DIR
+    value: "/tmp/pax-vault-duckdb"
+  - variable: DUCKDB_REFRESH_TTL_MS
+    value: "300000"
+  # Serve a last-known-good release for at most 24 hours of failed refreshes.
+  # Sign-in and region-admin checks read this snapshot, so this also bounds
+  # how long a removed user or revoked admin keeps access.
+  - variable: DUCKDB_MAX_LKG_AGE_MS
+    value: "86400000"
+  - variable: DUCKDB_MEMORY_LIMIT
+    value: "384MB"
+  - variable: DUCKDB_MAX_RELEASE_BYTES
+    value: "536870912"
+  - variable: DUCKDB_MAX_OBJECT_BYTES
+    value: "402653184"

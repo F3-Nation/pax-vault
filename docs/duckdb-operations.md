@@ -1,9 +1,11 @@
 # DuckDB Phase 3 operations runbook
 
-This runbook documents aspirational Phase-3 production cutover gates for the
-read-only `pv_*` DuckDB release consumer. The current effort remains a
-staging-only POC; production remains BigQuery, and no production release or
-cutover is claimed. The staging consumer accepts exactly the legacy ten-dataset
+This runbook documents the production cutover gates for the read-only `pv_*`
+DuckDB release consumer. `apphosting.yaml` now enables DuckDB in production
+for every capability, reading bucket `f3-analytics` (`pax-vault/releases`,
+`pax-vault/current.json`) with a 24-hour last-known-good limit; the gates
+below are the evidence still to record for that rollout, and
+`DUCKDB_ENABLED=false` is the cutback. The consumer accepts exactly the legacy ten-dataset
 profile or the split eleven-dataset profile described here. It complements
 [`duckdb-migration-plan.md`](./duckdb-migration-plan.md) and the producer
 contract in [`duckdb-producer-contract.md`](./duckdb-producer-contract.md).
