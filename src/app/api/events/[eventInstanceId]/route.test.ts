@@ -103,6 +103,9 @@ describe("event details API release pinning", () => {
     expect(String(consoleError.mock.calls[0][0])).toContain(
       '"scope":"api/events"',
     );
+    expect(
+      JSON.parse(String(consoleError.mock.calls[0][0])).context.durationMs,
+    ).toEqual(expect.any(Number));
     consoleError.mockRestore();
   });
 });

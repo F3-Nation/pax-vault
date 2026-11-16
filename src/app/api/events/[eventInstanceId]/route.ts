@@ -65,6 +65,7 @@ export async function GET(
 
   // Fetch event details from the BigQuery data layer.
   let event;
+  const startedAt = Date.now();
   try {
     event = await getEventDetails(
       eventId,
@@ -87,6 +88,9 @@ export async function GET(
     const errorId = reportError(error, {
       scope: "api/events",
       user: user.email,
+      // Separates fast query failures from ones that follow a long wait on
+      // the deferred event-details download.
+      extra: { durationMs: Date.now() - startedAt },
     });
     return NextResponse.json(
       { error: "Event lookup failed.", errorId },

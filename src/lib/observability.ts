@@ -59,6 +59,7 @@ function safeExtra(
     "outcome",
     "rejectionCategory",
     "refreshFailureCount",
+    "durationMs",
   ]);
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(extra)) {
@@ -69,6 +70,52 @@ function safeExtra(
         : value;
   }
   return result;
+}
+
+type CauseSummary = {
+  name: string;
+  code?: string;
+  rejectionCategory?: string;
+  kind?: string;
+};
+
+const MAX_CAUSE_DEPTH = 5;
+
+/**
+ * Summarise `error.cause` links without logging their messages. Wrapped
+ * errors (e.g. `DuckDbQueryError`) carry the real failure as a cause, but
+ * native and repository messages can contain file paths, object names, or row
+ * values. Only fixed-shape identifiers are kept: the error name, its `code`,
+ * its `rejectionCategory`, and the engine's error type when the message opens
+ * with one ("Out of Memory Error: ..." -> "Out of Memory Error").
+ */
+function summarizeCauses(error: unknown): CauseSummary[] | undefined {
+  const causes: CauseSummary[] = [];
+  let current = error instanceof Error ? error.cause : undefined;
+  while (current instanceof Error && causes.length < MAX_CAUSE_DEPTH) {
+    const fields = current as Error & {
+      code?: unknown;
+      rejectionCategory?: unknown;
+    };
+    const summary: CauseSummary = {
+      name: /^[A-Za-z0-9_$]{1,64}$/.test(current.name) ? current.name : "Error",
+    };
+    if (
+      typeof fields.code === "string" &&
+      /^[A-Za-z0-9_]{1,64}$/.test(fields.code)
+    )
+      summary.code = fields.code;
+    if (
+      typeof fields.rejectionCategory === "string" &&
+      /^[a-z-]{1,64}$/.test(fields.rejectionCategory)
+    )
+      summary.rejectionCategory = fields.rejectionCategory;
+    const kind = /^((?:[A-Za-z]+ ){0,3}Error):/.exec(current.message)?.[1];
+    if (kind) summary.kind = kind;
+    causes.push(summary);
+    current = current.cause;
+  }
+  return causes.length > 0 ? causes : undefined;
 }
 
 /**
@@ -94,6 +141,7 @@ export function reportError(
         /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,
         "[redacted-user]",
       ),
+      causes: summarizeCauses(error),
       context: safeExtra(context.extra),
     }),
   );
