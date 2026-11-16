@@ -453,11 +453,52 @@ export function validateIntegrity(
 export function crc32cBase64(bytes: Buffer): string {
   return crc32cFinish(crc32cUpdate(0xffffffff, bytes));
 }
-export function crc32cUpdate(crc: number, bytes: Buffer): number {
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (crc & 1 ? 0x82f63b78 : 0);
+// Slicing-by-8 lookup tables for CRC32C (Castagnoli, reflected 0x82f63b78).
+// Release objects are hundreds of megabytes and are checksummed on the server's
+// only event loop, so this processes eight bytes per step instead of one bit.
+const CRC32C_TABLES: Int32Array[] = (() => {
+  const tables = Array.from({ length: 8 }, () => new Int32Array(256));
+  for (let n = 0; n < 256; n++) {
+    let crc = n;
+    for (let bit = 0; bit < 8; bit++)
+      crc = (crc >>> 1) ^ (crc & 1 ? 0x82f63b78 : 0);
+    tables[0][n] = crc;
   }
+  for (let n = 0; n < 256; n++)
+    for (let k = 1; k < 8; k++) {
+      const previous = tables[k - 1][n];
+      tables[k][n] = (previous >>> 8) ^ tables[0][previous & 0xff];
+    }
+  return tables;
+})();
+
+/**
+ * Fold `bytes` into a running CRC32C. Start from `0xffffffff` and pass the
+ * result to `crc32cFinish`.
+ */
+export function crc32cUpdate(crc: number, bytes: Uint8Array): number {
+  const [t0, t1, t2, t3, t4, t5, t6, t7] = CRC32C_TABLES;
+  const length = bytes.length;
+  const wordEnd = length - (length % 8);
+  let i = 0;
+  for (; i < wordEnd; i += 8) {
+    const low =
+      crc ^
+      (bytes[i] |
+        (bytes[i + 1] << 8) |
+        (bytes[i + 2] << 16) |
+        (bytes[i + 3] << 24));
+    crc =
+      t7[low & 0xff] ^
+      t6[(low >>> 8) & 0xff] ^
+      t5[(low >>> 16) & 0xff] ^
+      t4[low >>> 24] ^
+      t3[bytes[i + 4]] ^
+      t2[bytes[i + 5]] ^
+      t1[bytes[i + 6]] ^
+      t0[bytes[i + 7]];
+  }
+  for (; i < length; i++) crc = (crc >>> 8) ^ t0[(crc ^ bytes[i]) & 0xff];
   return crc;
 }
 export function crc32cFinish(crc: number): string {

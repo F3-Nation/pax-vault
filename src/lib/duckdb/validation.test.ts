@@ -13,6 +13,8 @@ import { DuckDbReleaseError } from "./errors";
 import {
   canonicalJson,
   crc32cBase64,
+  crc32cFinish,
+  crc32cUpdate,
   sha256,
   parseJson,
   validateIntegrity,
@@ -169,6 +171,39 @@ describe("DuckDB release validation", () => {
         schemaVersion: "pv-release.v1",
       }),
     ).toThrow(/unsupported pointer contractVersion/);
+  });
+  it("computes CRC32C (Castagnoli) check values", () => {
+    // RFC 3720 appendix B.4 test vectors.
+    expect(crc32cBase64(Buffer.from("123456789"))).toBe("4waSgw==");
+    expect(crc32cBase64(Buffer.alloc(32))).toBe("ipE2qg==");
+    expect(crc32cBase64(Buffer.alloc(32, 0xff))).toBe("YqirQw==");
+    expect(crc32cBase64(Buffer.alloc(0))).toBe("AAAAAA==");
+  });
+  it("matches a bitwise CRC32C reference for every length and chunking", () => {
+    const reference = (bytes: Buffer): string => {
+      let crc = 0xffffffff;
+      for (const byte of bytes) {
+        crc ^= byte;
+        for (let i = 0; i < 8; i++)
+          crc = (crc >>> 1) ^ (crc & 1 ? 0x82f63b78 : 0);
+      }
+      const out = Buffer.alloc(4);
+      out.writeUInt32BE((crc ^ 0xffffffff) >>> 0);
+      return out.toString("base64");
+    };
+    const data = Buffer.alloc(300);
+    for (let i = 0; i < data.length; i++) data[i] = (i * 151 + 17) & 0xff;
+    // Lengths 0..40 cover every alignment of the word-at-a-time fast path.
+    for (let length = 0; length <= 40; length++)
+      expect(crc32cBase64(data.subarray(0, length))).toBe(
+        reference(data.subarray(0, length)),
+      );
+    for (const size of [1, 3, 7, 8, 9, 64, 299]) {
+      let crc = 0xffffffff;
+      for (let offset = 0; offset < data.length; offset += size)
+        crc = crc32cUpdate(crc, data.subarray(offset, offset + size));
+      expect(crc32cFinish(crc)).toBe(reference(data));
+    }
   });
   it("rejects unsafe paths and validates size plus CRC32C", () => {
     expect(() =>
