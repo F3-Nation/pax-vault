@@ -452,6 +452,11 @@ describe("migrated service functions on the pinned native release fixture", () =
     expect(region.events).toHaveLength(3);
     expect(ao.events).toHaveLength(2);
     expect(pax.events).toHaveLength(2);
+    // event_date sits inside a struct list here, past the runtime's top-level
+    // DATE handling, so the SQL must emit the date-only string formatDate needs.
+    for (const event of [...region.events, ...ao.events, ...pax.events]) {
+      expect(event.event_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
     expect(await getRegionEvents(1, undefined, { limit: 1 })).toHaveLength(1);
     expect(SOURCE_SNAPSHOT).toBe("phase2-native-fixture-snapshot-2026-01-01");
     expect(SOURCE_READ_AT).toBe("2026-01-01T00:00:00.000Z");

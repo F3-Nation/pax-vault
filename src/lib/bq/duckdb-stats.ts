@@ -48,7 +48,8 @@ const DISPLAY_COLUMNS =
 export function displayEventsProjection(limit = 100): string {
   return `
   (SELECT list({
-     'event_instance_id': event_id, 'event_date': event_date,
+     'event_instance_id': event_id,
+     'event_date': strftime(event_date, '%Y-%m-%d'),
      'event_name': event_name, 'pax_count': pax_count, 'fng_count': fng_count,
      'ao_org_id': ao_org_id, 'ao_name': ao_name,
      'region_org_id': region_org_id, 'region_name': region_name,
