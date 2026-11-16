@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import { getDuckDbRuntime, resetDuckDbRuntimeForTests } from "./factory";
 
 describe("DuckDB composition root", () => {
@@ -23,5 +23,22 @@ describe("DuckDB composition root", () => {
     });
     expect(runtime.status().activeReleaseId).toBeUndefined();
     await runtime.close();
+  });
+  it("shares one runtime across separately bundled copies of the module", async () => {
+    // Next.js bundles instrumentation.ts apart from route handlers, so each
+    // bundle evaluates this module on its own. The pre-warmed runtime must be
+    // the one requests use, or every instance downloads the release twice.
+    const env = {
+      NODE_ENV: "test",
+      DUCKDB_ENABLED: "true",
+      DUCKDB_GCS_BUCKET: "example-bucket",
+    } as const;
+    const prewarmed = getDuckDbRuntime(env);
+    vi.resetModules();
+    const requestBundle = await import("./factory");
+    expect(requestBundle.getDuckDbRuntime).not.toBe(getDuckDbRuntime);
+    expect(requestBundle.getDuckDbRuntime(env)).toBe(prewarmed);
+    await requestBundle.resetDuckDbRuntimeForTests();
+    expect(getDuckDbRuntime(env)).not.toBe(prewarmed);
   });
 });

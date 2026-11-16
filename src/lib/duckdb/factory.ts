@@ -34,26 +34,34 @@ class DisabledDuckDbRuntime implements DuckDbRuntimeService {
   }
 }
 
-let singleton: DuckDbRuntimeService | undefined;
+// The runtime lives on globalThis, not in module scope: Next.js bundles
+// instrumentation.ts separately from route handlers, so module state is
+// duplicated per bundle. A module-level singleton made the instrumentation
+// pre-warm populate one runtime while requests used another, downloading every
+// release twice per instance.
+const RUNTIME_KEY = Symbol.for("pax-vault.duckdb.runtime");
+type RuntimeHolder = { [RUNTIME_KEY]?: DuckDbRuntimeService };
+const holder = globalThis as RuntimeHolder;
+
 /** Test-only runtime seam. Reset with resetDuckDbRuntimeForTests(). */
 export function setDuckDbRuntimeForTests(runtime?: DuckDbRuntimeService): void {
-  singleton = runtime;
+  holder[RUNTIME_KEY] = runtime;
 }
 export function getDuckDbRuntime(
   env?: NodeJS.ProcessEnv,
 ): DuckDbRuntimeService {
   assertDuckDbServerRuntime("getDuckDbRuntime");
-  if (singleton) return singleton;
+  const existing = holder[RUNTIME_KEY];
+  if (existing) return existing;
   const config: DuckDbConfig = readDuckDbConfig(env);
   if (!config.enabled) {
-    singleton = new DisabledDuckDbRuntime();
-    return singleton;
+    return (holder[RUNTIME_KEY] = new DisabledDuckDbRuntime());
   }
   const repository = new GcsReleaseRepository(
     new GoogleCloudStorageClient(),
     config,
   );
-  singleton = new DuckDbRuntime(
+  return (holder[RUNTIME_KEY] = new DuckDbRuntime(
     repository,
     config,
     undefined,
@@ -65,12 +73,11 @@ export function getDuckDbRuntime(
         extra: telemetry,
       });
     },
-  );
-  return singleton;
+  ));
 }
 
 export async function resetDuckDbRuntimeForTests(): Promise<void> {
-  const previous = singleton;
-  singleton = undefined;
+  const previous = holder[RUNTIME_KEY];
+  holder[RUNTIME_KEY] = undefined;
   await previous?.close();
 }
