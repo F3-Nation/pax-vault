@@ -154,7 +154,11 @@ export function reportError(
 
 /** Structured, deliberately non-sensitive runtime telemetry. */
 export type DuckDbRuntimeTelemetry = {
-  event: "duckdb_refresh" | "duckdb_cleanup" | "duckdb_health";
+  event:
+    | "duckdb_refresh"
+    | "duckdb_cleanup"
+    | "duckdb_health"
+    | "duckdb_scheduled_refresh";
   outcome: "success" | "failure";
   releaseId?: string;
   generation?: string;

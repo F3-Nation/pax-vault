@@ -317,6 +317,38 @@ logs without credentials or raw user identifiers, disable the affected flag,
 and decide between App Hosting rollback, pointer CAS rollback, or continued
 LKG service. Re-run the relevant smoke tests before closing the incident.
 
+### Scheduled refresh (CPU throttling)
+
+With request-based billing, Cloud Run throttles CPU outside requests. Prod
+logs from 2026-11-17/18 showed background release downloads taking 2–14.5
+minutes, against 6–9 seconds when CPU is allocated. The first event-details
+call per release and instance also took 15–22 seconds.
+
+`POST /api/internal/duckdb/refresh` awaits `refresh()` inside a request and
+then opens the event-details sidecar, so both downloads run with CPU. It
+returns 404 unless `DUCKDB_REFRESH_TOKEN` is set, and requires
+`Authorization: Bearer <token>`. Each call reaches one instance, usually the
+`minInstances: 1` instance; scale-out instances still refresh in the
+background. Setup:
+
+1. Create the secret and grant App Hosting access:
+   `printf '%s' "$(openssl rand -hex 32)" | gcloud secrets create duckdb-refresh-token --project pax-vault --data-file=-`
+   then `firebase apphosting:secrets:grantaccess duckdb-refresh-token --backend pax-vault`.
+2. Add it to `apphosting.yaml` as `DUCKDB_REFRESH_TOKEN` (secret
+   `duckdb-refresh-token`, `RUNTIME` availability) and roll out.
+3. Create a Cloud Scheduler job, every 5 minutes, `POST` to
+   `<service URL>/api/internal/duckdb/refresh` with header
+   `Authorization: Bearer <token>` and a 300s attempt deadline. A no-op call
+   (pointer unchanged) takes about 0.3 seconds.
+4. Watch for `event: "duckdb_scheduled_refresh"` in logs; failures carry
+   `rejectionCategory` `refresh` or `details`.
+
+The alternative that covers every instance is `runConfig.cpuAlwaysAllocated:
+true` (instance-based billing). Settings changed only in the Cloud Run console
+can be overwritten by the next App Hosting rollout (console env edits on
+2026-11-13 did not survive the 2026-11-15 build), so make either change in
+`apphosting.yaml`.
+
 ## 8. Retention and garbage collection
 
 The release owner retains the current release, prior valid v2 release, and
