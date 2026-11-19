@@ -127,3 +127,9 @@ env:
     value: "536870912"
   - variable: DUCKDB_MAX_OBJECT_BYTES
     value: "402653184"
+  # Bearer token for POST /api/internal/duckdb/refresh, called by the Cloud
+  # Scheduler job duckdb-scheduled-refresh (see docs/duckdb-operations.md).
+  - variable: DUCKDB_REFRESH_TOKEN
+    secret: duckdb-refresh-token
+    availability:
+      - RUNTIME
