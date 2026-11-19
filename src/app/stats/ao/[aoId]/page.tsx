@@ -15,6 +15,8 @@ import { buildBreadcrumb } from "@/lib/breadcrumb";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import { parseFilterParams } from "@/lib/filters";
 import { EntityDataUnavailable } from "@/components/EntityDataUnavailable";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
+import { DuckDbUnavailable } from "@/components/DuckDbUnavailable";
 
 interface PageProps {
   params: Promise<{ aoId: string }>;
@@ -56,12 +58,16 @@ export default async function AODetailPage({
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
   const persist = searchParamsResolved?.persist;
-  const aoData = await loadAOData(Number(aoId), user.email, { ...filters });
-
-  const hasAOData = !!aoData && Object.keys(aoData).length > 0;
+  let aoData;
+  try {
+    aoData = await loadAOData(Number(aoId), user.email, { ...filters });
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError) return <DuckDbUnavailable />;
+    throw error;
+  }
 
   // Show empty state when AO data is missing or empty
-  if (!hasAOData) {
+  if (!aoData || Object.keys(aoData).length === 0) {
     return <EntityDataUnavailable entity="AO" />;
   }
 

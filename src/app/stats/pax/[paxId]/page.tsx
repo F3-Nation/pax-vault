@@ -15,6 +15,8 @@ import { buildBreadcrumb } from "@/lib/breadcrumb";
 import { getSessionUser, requireAuth } from "@/lib/auth/server";
 import { parseFilterParams } from "@/lib/filters";
 import { EntityDataUnavailable } from "@/components/EntityDataUnavailable";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
+import { DuckDbUnavailable } from "@/components/DuckDbUnavailable";
 import { EightBoxButton } from "@/components/pax/eightbox/EightBoxButton";
 
 interface PageProps {
@@ -65,9 +67,13 @@ export default async function PaxDetailPage({
   const tagIds = searchParamsResolved?.tagIds;
   const tagMode = searchParamsResolved?.tagMode;
   const persist = searchParamsResolved?.persist;
-  const paxData = await loadPaxData(Number(paxId), user.email, { ...filters });
-
-  const hasPaxData = !!paxData && Object.keys(paxData).length > 0;
+  let paxData;
+  try {
+    paxData = await loadPaxData(Number(paxId), user.email, { ...filters });
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError) return <DuckDbUnavailable />;
+    throw error;
+  }
 
   // "Is this my own page?" — session fast path only. This page is the hot
   // path, so it never pays for the BigQuery fallback that the 8 Box pages
@@ -76,7 +82,7 @@ export default async function PaxDetailPage({
   const isOwner = user.paxId != null && user.paxId === Number(paxId);
 
   // Show empty state when pax data is missing or empty
-  if (!hasPaxData) {
+  if (!paxData || Object.keys(paxData).length === 0) {
     return <EntityDataUnavailable entity="PAX" entityPlural="PAX" />;
   }
 

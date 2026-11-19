@@ -1,4 +1,14 @@
+/* The DuckDB row adapter returns schema-dependent nested structs. */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { queryBigQuery } from "@/lib/db";
+import { getDuckDbRuntime } from "@/lib/duckdb/factory";
+import {
+  DuckDbQueryAdapter,
+  DuckDbParams,
+  DuckDbQueryOperation,
+  isDuckDbEnabled,
+  selectDuckDbOrLegacy,
+} from "@/lib/duckdb/query";
 import {
   RegionInfo,
   EventData,
@@ -9,8 +19,156 @@ import {
   ChartData,
   RegionAchievementPax,
   RegionAOBreakdown,
+  PaxLeader,
 } from "@/lib/types";
 import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
+import {
+  chartCtes,
+  CHARTS_PROJECTION,
+  chartUnit,
+  displayEventsProjection,
+  eventBaseCtes,
+  kingsCtes,
+  KINGS_PROJECTION,
+  sortKings,
+  totalsCtes,
+} from "./duckdb-stats";
+
+type DuckDbExecutor = <T>(
+  sql: string,
+  params?: DuckDbParams,
+  operation?: DuckDbQueryOperation,
+) => Promise<T[]>;
+let injectedDuckDbQuery: DuckDbExecutor | undefined;
+let injectedDuckDbReleaseId: string | undefined;
+export function setRegionDuckDbQueryForTests(
+  query?: DuckDbExecutor,
+  releaseId?: string,
+): void {
+  injectedDuckDbQuery = query;
+  injectedDuckDbReleaseId = releaseId;
+}
+const executeDuckDb: DuckDbExecutor = async (sql, params, operation) => {
+  const adapter = injectedDuckDbQuery
+    ? undefined
+    : new DuckDbQueryAdapter(getDuckDbRuntime());
+  if (injectedDuckDbQuery) return injectedDuckDbQuery(sql, params, operation);
+  return adapter!.execute(sql, params, { operation });
+};
+const executeDuckDbEvents = async <T>(
+  sql: string,
+  params?: DuckDbParams,
+  operation?: DuckDbQueryOperation,
+) => {
+  if (injectedDuckDbQuery) {
+    return {
+      rows: await injectedDuckDbQuery<T>(sql, params, operation),
+      releaseId: injectedDuckDbReleaseId,
+    };
+  }
+  return new DuckDbQueryAdapter(getDuckDbRuntime()).executeWithRelease<T>(
+    sql,
+    params,
+    { operation },
+  );
+};
+
+function duckEventFilter(regionId: number | null, opts?: StatsFilters) {
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+  if (regionId !== null) {
+    clauses.push("region_org_id = ?");
+    params.push(regionId);
+  }
+  const range = buildRangeDates(opts?.range);
+  const start = opts?.startDate ?? range.startDate;
+  const end = opts?.endDate ?? range.endDate;
+  if (start) {
+    clauses.push("event_date >= CAST(? AS DATE)");
+    params.push(start);
+  }
+  if (end) {
+    clauses.push("event_date <= CAST(? AS DATE)");
+    params.push(end);
+  }
+  const aos = toFiniteNumbers(opts?.aoIds);
+  if (aos.length) {
+    const zero = aos.includes(0),
+      ids = aos.filter((id) => id !== 0),
+      marks = ids.map(() => "?").join(",");
+    if (zero && ids.length)
+      clauses.push(
+        opts?.aoMode === "exclude"
+          ? `(ao_org_id IS NOT NULL AND ao_org_id NOT IN (${marks}))`
+          : `(ao_org_id IS NULL OR ao_org_id IN (${marks}))`,
+      );
+    else if (zero)
+      clauses.push(
+        opts?.aoMode === "exclude"
+          ? "ao_org_id IS NOT NULL"
+          : "ao_org_id IS NULL",
+      );
+    else
+      clauses.push(
+        `${opts?.aoMode === "exclude" ? "ao_org_id NOT IN" : "ao_org_id IN"} (${marks})`,
+      );
+    params.push(...ids);
+  }
+  const addList = (
+    column: string,
+    values: number[] | undefined,
+    mode: string | undefined,
+  ) => {
+    const ids = toFiniteNumbers(values);
+    if (!ids.length) return;
+    const marks = ids.map(() => "?").join(",");
+    clauses.push(
+      `list_has(list_transform(${column}, x -> x.id), ${mode === "exclude" ? "" : ""}[${marks}])`,
+    );
+    // DuckDB's list_has accepts a scalar; use an EXISTS expression for lists.
+    clauses[clauses.length - 1] =
+      `${mode === "exclude" ? "NOT " : ""}EXISTS (SELECT 1 FROM UNNEST(${column}) u WHERE u.unnest.id IN (${marks}))`;
+    params.push(...ids);
+  };
+  addList("tags", opts?.tagIds, opts?.tagMode ?? "include");
+  addList("types", opts?.typeIds, opts?.typeMode ?? "include");
+  const cats = toFiniteNumbers(opts?.categoryIds).filter(
+    (x) => x === 1 || x === 2 || x === 3,
+  );
+  if (cats.length) {
+    const expressions = cats.map(
+      (x) => `${["", "first_f_ind", "second_f_ind", "third_f_ind"][x]} = 1`,
+    );
+    clauses.push(
+      (opts?.categoryMode === "exclude" ? "NOT " : "") +
+        `(${expressions.map((x) => `(${x})`).join(" OR ")})`,
+    );
+  }
+  return { where: clauses.join(" AND "), params };
+}
+
+async function getRegionEventsDuckDb(
+  regionId: number,
+  opts?: StatsFilters & { limit?: number },
+) {
+  const f = duckEventFilter(regionId, opts);
+  const limit =
+    Number.isFinite(opts?.limit) && Number(opts?.limit) > 0 ? " LIMIT ?" : "";
+  if (limit) f.params.push(Number(opts!.limit));
+  const result = await executeDuckDbEvents<EventData>(
+    `SELECT event_id AS event_instance_id, event_date, event_name,
+      pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name,
+      first_f_ind, second_f_ind, third_f_ind, types, tags,
+      list_filter(attendance, x -> x.fartsack IS NOT TRUE) AS attendance,
+      list_filter(attendance, x -> x.fartsack IS TRUE) AS fartsacks
+    FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC${limit}`,
+    f.params,
+  );
+  return result.rows.map((event) => ({
+    ...event,
+    eventReleaseId: result.releaseId,
+  }));
+}
 
 /**
  * Build a BigQuery WHERE clause for pv_events-based queries.
@@ -235,13 +393,20 @@ export async function getEvents(
     limit?: number;
   },
 ): Promise<EventData[] | null> {
-  // LIMIT is optional. Keep it numeric-only.
-  const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
-  const limitSql = limit ? `LIMIT ${limit}` : "";
+  return selectDuckDbOrLegacy({
+    capability: "events",
+    env: process.env,
+    duckdb: () => getRegionEventsDuckDb(regionId, opts),
+    legacy: async () => {
+      // LIMIT is optional. Keep it numeric-only.
+      const limit = Number.isFinite(opts?.limit)
+        ? Number(opts!.limit)
+        : undefined;
+      const limitSql = limit ? `LIMIT ${limit}` : "";
 
-  const whereSql = buildEventsWhereSql(regionId, opts);
+      const whereSql = buildEventsWhereSql(regionId, opts);
 
-  const query = `-- REGION EVENTS
+      const query = `-- REGION EVENTS
     SELECT
       event_id as event_instance_id,
       event_date,
@@ -265,12 +430,14 @@ export async function getEvents(
     ${limitSql};
   `;
 
-  const results = await queryBigQuery<EventData>(
-    query,
-    userIdentifier,
-    `fetch events for region ${regionId}`,
-  );
-  return results || null;
+      const results = await queryBigQuery<EventData>(
+        query,
+        userIdentifier,
+        `fetch events for region ${regionId}`,
+      );
+      return results || null;
+    },
+  });
 }
 
 /**
@@ -284,7 +451,19 @@ export async function getRegionInfo(
   regionId: number,
   userIdentifier?: string,
 ): Promise<RegionInfo | null> {
-  const query = `-- REGION INFO
+  return selectDuckDbOrLegacy({
+    capability: "stats_region",
+    env: process.env,
+    duckdb: async () => {
+      const rows = await executeDuckDb<RegionInfo>(
+        `SELECT region_id, region_name, area_id, area_name, logo_url, is_active, aos, types, tags
+       FROM pv_regions WHERE region_id = ? LIMIT 1`,
+        [regionId],
+      );
+      return rows[0] ?? null;
+    },
+    legacy: async () => {
+      const query = `-- REGION INFO
     SELECT
       region_id,
       region_name,
@@ -300,13 +479,15 @@ export async function getRegionInfo(
     LIMIT 1
   `;
 
-  const results = await queryBigQuery<RegionInfo>(
-    query,
-    userIdentifier,
-    `fetch region info for region ${regionId}`,
-    { regionId },
-  );
-  return results?.[0] ?? null;
+      const results = await queryBigQuery<RegionInfo>(
+        query,
+        userIdentifier,
+        `fetch region info for region ${regionId}`,
+        { regionId },
+      );
+      return results?.[0] ?? null;
+    },
+  });
 }
 
 /**
@@ -348,8 +529,19 @@ export async function searchRegionsByName(
   // Bound as a query parameter (@term) — no manual escaping needed.
   const likePattern = `%${term.toLowerCase()}%`;
 
-  // Simple contains search; ordering is alphabetical for predictability.
-  const query = `-- REGION SEARCH
+  return selectDuckDbOrLegacy({
+    capability: "search",
+    env: process.env,
+    duckdb: () =>
+      executeDuckDb<RegionInfo>(
+        `SELECT region_id, region_name, logo_url, is_active
+      FROM pv_regions WHERE region_name IS NOT NULL AND lower(region_name) LIKE ?
+      ${includeInactive ? "" : "AND is_active = TRUE"} ORDER BY region_name LIMIT 50`,
+        [likePattern],
+      ),
+    legacy: async () => {
+      // Simple contains search; ordering is alphabetical for predictability.
+      const query = `-- REGION SEARCH
     SELECT
       region_id,
       region_name,
@@ -363,13 +555,15 @@ export async function searchRegionsByName(
     LIMIT 50
   `;
 
-  const results = await queryBigQuery<RegionInfo>(
-    query,
-    userIdentifier,
-    `search regions by name: ${q}`,
-    { term: likePattern },
-  );
-  return results ?? [];
+      const results = await queryBigQuery<RegionInfo>(
+        query,
+        userIdentifier,
+        `search regions by name: ${q}`,
+        { term: likePattern },
+      );
+      return results ?? [];
+    },
+  });
 }
 
 export async function getPageData(
@@ -398,38 +592,45 @@ export async function getPageData(
   /** Raw `json_config` for this region; null when never saved. */
   preferencesJson: string | null;
 }> {
-  // Build WHERE clause from common filters (region-scoped).
-  const whereSql = buildEventsWhereSql(regionId, opts);
-  // Build non-region filters for re-use against aliased pv_events scans.
-  const eventsFilterAndSql = buildEventsAndSql(opts, "e");
+  const page = await selectDuckDbOrLegacy({
+    capability: "stats_region",
+    env: process.env,
+    duckdb: () => getRegionPageDuckDbParity(regionId, userIdentifier, opts),
+    legacy: async () => {
+      // Build WHERE clause from common filters (region-scoped).
+      const whereSql = buildEventsWhereSql(regionId, opts);
+      // Build non-region filters for re-use against aliased pv_events scans.
+      const eventsFilterAndSql = buildEventsAndSql(opts, "e");
 
-  // Determine chart granularity based on date range.
-  const rangeDates = buildRangeDates(opts?.range);
-  const effectiveStart = opts?.startDate ?? rangeDates.startDate;
-  const effectiveEnd =
-    opts?.endDate ??
-    rangeDates.endDate ??
-    new Date().toISOString().split("T")[0];
-  const daysDiff = effectiveStart
-    ? (new Date(effectiveEnd).getTime() - new Date(effectiveStart).getTime()) /
-      86_400_000
-    : Infinity;
-  const chartGranularity =
-    daysDiff > 365 ? "monthly" : daysDiff > 180 ? "weekly" : "daily";
-  const truncUnit =
-    chartGranularity === "monthly"
-      ? "MONTH"
-      : chartGranularity === "weekly"
-        ? "WEEK(MONDAY)"
-        : "DAY";
-  const spineInterval =
-    chartGranularity === "monthly"
-      ? "INTERVAL 1 MONTH"
-      : chartGranularity === "weekly"
-        ? "INTERVAL 1 WEEK"
-        : "INTERVAL 1 DAY";
+      // Determine chart granularity based on date range.
+      const rangeDates = buildRangeDates(opts?.range);
+      const effectiveStart = opts?.startDate ?? rangeDates.startDate;
+      const effectiveEnd =
+        opts?.endDate ??
+        rangeDates.endDate ??
+        new Date().toISOString().split("T")[0];
+      const daysDiff = effectiveStart
+        ? (new Date(effectiveEnd).getTime() -
+            new Date(effectiveStart).getTime()) /
+          86_400_000
+        : Infinity;
+      const chartGranularity =
+        daysDiff > 365 ? "monthly" : daysDiff > 180 ? "weekly" : "daily";
+      const truncUnit =
+        chartGranularity === "monthly"
+          ? "MONTH"
+          : chartGranularity === "weekly"
+            ? "WEEK(MONDAY)"
+            : "DAY";
+      const spineInterval =
+        chartGranularity === "monthly"
+          ? "INTERVAL 1 MONTH"
+          : chartGranularity === "weekly"
+            ? "INTERVAL 1 WEEK"
+            : "INTERVAL 1 DAY";
 
-  const query = `-- REGION PAGE LOAD
+      const preferenceProjection = `(SELECT json_config FROM pv_regions_preferences WHERE region_id = ${regionId} LIMIT 1) AS preferencesJson`;
+      const query = `-- REGION PAGE LOAD
     WITH
       events AS (
         SELECT
@@ -636,12 +837,7 @@ export async function getPageData(
       -- loader). Folded into this query rather than fetched separately to hold
       -- the single-query-per-page rule. NULL when the region has never saved
       -- preferences, in which case the loader applies defaults.
-      (
-        SELECT json_config
-        FROM pv_regions_preferences
-        WHERE region_id = ${regionId}
-        LIMIT 1
-      ) AS preferencesJson,
+      ${preferenceProjection},
 
       -- Events list as an ARRAY (limit it)
       (
@@ -909,29 +1105,577 @@ export async function getPageData(
       ) AS charts;
     `;
 
-  const results = await queryBigQuery<{
-    regionInfo: RegionInfo;
-    events: EventData[];
-    summary: RegionSummary;
-    leaders: Leaders[];
-    upcoming: EventUpcoming[];
-    kotter: RegionKotterList[];
-    charts: ChartData[];
-    achievements: RegionAchievementPax[];
-    aoBreakdown: RegionAOBreakdown[];
-    preferencesJson: string | null;
-  }>(query, userIdentifier, `fetch region data for region ${regionId}`);
+      const results = await queryBigQuery<{
+        regionInfo: RegionInfo;
+        events: EventData[];
+        summary: RegionSummary;
+        leaders: Leaders[];
+        upcoming: EventUpcoming[];
+        kotter: RegionKotterList[];
+        charts: ChartData[];
+        achievements: RegionAchievementPax[];
+        aoBreakdown: RegionAOBreakdown[];
+        preferencesJson: string | null;
+      }>(query, userIdentifier, `fetch region data for region ${regionId}`);
 
+      const preferencesJson = results?.[0]?.preferencesJson ?? null;
+      return {
+        info: results?.[0]?.regionInfo || null,
+        events: results?.[0]?.events || null,
+        summary: results?.[0]?.summary || null,
+        leaders: results?.[0]?.leaders || null,
+        upcoming: results?.[0]?.upcoming || null,
+        kotter: results?.[0]?.kotter || null,
+        charts: results?.[0]?.charts || null,
+        achievements: results?.[0]?.achievements || null,
+        aoBreakdown: results?.[0]?.aoBreakdown || null,
+        preferencesJson,
+      };
+    },
+  });
+  if (
+    isDuckDbEnabled(process.env, "stats_region") !==
+    isDuckDbEnabled(process.env, "events")
+  ) {
+    return {
+      ...page,
+      events: await getEvents(regionId, userIdentifier, {
+        ...opts,
+        limit: 100,
+      }),
+    };
+  }
+  return page;
+}
+
+/** Native DuckDB page read.  This is intentionally separate from the legacy
+ * BigQuery statement: DuckDB does not implement BigQuery STRUCT/UNNEST
+ * syntax, and keeping the two dialects mixed was the source of the old
+ * fallback bug. */
+type RegionPageData = Awaited<ReturnType<typeof getPageData>>;
+
+type RegionPhase =
+  | "initial_five_reads"
+  | "career_aggregate"
+  | "leader_career"
+  | "preferences_bigquery"
+  | "total";
+
+function logRegionPhase(
+  phase: RegionPhase,
+  startedAt: number,
+  outcome: "success" | "failure",
+): void {
+  if (process.env.ENVIRONMENT !== "staging") return;
+  console.info(
+    JSON.stringify({
+      app: "pax-vault",
+      level: "info",
+      metric: "stats_region_query_phase",
+      phase,
+      durationMs: performance.now() - startedAt,
+      outcome,
+    }),
+  );
+}
+
+async function timeRegionPhase<T>(
+  phase: RegionPhase,
+  work: () => Promise<T>,
+): Promise<T> {
+  const instrument = process.env.ENVIRONMENT === "staging";
+  const startedAt = instrument ? performance.now() : 0;
+  let outcome: "success" | "failure" = "failure";
+  try {
+    const result = await work();
+    outcome = "success";
+    return result;
+  } finally {
+    if (instrument) {
+      console.info(
+        JSON.stringify({
+          app: "pax-vault",
+          level: "info",
+          metric: "stats_region_query_phase",
+          phase,
+          durationMs: performance.now() - startedAt,
+          outcome,
+        }),
+      );
+    }
+  }
+}
+
+/** DuckDB implementation: aggregates in SQL over one scan of the region's events. */
+async function getRegionPageDuckDbParity(
+  regionId: number,
+  userIdentifier?: string,
+  opts?: StatsFilters,
+): Promise<RegionPageData> {
+  return timeRegionPhase("total", () =>
+    getRegionPageDuckDbParityImpl(regionId, userIdentifier, opts),
+  );
+}
+
+async function getRegionPageDuckDbParityImpl(
+  regionId: number,
+  userIdentifier?: string,
+  opts?: StatsFilters,
+): Promise<RegionPageData> {
+  const f = duckEventFilter(regionId, opts);
+  const allFilter = duckEventFilter(null, opts);
+  const range = buildRangeDates(opts?.range);
+  const rangeStart = opts?.startDate ?? range.startDate;
+  const rangeEnd = opts?.endDate ?? range.endDate;
+  const [info, aggregate, upcoming, kotter, pax] = await timeRegionPhase(
+    "initial_five_reads",
+    () =>
+      Promise.all([
+        executeDuckDb<RegionInfo>(
+          `SELECT region_id, region_name, area_id, area_name, logo_url, is_active, aos, types, tags FROM pv_regions WHERE region_id = ? LIMIT 1`,
+          [regionId],
+          "region_info",
+        ),
+        // One scan of the region's events; every aggregate below is computed
+        // in DuckDB and comes back as a single row.
+        executeDuckDbEvents<RegionAggregateRow>(
+          `WITH ${eventBaseCtes(f.where, true)},
+           ${kingsCtes()},
+           ${totalsCtes()},
+           ${chartCtes(chartUnit(rangeStart, rangeEnd))},
+           leader_rows AS (
+             SELECT user_id, any_value(f3_name) AS f3_name,
+                    any_value(avatar_url) AS avatar_url,
+                    count(*) AS posts,
+                    count(*) FILTER (WHERE is_q) AS qs
+               FROM present GROUP BY user_id
+              ORDER BY posts DESC, qs DESC, user_id
+              LIMIT 100
+           ),
+           ao_rows AS (
+             SELECT COALESCE(ao_org_id, 0) AS ao_id,
+                    COALESCE(
+                      arg_max_null(ao_name, (event_date, event_id)), '(No AO)'
+                    ) AS ao_name,
+                    count(*) AS beatdowns,
+                    max(event_date) AS last_date,
+                    arg_max(event_id, (event_date, event_id)) AS last_event_id
+               FROM filtered GROUP BY 1
+           )
+           SELECT e.event_count, e.ao_count, a.active_pax, a.unique_pax,
+                  a.unique_qs, e.fng_count, e.pax_count_average,
+                  ${KINGS_PROJECTION},
+                  ${displayEventsProjection()},
+                  (SELECT list({
+                     'user_id': user_id, 'f3_name': f3_name, 'posts': posts,
+                     'qs': qs, 'avatar_url': avatar_url
+                   } ORDER BY posts DESC, qs DESC, user_id) FROM leader_rows
+                  ) AS leaders,
+                  -- Newest-first, so the stable JS sort breaks ties by recency.
+                  (SELECT list({
+                     'ao_id': ao_id, 'ao_name': ao_name, 'beatdowns': beatdowns
+                   } ORDER BY last_date DESC, last_event_id DESC) FROM ao_rows
+                  ) AS ao_breakdown,
+                  ${CHARTS_PROJECTION}
+             FROM event_totals e CROSS JOIN attendance_totals a`,
+          f.params,
+          "region_events",
+        ),
+        executeDuckDb<EventUpcoming>(
+          `SELECT start_date, start_time, ao_name, ao_org_id, location_name, event_name, event_type, event_category, q_list FROM pv_upcoming WHERE region_org_id = ? ORDER BY start_date, start_time, ao_name LIMIT 50`,
+          [regionId],
+          "region_upcoming",
+        ),
+        executeDuckDb<RegionKotterList>(
+          `SELECT user_id, f3_name, avatar_url, kotter_status, total_events, first_event_date, days_since_last_event, last_event_date, last_event_name, last_event_ao_name, last_event_ao_org_id, bestie_list FROM pv_kotter WHERE home_region_id = ? ORDER BY days_since_last_event, last_event_date, f3_name`,
+          [regionId],
+          "region_kotter",
+        ),
+        executeDuckDb<any>(
+          `SELECT user_id, f3_name, avatar_url, start_date_override, lifetime_posts, lifetime_qs FROM pv_pax WHERE home_region_id = ?`,
+          [regionId],
+          "region_pax",
+        ),
+      ]),
+  );
+  const row = aggregate.rows[0];
+  let career: any[] = [];
+  if (pax.some((p: any) => p.user_id != null)) {
+    // Nationwide totals are authoritative in the PAX snapshot; attendance is
+    // retained here for region-scoped counts and event dates.
+    const careerAggregateStarted =
+      process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
+    career = await executeDuckDb<any>(
+      `WITH scoped_pax AS (
+         SELECT user_id, MAX(lifetime_posts) AS lifetime_posts,
+           MAX(lifetime_qs) AS lifetime_qs
+         FROM pv_pax
+         WHERE home_region_id = ? AND user_id IS NOT NULL
+         GROUP BY user_id
+       )
+       SELECT p.user_id,
+         COALESCE(MAX(p.lifetime_posts), COUNT(DISTINCT a.event_instance_id)) AS all_posts,
+         count(DISTINCT a.event_instance_id) FILTER (WHERE e.region_org_id = ?) AS region_posts,
+         min(e.event_date) AS first_event_date,
+         max(e.event_date) FILTER (WHERE e.region_org_id = ?) AS last_region_event_date,
+         COALESCE(MAX(p.lifetime_qs), COUNT(DISTINCT a.event_instance_id) FILTER (WHERE a.q_ind = 1)) AS all_qs,
+         count(DISTINCT a.event_instance_id) FILTER (WHERE e.region_org_id = ? AND a.q_ind = 1) AS region_qs
+       FROM scoped_pax p
+       LEFT JOIN pv_attendance a ON a.user_id = p.user_id
+       LEFT JOIN pv_events e ON e.event_id = a.event_instance_id
+       GROUP BY p.user_id`,
+      [regionId, regionId, regionId, regionId],
+      "region_career_attendance",
+    );
+    if (process.env.ENVIRONMENT === "staging")
+      logRegionPhase("career_aggregate", careerAggregateStarted, "success");
+  }
+  const leaderList: Leaders[] = (row?.leaders ?? []).map((leader) => ({
+    user_id: Number(leader.user_id),
+    f3_name: leader.f3_name,
+    posts: Number(leader.posts),
+    qs: Number(leader.qs),
+    avatar_url: leader.avatar_url ?? undefined,
+    all_posts: 0,
+    all_qs: 0,
+  }));
+  const leaderMap = new Map(
+    leaderList.map((leader) => [leader.user_id, leader]),
+  );
+  if (leaderList.length) {
+    const targets = leaderList.map((leader) => leader.user_id);
+    const leaderStarted =
+      process.env.ENVIRONMENT === "staging" ? performance.now() : 0;
+    if (!allFilter.where) {
+      const lifetimeRows = await executeDuckDb<any>(
+        `WITH targets(user_id) AS (VALUES ${targets.map(() => "(CAST(? AS INTEGER))").join(",")})
+         SELECT p.user_id, p.lifetime_posts AS all_posts, p.lifetime_qs AS all_qs
+         FROM pv_pax p JOIN targets USING (user_id)`,
+        targets,
+        "region_leader_lifetime",
+      );
+      const lifetimeByUser = new Map<number, any>(
+        lifetimeRows.map((row) => [Number(row.user_id), row]),
+      );
+      const missingTargets = targets.filter((userId) => {
+        const row = lifetimeByUser.get(userId);
+        if (
+          row?.all_posts != null &&
+          row?.all_qs != null &&
+          Number.isFinite(Number(row.all_posts)) &&
+          Number.isFinite(Number(row.all_qs))
+        ) {
+          const leader = leaderMap.get(userId);
+          if (leader) {
+            leader.all_posts = Number(row.all_posts);
+            leader.all_qs = Number(row.all_qs);
+          }
+          return false;
+        }
+        return true;
+      });
+      if (missingTargets.length) {
+        const fallbackRows = await executeDuckDb<any>(
+          `WITH targets(user_id) AS (VALUES ${missingTargets.map(() => "(CAST(? AS INTEGER))").join(",")})
+           SELECT a.user_id,
+             count(DISTINCT a.event_instance_id) AS all_posts,
+             count(DISTINCT a.event_instance_id) FILTER (WHERE a.q_ind = 1) AS all_qs
+           FROM pv_attendance a JOIN targets USING (user_id)
+           GROUP BY a.user_id`,
+          missingTargets,
+          "region_leader_career",
+        );
+        const fallbackByUser = new Map<number, any>(
+          fallbackRows.map((row) => [Number(row.user_id), row]),
+        );
+        for (const userId of missingTargets) {
+          const leader = leaderMap.get(userId);
+          const row = fallbackByUser.get(userId);
+          if (leader) {
+            leader.all_posts = Number(row?.all_posts ?? 0);
+            leader.all_qs = Number(row?.all_qs ?? 0);
+          }
+        }
+      }
+    } else {
+      const groupedLeaders = await executeDuckDb<any>(
+        `WITH filtered_events AS (
+           SELECT e.event_id FROM pv_events e${allFilter.where ? ` WHERE ${allFilter.where}` : ""}
+         ), targets(user_id) AS (VALUES ${targets.map(() => "(CAST(? AS INTEGER))").join(",")})
+         SELECT targets.user_id,
+           count(DISTINCT a.event_instance_id) AS all_posts,
+           count(DISTINCT a.event_instance_id) FILTER (WHERE a.q_ind = 1) AS all_qs
+         FROM pv_attendance a
+         JOIN filtered_events ON filtered_events.event_id = a.event_instance_id
+         JOIN targets ON targets.user_id = a.user_id
+         WHERE a.user_id IS NOT NULL
+         GROUP BY targets.user_id`,
+        [...allFilter.params, ...targets],
+        "region_leader_career",
+      );
+      for (const row of groupedLeaders) {
+        const leader = leaderMap.get(Number(row.user_id));
+        if (leader) {
+          leader.all_posts = Number(row.all_posts ?? 0);
+          leader.all_qs = Number(row.all_qs ?? 0);
+        }
+      }
+    }
+    if (process.env.ENVIRONMENT === "staging")
+      logRegionPhase("leader_career", leaderStarted, "success");
+  }
+  const prefs = await timeRegionPhase("preferences_bigquery", () =>
+    queryBigQuery<{ json_config: string | null }>(
+      "SELECT json_config FROM pv_regions_preferences WHERE region_id = @regionId LIMIT 1",
+      userIdentifier,
+      `fetch preferences for region ${regionId}`,
+      { regionId },
+    ),
+  );
   return {
-    info: results?.[0]?.regionInfo || null,
-    events: results?.[0]?.events || null,
-    summary: results?.[0]?.summary || null,
-    leaders: results?.[0]?.leaders || null,
-    upcoming: results?.[0]?.upcoming || null,
-    kotter: results?.[0]?.kotter || null,
-    charts: results?.[0]?.charts || null,
-    achievements: results?.[0]?.achievements || null,
-    aoBreakdown: results?.[0]?.aoBreakdown || null,
-    preferencesJson: results?.[0]?.preferencesJson ?? null,
+    info: info[0] ?? null,
+    events: (row?.events ?? []).map((event) => ({
+      ...event,
+      eventReleaseId: aggregate.releaseId,
+    })),
+    summary: {
+      event_count: Number(row?.event_count ?? 0),
+      ao_count: Number(row?.ao_count ?? 0),
+      active_pax: Number(row?.active_pax ?? 0),
+      unique_pax: Number(row?.unique_pax ?? 0),
+      unique_qs: Number(row?.unique_qs ?? 0),
+      fng_count: Number(row?.fng_count ?? 0),
+      pax_count_average: Number(row?.pax_count_average ?? 0),
+      fartsack_kings: sortKings(row?.fartsack_kings),
+      ghost_kings: sortKings(row?.ghost_kings),
+    },
+    leaders: leaderList,
+    upcoming,
+    kotter,
+    charts: row?.charts ?? [],
+    achievements: buildRegionAchievementsFromTotals(pax, career),
+    aoBreakdown: (row?.ao_breakdown ?? [])
+      .map((ao) => ({
+        ao_id: Number(ao.ao_id),
+        ao_name: ao.ao_name,
+        beatdowns: Number(ao.beatdowns),
+      }))
+      .sort(
+        (a, b) =>
+          b.beatdowns - a.beatdowns || a.ao_name.localeCompare(b.ao_name),
+      ),
+    preferencesJson: prefs[0]?.json_config ?? null,
   };
+}
+
+interface RegionAggregateRow {
+  event_count: number;
+  ao_count: number;
+  active_pax: number;
+  unique_pax: number;
+  unique_qs: number;
+  fng_count: number;
+  pax_count_average: number;
+  fartsack_kings: PaxLeader[] | null;
+  ghost_kings: PaxLeader[] | null;
+  events: EventData[] | null;
+  leaders:
+    | (Pick<Leaders, "user_id" | "f3_name" | "posts" | "qs"> & {
+        avatar_url: string | null;
+      })[]
+    | null;
+  ao_breakdown: RegionAOBreakdown[] | null;
+  charts: ChartData[] | null;
+}
+
+export function buildRegionAchievements(
+  pax: any[],
+  allEvents: any[],
+  regionId: number,
+): RegionAchievementPax[] {
+  const attended = (e: any) =>
+    (e.attendance ?? []).filter((a: any) => a.fartsack !== true);
+  const byUser = new Map<
+    number,
+    {
+      allPosts: number;
+      allQs: number;
+      regionPosts: number;
+      regionQs: number;
+      first: string | null;
+      last: string | null;
+    }
+  >();
+  for (const p of pax) {
+    if (p.user_id == null) continue;
+    const id = Number(p.user_id);
+    if (!Number.isNaN(id) && !byUser.has(id))
+      byUser.set(id, {
+        allPosts: 0,
+        allQs: 0,
+        regionPosts: 0,
+        regionQs: 0,
+        first: null,
+        last: null,
+      });
+  }
+  for (const e of allEvents) {
+    // Null-dated source rows still contribute attendance totals, but do not
+    // participate in earliest/last-date calculations (matching SQL MIN/MAX).
+    const eventDate =
+      e.event_date == null ? null : String(e.event_date).slice(0, 10);
+    const inRegion = Number(e.region_org_id) === regionId;
+    const qCounts = new Map<number, number>();
+    for (const a of attended(e)) {
+      if (a.user_id == null) continue;
+      const id = Number(a.user_id);
+      const stats = byUser.get(id);
+      if (!stats) continue;
+      // Posts and Qs each count at most once per user/event, regardless of
+      // duplicate attendance rows.
+      if (!qCounts.has(id)) qCounts.set(id, 0);
+      if (a.q_ind === 1) qCounts.set(id, 1);
+    }
+    for (const [id, qCount] of qCounts) {
+      const stats = byUser.get(id)!;
+      stats.allPosts++;
+      stats.allQs += qCount;
+      if (
+        eventDate !== null &&
+        (stats.first === null || eventDate < stats.first)
+      )
+        stats.first = eventDate;
+      if (inRegion) {
+        stats.regionPosts++;
+        stats.regionQs += qCount;
+        if (
+          eventDate !== null &&
+          (stats.last === null || eventDate > stats.last)
+        )
+          stats.last = eventDate;
+      }
+    }
+  }
+  return buildRegionAchievementsFromTotals(pax, byUser);
+}
+
+function buildRegionAchievementsFromTotals(
+  pax: any[],
+  rows: any[] | Map<number, any>,
+): RegionAchievementPax[] {
+  const totals =
+    rows instanceof Map
+      ? rows
+      : new Map<number, any>(
+          rows.map((row) => [
+            Number(row.user_id),
+            {
+              allPosts: Number(row.all_posts ?? 0),
+              allQs: Number(row.all_qs ?? 0),
+              regionPosts: Number(row.region_posts ?? 0),
+              regionQs: Number(row.region_qs ?? 0),
+              first:
+                row.first_event_date == null
+                  ? null
+                  : String(row.first_event_date).slice(0, 10),
+              last:
+                row.last_region_event_date == null
+                  ? null
+                  : String(row.last_region_event_date).slice(0, 10),
+            },
+          ]),
+        );
+  const thresholds = [
+    25, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
+  ];
+  return pax
+    .map((p) => {
+      const stats = (p.user_id == null
+        ? undefined
+        : totals.get(Number(p.user_id))) ?? {
+        allPosts: 0,
+        allQs: 0,
+        regionPosts: 0,
+        regionQs: 0,
+        first: null,
+        last: null,
+      };
+      const rp = stats.regionPosts,
+        ap = stats.allPosts,
+        rq = stats.regionQs,
+        aq = stats.allQs;
+      const next = (n: number) => thresholds.find((t) => t > n) ?? null;
+      const first = p.start_date_override ?? stats.first;
+      const last = stats.last;
+      let anniversary: string | null = null;
+      if (first) {
+        const [, month, day] = first.slice(0, 10).split("-").map(Number),
+          today = new Date();
+        const isLeap = (year: number) =>
+          year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+        const safeDay =
+          month === 2 && day === 29 && !isLeap(today.getUTCFullYear())
+            ? 28
+            : day;
+        anniversary = `${today.getUTCFullYear()}-${String(month).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
+        if (anniversary < today.toISOString().slice(0, 10)) {
+          const nextYear = today.getUTCFullYear() + 1;
+          const nextDay =
+            month === 2 && day === 29 && !isLeap(nextYear) ? 28 : day;
+          anniversary = `${nextYear}-${String(month).padStart(2, "0")}-${String(nextDay).padStart(2, "0")}`;
+        }
+      }
+      const days = anniversary
+        ? Math.round(
+            (Date.parse(`${anniversary}T00:00:00Z`) - Date.now()) / 86400000,
+          )
+        : null;
+      const nextWithin = (n: number, limit: number) => {
+        const milestone = next(n);
+        return milestone !== null && milestone - n <= limit;
+      };
+      const lastTime = last ? Date.parse(`${last}T00:00:00Z`) : NaN;
+      const active90 =
+        Number.isFinite(lastTime) && lastTime >= Date.now() - 90 * 86400000;
+      const active30 =
+        Number.isFinite(lastTime) && lastTime >= Date.now() - 30 * 86400000;
+      const qualifies =
+        rp > 10 &&
+        ((active90 &&
+          (nextWithin(rp, 1) ||
+            nextWithin(ap, 1) ||
+            nextWithin(rq, 1) ||
+            nextWithin(aq, 1) ||
+            (active30 &&
+              (nextWithin(rp, 5) ||
+                nextWithin(ap, 5) ||
+                nextWithin(rq, 3) ||
+                nextWithin(aq, 3))))) ||
+          (days !== null && days >= 0 && days <= 14 && rp >= 25));
+      return {
+        user_id: p.user_id,
+        f3_name: p.f3_name,
+        avatar_url: p.avatar_url ?? undefined,
+        region_posts: rp,
+        region_qs: rq,
+        all_posts: ap,
+        all_qs: aq,
+        next_region_post_milestone: next(rp),
+        next_nation_post_milestone: next(ap),
+        next_region_q_milestone: next(rq),
+        next_nation_q_milestone: next(aq),
+        fng_date: first,
+        next_anniversary_date: anniversary,
+        days_until_anniversary: days,
+        last_region_event_date: last,
+        qualifies,
+      };
+    })
+    .filter((p) => p.qualifies)
+    .map((p) => {
+      const { qualifies, ...rest } = p;
+      void qualifies;
+      return rest;
+    })
+    .sort((a, b) => a.f3_name.localeCompare(b.f3_name));
 }

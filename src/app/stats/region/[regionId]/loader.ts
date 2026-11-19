@@ -19,11 +19,34 @@ import {
   RegionAchievementPax,
   RegionAOBreakdown,
 } from "@/lib/types";
+import { DuckDbDependencyError, DuckDbQueryError } from "@/lib/duckdb/errors";
 import { getPageData } from "@/lib/bq/regions";
 import { parseRegionPreferences } from "@/lib/preferences";
-import { cacheStatsData } from "@/lib/cache";
+import { cacheStatsPageData } from "@/lib/cache";
 import { StatsFilters } from "@/lib/filters";
 import { normalizeDeep } from "@/lib/normalize";
+
+function logRegionTiming(
+  operation: string,
+  regionId: number,
+  durationMs: number,
+  outcome: "success" | "failure",
+  extra: Record<string, unknown> = {},
+): void {
+  if (process.env.ENVIRONMENT !== "staging") return;
+  console.info(
+    JSON.stringify({
+      app: "pax-vault",
+      level: "info",
+      metric: "stats_region_timing",
+      operation,
+      regionId,
+      durationMs,
+      outcome,
+      ...extra,
+    }),
+  );
+}
 
 /**
  * Load all data required for the region stats page.
@@ -35,15 +58,33 @@ export async function loadRegionData(
   userIdentifier?: string,
   filters?: StatsFilters,
 ): Promise<RegionData | null> {
+  const cacheStartedAt = Date.now();
+  let cacheComputed = false;
+  let cacheOutcome: "success" | "failure" = "failure";
   try {
     // Cache key is entity-scoped (region + filters), NOT user-scoped — the
     // normalization runs inside the cache so the cached value is plain JSON.
-    return await cacheStatsData<RegionData>(
-      async () => {
-        const regionData = await getPageData(regionId, userIdentifier, filters);
+    const fetchAndNormalize = async () => {
+      const fetchStartedAt = Date.now();
+      let fetchOutcome: "success" | "failure" = "failure";
+      let regionData;
+      try {
+        regionData = await getPageData(regionId, userIdentifier, filters);
+        fetchOutcome = "success";
+      } finally {
+        logRegionTiming(
+          "getPageData",
+          regionId,
+          Date.now() - fetchStartedAt,
+          fetchOutcome,
+        );
+      }
 
-        // Normalize BigQuery output into plain, serializable data so it can
-        // be passed from this Server Component to Client Components.
+      // Normalize BigQuery output into plain, serializable data so it can
+      // be passed from this Server Component to Client Components.
+      const normalizationStartedAt = Date.now();
+      let normalizationOutcome: "success" | "failure" = "failure";
+      try {
         const mergedPlain = normalizeDeep<RegionData>(regionData);
 
         // Defensive: many UI components assume list fields are arrays and call `.map`.
@@ -78,13 +119,42 @@ export async function loadRegionData(
           }),
         ) as RegionKotterList[];
 
+        normalizationOutcome = "success";
         return mergedSafe;
+      } finally {
+        logRegionTiming(
+          "normalizeRegionData",
+          regionId,
+          Date.now() - normalizationStartedAt,
+          normalizationOutcome,
+        );
+      }
+    };
+    const result = await cacheStatsPageData<RegionData>(
+      async () => {
+        cacheComputed = true;
+        return fetchAndNormalize();
       },
       ["region-page-data", String(regionId), JSON.stringify(filters ?? {})],
       [`region-${regionId}`],
+      "stats_region",
     );
+    cacheOutcome = "success";
+    return result;
   } catch (err) {
+    if (err instanceof DuckDbDependencyError) throw err;
     console.error(`Error fetching Region data (region=${regionId}):`, err);
+    // A failed DuckDB query is not an empty region. Surface the error rather
+    // than rendering the unavailable state; streamed responses may already be 200.
+    if (err instanceof DuckDbQueryError) throw err;
     return null;
+  } finally {
+    logRegionTiming(
+      "cacheStatsData",
+      regionId,
+      Date.now() - cacheStartedAt,
+      cacheOutcome,
+      { cacheComputed },
+    );
   }
 }

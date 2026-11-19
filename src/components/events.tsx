@@ -64,6 +64,7 @@ import { Tab, Tabs } from "@heroui/tabs";
 import {
   EventDetailsHeader,
   EventDetailsBody,
+  eventDetailsIdentity,
 } from "@/components/EventDetailsContent";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 
@@ -138,28 +139,66 @@ export function EventsCard({
   const [selectedEvent, setSelectedEvent] = useState<EventData | null>(null);
   const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [detailsRefreshRequired, setDetailsRefreshRequired] = useState(false);
+  const [detailsAttempt, setDetailsAttempt] = useState(0);
+  const [detailsIdentity, setDetailsIdentity] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedEvent || !isOpen) return;
 
+    const controller = new AbortController();
     let cancelled = false;
+    const currentEvent = selectedEvent;
+    const currentIdentity = eventDetailsIdentity(currentEvent);
 
     async function fetchDetails() {
       try {
         setIsLoadingDetails(true);
         setEventDetails(null);
+        setDetailsError(null);
+        setDetailsRefreshRequired(false);
+        setDetailsIdentity(currentIdentity);
 
+        const params = new URLSearchParams();
+        if (currentEvent.eventReleaseId)
+          params.set("releaseId", currentEvent.eventReleaseId);
+        const query = params.toString();
         const res = await fetch(
-          `/api/events/${selectedEvent?.event_instance_id}`,
+          `/api/events/${currentEvent.event_instance_id}${query ? `?${query}` : ""}`,
+          { signal: controller.signal },
         );
         if (!res.ok) {
-          throw new Error(`Failed to load event details (${res.status})`);
+          if (res.status === 409) {
+            const mismatch = new Error(
+              "This event has changed since it was opened. Refresh the page to load the latest details.",
+            );
+            Object.assign(mismatch, { refreshRequired: true });
+            throw mismatch;
+          }
+          throw new Error(
+            res.status === 503
+              ? "Event details are temporarily unavailable. Please try again."
+              : "We couldn’t load the event details. Please try again.",
+          );
         }
 
         const data = await res.json();
         if (!cancelled) setEventDetails(data);
       } catch (err) {
-        console.error("Error loading event details:", err);
+        if (
+          !cancelled &&
+          !(err instanceof DOMException && err.name === "AbortError")
+        ) {
+          if ((err as { refreshRequired?: boolean })?.refreshRequired) {
+            setDetailsRefreshRequired(true);
+          }
+          setDetailsError(
+            err instanceof Error
+              ? err.message
+              : "We couldn’t load the event details.",
+          );
+        }
       } finally {
         if (!cancelled) setIsLoadingDetails(false);
       }
@@ -169,8 +208,9 @@ export function EventsCard({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [selectedEvent, isOpen]);
+  }, [selectedEvent, isOpen, detailsAttempt]);
 
   /**
    * Load the full event history for the region, respecting current filters.
@@ -679,6 +719,8 @@ export function EventsCard({
             setSelectedEvent(null);
             setEventDetails(null);
             setIsLoadingDetails(false);
+            setDetailsError(null);
+            setDetailsRefreshRequired(false);
           }
           onOpenChange();
         }}
@@ -714,8 +756,27 @@ export function EventsCard({
             {selectedEvent && (
               <EventDetailsBody
                 event={selectedEvent}
-                details={eventDetails}
-                isLoadingDetails={isLoadingDetails}
+                key={eventDetailsIdentity(selectedEvent)}
+                details={
+                  detailsIdentity === eventDetailsIdentity(selectedEvent)
+                    ? eventDetails
+                    : null
+                }
+                isLoadingDetails={
+                  detailsIdentity !== eventDetailsIdentity(selectedEvent) ||
+                  isLoadingDetails
+                }
+                detailsError={
+                  detailsIdentity === eventDetailsIdentity(selectedEvent)
+                    ? detailsError
+                    : null
+                }
+                onRetry={() => setDetailsAttempt((attempt) => attempt + 1)}
+                refreshRequired={
+                  detailsIdentity === eventDetailsIdentity(selectedEvent) &&
+                  detailsRefreshRequired
+                }
+                onRefresh={() => window.location.reload()}
                 filters={filters}
                 showFartsackGhost={showFartsackGhost}
               />

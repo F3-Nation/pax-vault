@@ -38,6 +38,86 @@ export type ErrorContext = {
   extra?: Record<string, unknown>;
 };
 
+function hashIdentifier(value: string): string {
+  let hash = 2166136261;
+  for (const char of value)
+    hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function safeExtra(
+  extra: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!extra) return {};
+  const allowed = new Set([
+    "regionId",
+    "areaId",
+    "sectorId",
+    "paxId",
+    "eventInstanceId",
+    "event",
+    "outcome",
+    "rejectionCategory",
+    "refreshFailureCount",
+    "durationMs",
+  ]);
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(extra)) {
+    if (!allowed.has(key)) continue;
+    result[key] =
+      /id$/i.test(key) && typeof value === "string"
+        ? hashIdentifier(value)
+        : value;
+  }
+  return result;
+}
+
+type CauseSummary = {
+  name: string;
+  code?: string;
+  rejectionCategory?: string;
+  kind?: string;
+};
+
+const MAX_CAUSE_DEPTH = 5;
+
+/**
+ * Summarise `error.cause` links without logging their messages. Wrapped
+ * errors (e.g. `DuckDbQueryError`) carry the real failure as a cause, but
+ * native and repository messages can contain file paths, object names, or row
+ * values. Only fixed-shape identifiers are kept: the error name, its `code`,
+ * its `rejectionCategory`, and the engine's error type when the message opens
+ * with one ("Out of Memory Error: ..." -> "Out of Memory Error").
+ */
+function summarizeCauses(error: unknown): CauseSummary[] | undefined {
+  const causes: CauseSummary[] = [];
+  let current = error instanceof Error ? error.cause : undefined;
+  while (current instanceof Error && causes.length < MAX_CAUSE_DEPTH) {
+    const fields = current as Error & {
+      code?: unknown;
+      rejectionCategory?: unknown;
+    };
+    const summary: CauseSummary = {
+      name: /^[A-Za-z0-9_$]{1,64}$/.test(current.name) ? current.name : "Error",
+    };
+    if (
+      typeof fields.code === "string" &&
+      /^[A-Za-z0-9_]{1,64}$/.test(fields.code)
+    )
+      summary.code = fields.code;
+    if (
+      typeof fields.rejectionCategory === "string" &&
+      /^[a-z-]{1,64}$/.test(fields.rejectionCategory)
+    )
+      summary.rejectionCategory = fields.rejectionCategory;
+    const kind = /^((?:[A-Za-z]+ ){0,3}Error):/.exec(current.message)?.[1];
+    if (kind) summary.kind = kind;
+    causes.push(summary);
+    current = current.cause;
+  }
+  return causes.length > 0 ? causes : undefined;
+}
+
 /**
  * Report an error and return its id. Single choke point for error tracking.
  */
@@ -47,6 +127,7 @@ export function reportError(
 ): string {
   const errorId = context.errorId ?? makeErrorId(error);
   const isError = error instanceof Error;
+  const message = isError ? error.message : String(error);
 
   console.error(
     JSON.stringify({
@@ -54,11 +135,14 @@ export function reportError(
       level: "error",
       errorId,
       scope: context.scope ?? "unknown",
-      user: context.user,
+      userHash: context.user ? hashIdentifier(context.user) : undefined,
       name: isError ? error.name : "Error",
-      message: isError ? error.message : String(error),
-      stack: isError ? error.stack : undefined,
-      ...context.extra,
+      message: message.replace(
+        /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,
+        "[redacted-user]",
+      ),
+      causes: summarizeCauses(error),
+      context: safeExtra(context.extra),
     }),
   );
 
@@ -66,4 +150,43 @@ export function reportError(
   // e.g. Sentry.captureException(error, { tags: { scope }, user: { id: user } });
 
   return errorId;
+}
+
+/** Structured, deliberately non-sensitive runtime telemetry. */
+export type DuckDbRuntimeTelemetry = {
+  event:
+    | "duckdb_refresh"
+    | "duckdb_cleanup"
+    | "duckdb_health"
+    | "duckdb_scheduled_refresh";
+  outcome: "success" | "failure";
+  releaseId?: string;
+  generation?: string;
+  pointerAgeMs?: number;
+  refreshFailureCount?: number;
+  lkgState?: "none" | "ready" | "stale";
+  refreshDurationMs?: number;
+  stageDurationsMs?: Record<string, number>;
+  releaseSequence?: number;
+  leaseCount?: number;
+  waiterCount?: number;
+  rejectionCategory?: string;
+  httpStatus?: number;
+  queryLatencyMs?: number;
+  error?: boolean;
+};
+
+export function reportDuckDbRuntimeTelemetry(
+  telemetry: DuckDbRuntimeTelemetry,
+): void {
+  // Do not attach the exception or arbitrary error context here: repository
+  // errors can contain object names, paths, or credentials.
+  console.info(
+    JSON.stringify({
+      app: "pax-vault",
+      level: "info",
+      metric: "duckdb_runtime",
+      ...telemetry,
+    }),
+  );
 }

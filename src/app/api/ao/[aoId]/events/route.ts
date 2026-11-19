@@ -10,7 +10,9 @@
 import { NextResponse } from "next/server";
 import { getEvents } from "@/lib/bq/aos";
 import { getSessionUser } from "@/lib/auth/server";
+import { reportError } from "@/lib/observability";
 import { parseFilterSearchParams } from "@/lib/filters";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 
 export async function GET(
   request: Request,
@@ -40,7 +42,24 @@ export async function GET(
       : undefined,
   };
 
-  const events = await getEvents(aoId, user?.email, opts);
+  let events;
+  try {
+    events = await getEvents(aoId, user?.email, opts);
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError)
+      return NextResponse.json(
+        { error: "AO event data is temporarily unavailable." },
+        { status: 503 },
+      );
+    const errorId = reportError(error, {
+      scope: "api/ao/events",
+      user: user.email,
+    });
+    return NextResponse.json(
+      { error: "AO event lookup failed.", errorId },
+      { status: 500 },
+    );
+  }
 
   if (!events) {
     return NextResponse.json({ error: "AO not found" }, { status: 404 });

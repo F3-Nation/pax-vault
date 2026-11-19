@@ -1,12 +1,110 @@
+/* The DuckDB row adapter returns schema-dependent nested structs. */
 import { queryBigQuery } from "@/lib/db";
+import { getDuckDbRuntime } from "@/lib/duckdb/factory";
+import {
+  DuckDbQueryAdapter,
+  DuckDbParams,
+  isDuckDbEnabled,
+  selectDuckDbOrLegacy,
+} from "@/lib/duckdb/query";
 import {
   AOInfo,
   EventData,
   AOSummary,
+  PaxLeader,
   Leaders,
   EventUpcoming,
 } from "@/lib/types";
 import { StatsFilters, toFiniteNumbers } from "@/lib/filters";
+import {
+  displayEventsProjection,
+  eventBaseCtes,
+  kingsCtes,
+  KINGS_PROJECTION,
+  sortKings,
+  totalsCtes,
+} from "./duckdb-stats";
+
+type DuckDbExecutor = <T>(sql: string, params?: DuckDbParams) => Promise<T[]>;
+let injectedDuckDbQuery: DuckDbExecutor | undefined;
+let injectedDuckDbReleaseId: string | undefined;
+export function setAoDuckDbQueryForTests(
+  query?: DuckDbExecutor,
+  releaseId?: string,
+): void {
+  injectedDuckDbQuery = query;
+  injectedDuckDbReleaseId = releaseId;
+}
+const executeDuckDb: DuckDbExecutor = async (sql, params) => {
+  const adapter = injectedDuckDbQuery
+    ? undefined
+    : new DuckDbQueryAdapter(getDuckDbRuntime());
+  return (injectedDuckDbQuery ?? adapter!.execute.bind(adapter))(sql, params);
+};
+const executeDuckDbEvents = async <T>(sql: string, params?: DuckDbParams) => {
+  if (injectedDuckDbQuery)
+    return {
+      rows: await injectedDuckDbQuery<T>(sql, params),
+      releaseId: injectedDuckDbReleaseId,
+    };
+  return new DuckDbQueryAdapter(getDuckDbRuntime()).executeWithRelease<T>(
+    sql,
+    params,
+  );
+};
+
+function duckAoFilter(aoId: number, opts?: StatsFilters) {
+  const clauses = ["ao_org_id = ?"],
+    params: unknown[] = [aoId];
+  const range = buildRangeDates(opts?.range),
+    start = opts?.startDate ?? range.startDate,
+    end = opts?.endDate ?? range.endDate;
+  if (start) {
+    clauses.push("event_date >= CAST(? AS DATE)");
+    params.push(start);
+  }
+  if (end) {
+    clauses.push("event_date <= CAST(? AS DATE)");
+    params.push(end);
+  }
+  const add = (column: string, values: number[] | undefined, mode: string) => {
+    const ids = toFiniteNumbers(values);
+    if (!ids.length) return;
+    clauses.push(
+      `${mode === "exclude" ? "NOT " : ""}EXISTS (SELECT 1 FROM UNNEST(${column}) u WHERE u.unnest.id IN (${ids.map(() => "?").join(",")}))`,
+    );
+    params.push(...ids);
+  };
+  add("tags", opts?.tagIds, opts?.tagMode ?? "include");
+  add("types", opts?.typeIds, opts?.typeMode ?? "include");
+  const cats = toFiniteNumbers(opts?.categoryIds).filter(
+    (x) => x >= 1 && x <= 3,
+  );
+  if (cats.length)
+    clauses.push(
+      `${opts?.categoryMode === "exclude" ? "NOT " : ""}(${cats.map((x) => `${["", "first_f_ind", "second_f_ind", "third_f_ind"][x]} = 1`).join(" OR ")})`,
+    );
+  return { where: clauses.join(" AND "), params };
+}
+
+async function getAoEventsDuckDb(
+  aoId: number,
+  opts?: StatsFilters & { limit?: number },
+) {
+  const f = duckAoFilter(aoId, opts);
+  const limited = Number.isFinite(opts?.limit) && Number(opts?.limit) > 0;
+  if (limited) {
+    f.params.push(Number(opts!.limit));
+  }
+  const result = await executeDuckDbEvents<EventData>(
+    `SELECT event_id AS event_instance_id, event_date, event_name, pax_count, fng_count, ao_org_id, ao_name, region_org_id, region_name, first_f_ind, second_f_ind, third_f_ind, types, tags, list_filter(attendance, x -> x.fartsack IS NOT TRUE) AS attendance, list_filter(attendance, x -> x.fartsack IS TRUE) AS fartsacks FROM pv_events WHERE ${f.where} ORDER BY event_date DESC, event_id DESC${limited ? " LIMIT ?" : ""}`,
+    f.params,
+  );
+  return result.rows.map((event) => ({
+    ...event,
+    eventReleaseId: result.releaseId,
+  }));
+}
 
 /**
  * Build a BigQuery WHERE clause for pv_events-based queries.
@@ -163,11 +261,19 @@ export async function getEvents(
     limit?: number;
   },
 ): Promise<EventData[] | null> {
-  // LIMIT is optional. Keep it numeric-only.
-  const limit = Number.isFinite(opts?.limit) ? Number(opts!.limit) : undefined;
-  const limitSql = limit ? `LIMIT ${limit}` : "";
+  return selectDuckDbOrLegacy({
+    capability: "events",
+    env: process.env,
+    duckdb: () => getAoEventsDuckDb(aoId, opts),
+    legacy: async () => {
+      // LIMIT is optional. Keep it numeric-only.
+      const limit = Number.isFinite(opts?.limit)
+        ? Number(opts!.limit)
+        : undefined;
+      const limitSql = limit ? `LIMIT ${limit}` : "";
+      const whereSql = buildEventsWhereSql(aoId, opts);
 
-  const query = `-- AO EVENTS
+      const query = `-- AO EVENTS
     SELECT
       event_id as event_instance_id,
       event_date,
@@ -186,17 +292,19 @@ export async function getEvents(
       ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS NOT TRUE) AS attendance,
       ARRAY(SELECT a FROM UNNEST(attendance) a WHERE a.fartsack IS TRUE) AS fartsacks
     FROM pv_events
-    WHERE ao_org_id = ${aoId}
+    ${whereSql}
     ORDER BY event_date DESC, event_id DESC
     ${limitSql};
   `;
 
-  const results = await queryBigQuery<EventData>(
-    query,
-    userIdentifier,
-    `fetch events for AO ${aoId}`,
-  );
-  return results || null;
+      const results = await queryBigQuery<EventData>(
+        query,
+        userIdentifier,
+        `fetch events for AO ${aoId}`,
+      );
+      return results || null;
+    },
+  });
 }
 
 export async function getPageData(
@@ -212,10 +320,33 @@ export async function getPageData(
   /** Raw `json_config` inherited from the parent region; null when unset. */
   preferencesJson: string | null;
 }> {
-  // Build WHERE clause from common filters.
-  const whereSql = buildEventsWhereSql(aoId, opts);
+  const page = await selectDuckDbOrLegacy({
+    capability: "stats_ao",
+    env: process.env,
+    duckdb: async () => {
+      // Region preferences are application-owned and stay in BigQuery, so the
+      // DuckDB page needs this one extra lookup. The legacy query below
+      // already projects the column itself.
+      const [duckPage, preferences] = await Promise.all([
+        getAoPageDuckDbParity(aoId, userIdentifier, opts),
+        queryBigQuery<{ json_config: string | null }>(
+          "SELECT p.json_config FROM pv_regions_preferences p WHERE p.region_id = (SELECT region_id FROM pv_aos WHERE ao_id = @aoId LIMIT 1) LIMIT 1",
+          userIdentifier,
+          `fetch preferences for AO ${aoId}`,
+          { aoId },
+        ),
+      ]);
+      return {
+        ...duckPage,
+        preferencesJson: preferences?.[0]?.json_config ?? null,
+      };
+    },
+    legacy: async () => {
+      // Build WHERE clause from common filters.
+      const whereSql = buildEventsWhereSql(aoId, opts);
 
-  const query = `-- AO PAGE LOAD
+      const preferenceProjection = `(SELECT p.json_config FROM pv_regions_preferences p WHERE p.region_id = (SELECT region_id FROM pv_aos WHERE ao_id = ${aoId} LIMIT 1) LIMIT 1) AS preferencesJson`;
+      const query = `-- AO PAGE LOAD
     WITH
       events AS (
         SELECT
@@ -303,14 +434,7 @@ export async function getPageData(
       -- Resolved here (rather than by a second query) to hold the
       -- single-query-per-page rule. NULL when the parent region has never
       -- saved preferences, in which case the loader applies defaults.
-      (
-        SELECT p.json_config
-        FROM pv_regions_preferences p
-        WHERE p.region_id = (
-          SELECT region_id FROM pv_aos WHERE ao_id = ${aoId} LIMIT 1
-        )
-        LIMIT 1
-      ) AS preferencesJson,
+      ${preferenceProjection},
 
       -- Events list as an ARRAY (limit it)
       (
@@ -424,23 +548,36 @@ export async function getPageData(
       ) AS upcoming
     `;
 
-  const results = await queryBigQuery<{
-    info: AOInfo;
-    events: EventData[];
-    summary: AOSummary;
-    leaders: Leaders[];
-    upcoming: EventUpcoming[];
-    preferencesJson: string | null;
-  }>(query, userIdentifier, `fetch page data for AO ${aoId}`);
+      const results = await queryBigQuery<{
+        info: AOInfo;
+        events: EventData[];
+        summary: AOSummary;
+        leaders: Leaders[];
+        upcoming: EventUpcoming[];
+        preferencesJson: string | null;
+      }>(query, userIdentifier, `fetch page data for AO ${aoId}`);
 
-  return {
-    info: results?.[0]?.info || null,
-    events: results?.[0]?.events || null,
-    summary: results?.[0]?.summary || null,
-    leaders: results?.[0]?.leaders || null,
-    upcoming: results?.[0]?.upcoming || null,
-    preferencesJson: results?.[0]?.preferencesJson ?? null,
-  };
+      const preferencesJson = results?.[0]?.preferencesJson ?? null;
+      return {
+        info: results?.[0]?.info || null,
+        events: results?.[0]?.events || null,
+        summary: results?.[0]?.summary || null,
+        leaders: results?.[0]?.leaders || null,
+        upcoming: results?.[0]?.upcoming || null,
+        preferencesJson,
+      };
+    },
+  });
+  if (
+    isDuckDbEnabled(process.env, "stats_ao") !==
+    isDuckDbEnabled(process.env, "events")
+  ) {
+    return {
+      ...page,
+      events: await getEvents(aoId, userIdentifier, { ...opts, limit: 100 }),
+    };
+  }
+  return page;
 }
 
 export async function searchAOsByName(
@@ -453,7 +590,16 @@ export async function searchAOsByName(
 
   const likePattern = `%${term.toLowerCase()}%`;
 
-  const query = `-- AO SEARCH
+  return selectDuckDbOrLegacy({
+    capability: "search",
+    env: process.env,
+    duckdb: () =>
+      executeDuckDb<AOInfo>(
+        `SELECT ao_id, ao_name, region_id, region_name, logo_url, is_active FROM pv_aos WHERE ao_name IS NOT NULL AND lower(ao_name) LIKE ? ${includeInactive ? "" : "AND is_active = TRUE"} ORDER BY ao_name LIMIT 50`,
+        [likePattern],
+      ),
+    legacy: async () => {
+      const query = `-- AO SEARCH
     SELECT
       ao_id,
       ao_name,
@@ -469,11 +615,106 @@ export async function searchAOsByName(
     LIMIT 50
   `;
 
-  const results = await queryBigQuery<AOInfo>(
-    query,
-    userIdentifier,
-    `search AOs by name: ${q}`,
-    { term: likePattern },
-  );
-  return results ?? [];
+      const results = await queryBigQuery<AOInfo>(
+        query,
+        userIdentifier,
+        `search AOs by name: ${q}`,
+        { term: likePattern },
+      );
+      return results ?? [];
+    },
+  });
+}
+
+type AOPageData = Awaited<ReturnType<typeof getPageData>>;
+
+async function getAoPageDuckDbParity(
+  aoId: number,
+  userIdentifier?: string,
+  opts?: StatsFilters,
+): Promise<AOPageData> {
+  const f = duckAoFilter(aoId, opts);
+  // Aggregation runs in DuckDB; only the 100 displayed events and one summary
+  // row are read into Node.
+  const [info, upcoming, aggregate] = await Promise.all([
+    executeDuckDb<AOInfo>(
+      `SELECT ao_id, ao_name, region_id, region_name, logo_url, is_active, types, tags FROM pv_aos WHERE ao_id = ? LIMIT 1`,
+      [aoId],
+    ),
+    executeDuckDb<EventUpcoming>(
+      `SELECT start_date, start_time, ao_name, ao_org_id, location_name, event_name, event_type, event_category, q_list FROM pv_upcoming WHERE ao_org_id = ? ORDER BY start_date, start_time, ao_name LIMIT 50`,
+      [aoId],
+    ),
+    executeDuckDbEvents<AoAggregateRow>(
+      `WITH ${eventBaseCtes(f.where, true)},
+       ${kingsCtes()},
+       ${totalsCtes()},
+       leader_rows AS (
+         -- Per attendance entry, as the AO leaderboard has always counted.
+         SELECT user_id, any_value(f3_name) AS f3_name,
+                any_value(avatar_url) AS avatar_url,
+                count(*) AS posts,
+                count(*) FILTER (WHERE q_ind = 1) AS qs
+           FROM att WHERE fartsack IS NOT TRUE
+          GROUP BY user_id
+          ORDER BY posts DESC, qs DESC, user_id
+          LIMIT 100
+       )
+       SELECT e.event_count, e.first_event_date, a.active_pax, a.unique_pax,
+              a.unique_qs, e.fng_count, e.pax_count_average,
+              ${KINGS_PROJECTION},
+              ${displayEventsProjection()},
+              (SELECT list({
+                 'user_id': user_id, 'f3_name': f3_name, 'posts': posts,
+                 'qs': qs, 'avatar_url': avatar_url
+               } ORDER BY posts DESC, qs DESC, user_id) FROM leader_rows
+              ) AS leaders
+         FROM event_totals e CROSS JOIN attendance_totals a`,
+      f.params,
+    ),
+  ]);
+  const row = aggregate.rows[0];
+  return {
+    info: info[0] ?? null,
+    events: (row?.events ?? []).map((event) => ({
+      ...event,
+      eventReleaseId: aggregate.releaseId,
+    })),
+    upcoming,
+    leaders: (row?.leaders ?? []).map((leader) => ({
+      user_id: Number(leader.user_id),
+      f3_name: leader.f3_name,
+      posts: Number(leader.posts),
+      qs: Number(leader.qs),
+      avatar_url: leader.avatar_url ?? undefined,
+    })),
+    summary: {
+      event_count: Number(row?.event_count ?? 0),
+      first_event_date: row?.first_event_date ?? null,
+      active_pax: Number(row?.active_pax ?? 0),
+      unique_pax: Number(row?.unique_pax ?? 0),
+      unique_qs: Number(row?.unique_qs ?? 0),
+      fng_count: Number(row?.fng_count ?? 0),
+      pax_count_average: Number(row?.pax_count_average ?? 0),
+      fartsack_kings: sortKings(row?.fartsack_kings),
+      ghost_kings: sortKings(row?.ghost_kings),
+    },
+    preferencesJson: null,
+  };
+}
+
+interface AoAggregateRow {
+  event_count: number;
+  first_event_date: string | null;
+  active_pax: number;
+  unique_pax: number;
+  unique_qs: number;
+  fng_count: number;
+  pax_count_average: number;
+  fartsack_kings: PaxLeader[] | null;
+  ghost_kings: PaxLeader[] | null;
+  events: EventData[] | null;
+  leaders:
+    | (Omit<Leaders, "avatar_url"> & { avatar_url: string | null })[]
+    | null;
 }

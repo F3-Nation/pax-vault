@@ -1,4 +1,6 @@
 import { queryBigQuery } from "@/lib/db";
+import { getDuckDbRuntime } from "@/lib/duckdb/factory";
+import { DuckDbQueryAdapter, selectDuckDbOrLegacy } from "@/lib/duckdb/query";
 import {
   AreaInfo,
   AreaSummary,
@@ -6,6 +8,12 @@ import {
   ChartData,
 } from "@/lib/types";
 import { DateRangeFilters } from "@/lib/filters";
+import {
+  chartUnit,
+  rollupPageSql,
+  rollupSummary,
+  type RollupRow,
+} from "./duckdb-stats";
 
 /**
  * Convert a named range into UTC YYYY-MM-DD start/end strings.
@@ -97,6 +105,30 @@ export async function searchAreasByName(
   userIdentifier?: string,
   includeInactive = false,
 ): Promise<AreaInfo[]> {
+  return selectDuckDbOrLegacy({
+    capability: "search",
+    env: process.env,
+    duckdb: async () => {
+      const term = (q || "").trim();
+      if (term.length < 2) return [];
+      return new DuckDbQueryAdapter(getDuckDbRuntime()).execute<AreaInfo>(
+        `SELECT area_id, area_name, logo_url, is_active FROM pv_areas
+         WHERE area_name IS NOT NULL AND lower(area_name) LIKE ?
+         ${includeInactive ? "" : "AND is_active = TRUE"}
+         ORDER BY area_name LIMIT 50`,
+        [`%${term.toLowerCase()}%`],
+      );
+    },
+    legacy: async () =>
+      searchAreasByNameLegacy(q, userIdentifier, includeInactive),
+  });
+}
+
+async function searchAreasByNameLegacy(
+  q: string,
+  userIdentifier?: string,
+  includeInactive = false,
+): Promise<AreaInfo[]> {
   const term = (q || "").trim();
   if (term.length < 2) return [];
 
@@ -135,6 +167,19 @@ export async function getPageData(
   regionBreakdown: AreaRegionBreakdown[] | null;
   charts: ChartData[] | null;
 }> {
+  return selectDuckDbOrLegacy({
+    capability: "stats_area",
+    env: process.env,
+    duckdb: () => getAreaPageDataDuckDb(areaId, opts),
+    legacy: () => getAreaPageDataLegacy(areaId, userIdentifier, opts),
+  });
+}
+
+async function getAreaPageDataLegacy(
+  areaId: number,
+  userIdentifier?: string,
+  opts?: DateRangeFilters,
+): Promise<Awaited<ReturnType<typeof getPageData>>> {
   // Build date-only WHERE clauses for the events CTE.
   const dateFilterClauses = buildDateFilterClauses(opts);
   const dateFilterSql = dateFilterClauses.length
@@ -404,5 +449,60 @@ export async function getPageData(
     summary: results?.[0]?.summary || null,
     regionBreakdown: results?.[0]?.regionBreakdown || null,
     charts: results?.[0]?.charts || null,
+  };
+}
+
+async function getAreaPageDataDuckDb(
+  areaId: number,
+  opts?: DateRangeFilters,
+): Promise<Awaited<ReturnType<typeof getPageData>>> {
+  const db = new DuckDbQueryAdapter(getDuckDbRuntime());
+  const range = buildRangeDates(opts?.range);
+  const start = opts?.startDate ?? range.startDate;
+  const end = opts?.endDate ?? range.endDate;
+  const params: unknown[] = [areaId];
+  const filters = ["area_org_id = ?"];
+  if (start) {
+    filters.push("event_date >= CAST(? AS DATE)");
+    params.push(start);
+  }
+  if (end) {
+    filters.push("event_date <= CAST(? AS DATE)");
+    params.push(end);
+  }
+  // Aggregation runs in DuckDB: one row comes back, not the area's events.
+  const [info, rows] = await Promise.all([
+    db.execute<AreaInfo>(
+      `SELECT area_id, area_name, sector_id, sector_name, logo_url, is_active, regions
+         FROM pv_areas WHERE area_id = ? LIMIT 1`,
+      [areaId],
+    ),
+    db.execute<RollupRow>(
+      rollupPageSql(filters.join(" AND "), chartUnit(start, end), "region"),
+      params,
+    ),
+  ]);
+  const row = rows[0];
+  const { ao_count, ...totals } = rollupSummary(row);
+  return {
+    info: info[0] ?? null,
+    summary: {
+      event_count: totals.event_count,
+      region_count: Number(row?.region_count ?? 0),
+      ao_count,
+      active_pax: totals.active_pax,
+      unique_pax: totals.unique_pax,
+      unique_qs: totals.unique_qs,
+      fng_count: totals.fng_count,
+      pax_count_average: totals.pax_count_average,
+      fartsack_kings: totals.fartsack_kings,
+      ghost_kings: totals.ghost_kings,
+    },
+    regionBreakdown: (row?.breakdown ?? []).map(({ id, name, ...rest }) => ({
+      region_id: id as number,
+      region_name: name,
+      ...rest,
+    })),
+    charts: row?.charts ?? [],
   };
 }

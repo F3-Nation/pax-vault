@@ -13,8 +13,9 @@ import {
   AreaRegionBreakdown,
   ChartData,
 } from "@/lib/types";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 import { getPageData } from "@/lib/bq/areas";
-import { cacheStatsData } from "@/lib/cache";
+import { cacheStatsData, getStatsReleaseIdentity } from "@/lib/cache";
 import { DateRangeFilters } from "@/lib/filters";
 import { normalizeDeep } from "@/lib/normalize";
 
@@ -24,6 +25,7 @@ export async function loadAreaData(
   filters?: DateRangeFilters,
 ): Promise<AreaData | null> {
   try {
+    const releaseIdentity = getStatsReleaseIdentity("stats_area");
     // Cache key is entity-scoped (area + filters), NOT user-scoped — the
     // normalization runs inside the cache so the cached value is plain JSON.
     return await cacheStatsData<AreaData>(
@@ -44,8 +46,11 @@ export async function loadAreaData(
       },
       ["area-page-data", String(areaId), JSON.stringify(filters ?? {})],
       [`area-${areaId}`],
+      releaseIdentity,
+      "stats_area",
     );
   } catch (err) {
+    if (err instanceof DuckDbDependencyError) throw err;
     console.error(`Error fetching Area data (area=${areaId}):`, err);
     return null;
   }

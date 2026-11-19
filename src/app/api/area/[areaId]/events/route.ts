@@ -10,6 +10,8 @@
 import { NextResponse } from "next/server";
 import { getPageData } from "@/lib/bq/areas";
 import { getSessionUser } from "@/lib/auth/server";
+import { reportError } from "@/lib/observability";
+import { DuckDbDependencyError } from "@/lib/duckdb/errors";
 
 export async function GET(
   request: Request,
@@ -36,7 +38,24 @@ export async function GET(
     endDate: searchParams.get("endDate") || undefined,
   };
 
-  const data = await getPageData(areaId, user.email, opts);
+  let data;
+  try {
+    data = await getPageData(areaId, user.email, opts);
+  } catch (error) {
+    if (error instanceof DuckDbDependencyError)
+      return NextResponse.json(
+        { error: "Area data is temporarily unavailable." },
+        { status: 503 },
+      );
+    const errorId = reportError(error, {
+      scope: "api/area/events",
+      user: user.email,
+    });
+    return NextResponse.json(
+      { error: "Area lookup failed.", errorId },
+      { status: 500 },
+    );
+  }
 
   if (!data.info) {
     return NextResponse.json({ error: "Area not found" }, { status: 404 });

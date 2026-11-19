@@ -19,6 +19,9 @@ yarn.lock
 public/sw.js
 public/workbox-*.js
 
+# Local release fixtures
+.gcs/
+
 # IDE and OS files
 .idea/
 .vscode/
